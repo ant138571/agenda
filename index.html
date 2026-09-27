@@ -363,6 +363,30 @@ tr:last-child td{border-bottom:0}
 .ce-hint{font-size:12.5px;color:var(--muted)}
 @media (max-width:1100px){ .proj-cols{grid-template-columns:1fr} }
 @media (max-width:860px){ .crono.cr-card{padding:1.4rem 1.1rem 1rem} .proj-grid,.home-proj .proj-grid{grid-template-columns:1fr} .ce-ev{grid-template-columns:1fr 1fr} .ce-ev .ce-del{grid-column:2;justify-self:end;grid-row:1} }
+/* celular: quando o cabeçalho tem mais de um botão (ex.: grupo), os botões descem para uma linha própria abaixo do título */
+@media (max-width:860px){
+  .band{flex-wrap:wrap}
+  .band .band-actions:has(>:nth-child(2)){order:4;flex-basis:100%;margin-left:0}
+}
+/* tamanho do texto no computador (Configurações) */
+@media (min-width:861px){ html{zoom:var(--ui-zoom,1)} }
+/* linha do tempo: raio (urgente) e estrela (importante) junto dos pontinhos */
+.tl-dots{align-items:center}
+.tl-ic{line-height:0}
+.tl-ic.urg{color:var(--p1)} .tl-ic.imp{color:var(--imp)}
+/* menu do clique direito */
+.ctx{position:fixed;z-index:70;background:var(--panel);border:1px solid var(--line-strong);border-radius:12px;box-shadow:var(--shadow);padding:4px;display:flex;flex-direction:column;min-width:210px}
+.ctx button{border:0;background:none;text-align:left;padding:8px 10px;border-radius:8px;display:flex;gap:8px;align-items:center;font-weight:600;font-size:14px}
+.ctx button:hover,.ctx button:focus-visible{background:var(--hover);outline:none}
+.ctx button span{color:var(--muted)}
+.pn .gest-hint{text-align:left;padding:0}
+/* atalhos de teclado (Configurações) */
+.keys{display:flex;flex-direction:column}
+.keys-sub{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:10px 0 2px}
+.key-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
+.kbd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;min-width:104px;justify-content:center;flex:none}
+.kbd.rec{border-color:var(--accent);color:var(--accent-text);background:var(--accent-soft)}
+.kbd.none{color:var(--faint)}
 </style>
 <style id="cronoCss">
 /* Cronograma de projeto: estrutura e design da ferramenta “Cronograma do projeto” */
@@ -488,6 +512,10 @@ tr:last-child td{border-bottom:0}
     </div>
     <nav class="nav" id="nav"></nav>
     <div class="side-foot">
+      <button class="nav-item" id="configBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+        Configurações
+      </button>
       <button class="nav-item" id="settingsBtn">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
         Sincronização e backup
@@ -920,6 +948,7 @@ function homePanel(key,title,icon,items,o={}){
   if(!open) return sec;
   if(!items.length){ sec.append(h("div",{class:"pn-empty"},o.empty||"Nada aqui.")); return sec; }
   sec.append(h("div",{class:"list"},items.slice(0,PANEL_MAX).map(t=>taskRow(t,{toDay:o.toDay}))));
+  if(o.toDay) sec.append(h("div",{class:"gest-hint mouse-only"},"Clique com o botão direito numa tarefa para trazê-la para o dia."));
   if(items.length>PANEL_MAX) sec.append(o.more?h("button",{class:"pn-more",onclick:()=>go(o.more)},`Ver todas (${items.length})`):h("div",{class:"pn-empty"},`+ ${items.length-PANEL_MAX} depois`));
   return sec;
 }
@@ -935,12 +964,16 @@ function timeline(sel){
   for(let i=-TL_PAST;i<=TL_FUT;i++){
     const d=addDays(base,i), key=ymd(d), items=sortTasks(byDay[key]||[],"manual"), n=items.length;
     const first=d.getDate()===1;
+    const urg=items.some(t=>(t.priority||2)===1), imp=items.some(t=>t.importance===3);
+    const tlIc=(d,c)=>{ const s=svg(d,10,'fill="currentColor" stroke-width="1.6"'); s.className="tl-ic "+c; return s; };
+    const flags=(urg?" · urgente":"")+(imp?" · importante":"");
     const cls="tl-day"+(key===td?" is-today":"")+(key===sel?" is-sel":"")+(d.getDay()===0||d.getDay()===6?" weekend":"")+(n&&key<td?" late":"");
-    track.append(h("button",{class:cls,title:`${fmtShort(key)} · ${n} tarefa${n===1?"":"s"}`,"aria-label":`${fmtShort(key)}, ${n} tarefa${n===1?"":"s"}`,"aria-pressed":key===sel?"true":"false",
+    track.append(h("button",{class:cls,title:`${fmtShort(key)} · ${n} tarefa${n===1?"":"s"}${flags}`,"aria-label":`${fmtShort(key)}, ${n} tarefa${n===1?"":"s"}${flags}`,"aria-pressed":key===sel?"true":"false",
         onclick:()=>{UI.homeDay=key===td?null:key;render();}},
       h("span",{class:"tl-wd"+(first?" mon":"")},first?MESES[d.getMonth()]:DIAS[d.getDay()][0].toUpperCase()),
       h("span",{class:"tl-num"},d.getDate()),
-      h("span",{class:"tl-dots"},items.slice(0,3).map(t=>h("i",{style:`--tc:${t.tags&&t.tags[0]?tagColor(t.tags[0]):"var(--faint)"}`})))));
+      h("span",{class:"tl-dots"},items.slice(0,3).map(t=>h("i",{style:`--tc:${t.tags&&t.tags[0]?tagColor(t.tags[0]):"var(--faint)"}`})),
+        urg?tlIc(ICON.bolt,"urg"):null,imp?tlIc(ICON.star,"imp"):null)));
   }
   const sc=h("div",{class:"tl-scroll"},track);
   sc.addEventListener("scroll",()=>{UI.tlLeft=sc.scrollLeft;},{passive:true});
@@ -1076,8 +1109,32 @@ function taskRow(t,opt={}){
         act("act-del","Apagar",ICON.trash,()=>removeTask(t.id))),
       opt.drag?h("button",{class:"grip","aria-label":"Arrastar para mudar a ordem (ou Alt + setas)",title:"Arraste para mudar a ordem",onclick:e=>e.stopPropagation()},svg(ICON.grip,16,'fill="currentColor"')):null));
   row._right=ra;
+  // painéis Urgentes/Importantes: clique direito oferece trazer para o dia (o arraste lateral fica só para apagar/tirar)
+  if(opt.toDay&&!t.done) row.addEventListener("contextmenu",e=>{ e.preventDefault(); openCtx(e.clientX,e.clientY,dayMenu(t)); });
   return row;
 }
+/* ---------- Menu do clique direito ---------- */
+function dayMenu(t){
+  const td=today(), sel=UI.view==="home"&&!UI.q&&UI.homeDay&&UI.homeDay!==td?UI.homeDay:null, items=[];
+  if(!inMyDay(t)) items.push({label:"Trazer para hoje (Meu Dia)",icon:ICON.sun,run:()=>bringToday(t.id)});
+  if(sel&&t.due!==sel) items.push({label:"Levar para "+fmtShort(sel),icon:ICON.cal,run:()=>{ const prev=VIEW.tasks[t.id]; if(!prev) return; patchTask(t.id,{due:sel}); toast("Prazo: "+fmtShort(sel),()=>restoreTask(t.id,prev)); }});
+  items.push({label:"Abrir detalhes",icon:ICON.edit,run:()=>select(t.id)});
+  return items;
+}
+function closeCtx(){ const m=$("#ctx"); if(m) m.remove(); }
+function openCtx(x,y,items){
+  closeCtx();
+  const m=h("div",{class:"ctx",id:"ctx",role:"menu"},items.map(it=>h("button",{role:"menuitem",onclick:()=>{ closeCtx(); it.run(); }},svg(it.icon,16),it.label)));
+  document.body.append(m);
+  const r=m.getBoundingClientRect(), z=parseFloat(getComputedStyle(document.documentElement).zoom)||1;
+  const W=window.innerWidth/z, H=window.innerHeight/z; x/=z; y/=z;
+  m.style.left=Math.max(8,Math.min(x,W-r.width/z-8))+"px"; m.style.top=Math.max(8,Math.min(y,H-r.height/z-8))+"px";
+  setTimeout(()=>{ const b=m.querySelector("button"); if(b) b.focus(); },0);
+}
+document.addEventListener("pointerdown",e=>{ if(!e.target.closest("#ctx")) closeCtx(); },true);
+window.addEventListener("keydown",e=>{ if(e.key==="Escape"&&$("#ctx")){ closeCtx(); e.stopPropagation(); } },true);
+window.addEventListener("resize",closeCtx);
+document.addEventListener("scroll",closeCtx,true);
 function rowKey(e,id){
   if(e.target!==e.currentTarget) return;
   if(e.key==="Enter"){ select(id); return; }
@@ -1301,6 +1358,7 @@ function renderReport(wrap){
   wrap.append(h("div",{class:"row-end",style:"justify-content:flex-start"},
     h("button",{class:"btn primary",onclick:()=>exportFile("csv")},"Exportar planilha (.csv)"),
     h("button",{class:"btn",onclick:()=>exportFile("html")},"Exportar relatório (.html)"),
+    h("button",{class:"btn",onclick:exportReportPDF},"Exportar PDF"),
     h("button",{class:"btn",onclick:copyReport},"Copiar tabela")));
   if(!rows.length){ wrap.append(h("div",{class:"empty"},"Nenhuma tarefa concluída neste período com esses grupos.")); return; }
   const tbl=h("table",{},h("thead",{},h("tr",{},["Concluída em","Tarefa","Grupos","Importância","Prioridade","Prazo"].map(x=>h("th",{},x)))),
@@ -1335,10 +1393,32 @@ function downloadFile(name,data,type){
     setTimeout(()=>URL.revokeObjectURL(url),4000); return true;
   }catch(e){ return false; }
 }
-function exportFile(kind){
+/* celular / app instalado: o download direto de arquivo gerado no app costuma não acontecer;
+   usa a folha de compartilhamento do sistema (Salvar em Arquivos, Drive, e-mail…). No computador, baixa o arquivo. */
+async function shareOrDownload(name,data,type){
+  const touch=window.matchMedia&&matchMedia("(hover:none)").matches;
+  if(touch&&navigator.canShare&&navigator.share&&typeof File==="function"){
+    try{ const f=new File([data],name,{type:type.split(";")[0]}); if(navigator.canShare({files:[f]})){ await navigator.share({files:[f],title:name}); return "shared"; } }
+    catch(e){ if(e&&e.name==="AbortError") return "cancel"; }
+  }
+  return downloadFile(name,data,type)?"ok":"fail";
+}
+async function exportFile(kind){
   const R=UI.rep; const name=`relatorio-tarefas_${R.from}_a_${R.to}.${kind}`;
-  const ok=kind==="csv"?downloadFile(name,reportCSV(),"text/csv;charset=utf-8"):downloadFile(name,reportHTML(),"text/html;charset=utf-8");
-  if(ok) toast("Relatório exportado"); else { copyText(reportPlain()); toast("Não foi possível baixar. O relatório foi copiado."); }
+  const r=kind==="csv"?await shareOrDownload(name,reportCSV(),"text/csv;charset=utf-8"):await shareOrDownload(name,reportHTML(),"text/html;charset=utf-8");
+  if(r==="shared"||r==="cancel") return;
+  if(r==="ok") toast("Relatório exportado"); else { copyText(reportPlain()); toast("Não foi possível baixar. O relatório foi copiado."); }
+}
+/* Exportar PDF: abre o relatório numa página própria e chama a impressão (“Salvar como PDF”), como no cronograma */
+function exportReportPDF(){
+  if(!reportRows().length){ toast("Nenhuma tarefa concluída neste período com esses grupos."); return; }
+  const html=reportHTML().replace(/<\/html>$/,`<style>html{-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{@page{size:A4;margin:14mm}body{margin:0;max-width:none}tr{break-inside:avoid}}</style><script>(function(){function ir(){setTimeout(function(){window.focus();window.print();},250);}if(document.readyState==="complete")ir();else window.addEventListener("load",ir);})();<\/script></html>`);
+  const w=window.open("","_blank");
+  if(w){ w.document.open(); w.document.write(html); w.document.close(); toast("Escolha “Salvar como PDF” na janela de impressão."); return; }
+  // janela bloqueada: imprime por um quadro oculto
+  const fr=h("iframe",{style:"position:fixed;right:0;bottom:0;width:794px;height:1123px;border:0;opacity:0;pointer-events:none","aria-hidden":"true"});
+  document.body.append(fr); fr.contentDocument.open(); fr.contentDocument.write(html); fr.contentDocument.close();
+  setTimeout(()=>fr.remove(),60000);
 }
 function reportPlain(){ return ["Concluída em\tTarefa\tGrupos\tImportância\tPrioridade\tPrazo",...reportRows().map(t=>[fmtBR(t.doneAt),t.title,(t.tags||[]).map(g=>"#"+g).join(" "),IMP[t.importance||2],"P"+(t.priority||2),t.due?fmtBR(t.due):""].join("\t"))].join("\n"); }
 function copyText(txt){
@@ -1761,11 +1841,145 @@ function remindersSection(){
   return sec;
 }
 
+/* ================= Configurações: tamanho do texto, tela cheia, atalhos ================= */
+const PREF_KEY="agenda-prefs-v1", KEYS_KEY="agenda-keys-v1";
+let PREFS=Object.assign({zoom:0.9},lsGet(PREF_KEY,{}));   // 90% no computador por padrão
+if(![0.8,0.9,1,1.1].includes(PREFS.zoom)) PREFS.zoom=0.9;
+function applyZoom(){ document.documentElement.style.setProperty("--ui-zoom",String(PREFS.zoom)); crAjustarTudo(); }
+applyZoom();
+/* tela cheia */
+const fsEl=()=>document.fullscreenElement||document.webkitFullscreenElement||null;
+function toggleFullscreen(){
+  const d=document.documentElement, req=d.requestFullscreen||d.webkitRequestFullscreen, ex=document.exitFullscreen||document.webkitExitFullscreen;
+  try{
+    if(fsEl()){ if(ex) ex.call(document); return; }
+    if(!req){ toast("Este navegador não permite tela cheia. No iPhone, instale o app na Tela de Início."); return; }
+    const r=req.call(d); if(r&&r.catch) r.catch(()=>toast("Não foi possível entrar em tela cheia."));
+  }catch(e){ toast("Não foi possível entrar em tela cheia."); }
+}
+document.addEventListener("fullscreenchange",()=>refreshConfig());
+document.addEventListener("webkitfullscreenchange",()=>refreshConfig());
+/* atalhos de teclado (editáveis; guardados neste aparelho) */
+function keyTask(){ const a=document.activeElement, r=a&&a.closest&&a.closest(".task[data-id]"); const id=(r&&r.dataset.id)||UI.sel; return id&&VIEW.tasks[id]?id:null; }
+function taskKey(patchFn,msgFn){
+  return ()=>{
+    const id=keyTask(); if(!id){ toast("Abra ou selecione uma tarefa primeiro."); return; }
+    const prev=VIEW.tasks[id], wasFocused=document.activeElement&&document.activeElement.closest&&document.activeElement.closest(".task[data-id]");
+    patchTask(id,patchFn(prev)); toast(msgFn(prev),()=>restoreTask(id,prev));
+    if(wasFocused) setTimeout(()=>{ const r=document.querySelector(`.task[data-id="${id}"]`); if(r) r.focus(); },0);
+  };
+}
+const KEY_ACTIONS=[
+  {id:"home",grp:"nav",label:"Início",def:"H",run:()=>go("home")},
+  {id:"hoje",grp:"nav",label:"Hoje (Início, no dia de hoje)",def:"T",run:()=>{ if(UI.view!=="home"||UI.q) go("home"); goToday(); }},
+  {id:"today",grp:"nav",label:"Meu Dia",def:"D",run:()=>go("today")},
+  {id:"important",grp:"nav",label:"Importantes",def:"I",run:()=>go("important")},
+  {id:"priority",grp:"nav",label:"Por prioridade",def:"P",run:()=>go("priority")},
+  {id:"planned",grp:"nav",label:"Planejado",def:"L",run:()=>go("planned")},
+  {id:"all",grp:"nav",label:"Tarefas",def:"A",run:()=>go("all")},
+  {id:"done",grp:"nav",label:"Concluídas",def:"C",run:()=>go("done")},
+  {id:"projects",grp:"nav",label:"Projetos",def:"J",run:()=>go("projects")},
+  {id:"report",grp:"nav",label:"Relatório",def:"R",run:()=>go("report")},
+  {id:"new",grp:"nav",label:"Nova tarefa (campo Adicionar)",def:"N",run:()=>{ const i=$("#addInput"); if(i){ i.focus(); i.scrollIntoView({block:"nearest"}); } else toast("Esta tela não tem campo de nova tarefa."); }},
+  {id:"full",grp:"nav",label:"Tela cheia",def:"F",run:toggleFullscreen},
+  {id:"config",grp:"nav",label:"Configurações",def:"O",run:()=>openConfig()},
+  {id:"p1",grp:"task",label:"Prioridade P1 · Urgente",def:"1",run:taskKey(()=>({priority:1}),()=>"Prioridade P1")},
+  {id:"p2",grp:"task",label:"Prioridade P2 · Normal",def:"2",run:taskKey(()=>({priority:2}),()=>"Prioridade P2")},
+  {id:"p3",grp:"task",label:"Prioridade P3 · Pode esperar",def:"3",run:taskKey(()=>({priority:3}),()=>"Prioridade P3")},
+  {id:"impA",grp:"task",label:"Importância alta",def:"Shift+1",run:taskKey(()=>({importance:3}),()=>"Importância alta")},
+  {id:"impM",grp:"task",label:"Importância média",def:"Shift+2",run:taskKey(()=>({importance:2}),()=>"Importância média")},
+  {id:"impB",grp:"task",label:"Importância baixa",def:"Shift+3",run:taskKey(()=>({importance:1}),()=>"Importância baixa")},
+  {id:"dueToday",grp:"task",label:"Prazo: hoje",def:"Shift+H",run:taskKey(()=>({due:today()}),()=>"Prazo: hoje")},
+  {id:"dueTom",grp:"task",label:"Prazo: amanhã",def:"Shift+A",run:taskKey(()=>({due:ymd(addDays(new Date(),1))}),()=>"Prazo: amanhã")},
+  {id:"dueWeek",grp:"task",label:"Prazo: em 1 semana",def:"Shift+S",run:taskKey(()=>({due:ymd(addDays(new Date(),7))}),()=>"Prazo: em 1 semana")},
+  {id:"dueNone",grp:"task",label:"Sem prazo",def:"Shift+X",run:taskKey(()=>({due:null}),()=>"Prazo removido")},
+  {id:"myday",grp:"task",label:"Adicionar / tirar do Meu Dia",def:"M",run:()=>{ const id=keyTask(); if(!id){ toast("Abra ou selecione uma tarefa primeiro."); return; } toggleMyDay({...VIEW.tasks[id],id}); }}
+];
+const defaultKeys=()=>Object.fromEntries(KEY_ACTIONS.map(a=>[a.id,a.def]));
+let KEYS=Object.assign(defaultKeys(),lsGet(KEYS_KEY,{}));
+for(const k of Object.keys(KEYS)) if(typeof KEYS[k]!=="string") KEYS[k]="";
+const saveKeys=()=>lsSet(KEYS_KEY,KEYS);
+let KEY_REC=false;
+function comboOf(e){
+  if(["Shift","Control","Alt","Meta","AltGraph","CapsLock","Tab"].includes(e.key)) return null;
+  let k=/^Key[A-Z]$/.test(e.code)?e.code.slice(3):/^Digit\d$/.test(e.code)?e.code.slice(5):/^Numpad\d$/.test(e.code)?e.code.slice(6):(e.key.length===1?e.key.toUpperCase():e.key);
+  if(!k||k==="Unidentified"||k==="Dead") return null;
+  if(k===" ") k="Espaço";
+  return (e.ctrlKey?"Ctrl+":"")+(e.altKey?"Alt+":"")+(e.shiftKey?"Shift+":"")+(e.metaKey?"Meta+":"")+k;
+}
+const fmtCombo=c=>c?c.split("+").join(" + "):"—";
+document.addEventListener("keydown",e=>{
+  if(KEY_REC||e.defaultPrevented||e.isComposing||e.repeat) return;
+  const tg=e.target;
+  if(tg&&tg.closest&&tg.closest("input,textarea,select,[contenteditable]")) return;   // digitando: atalhos desligados
+  if($("#modalRoot").firstChild||$("#ctx")) return;
+  const c=comboOf(e); if(!c) return;
+  if(tg&&tg.closest&&tg.closest(".task")&&(c==="Enter"||c==="Delete")) return;          // Enter/Delete da linha continuam como antes
+  const a=KEY_ACTIONS.find(x=>KEYS[x.id]===c); if(!a) return;
+  e.preventDefault(); a.run();
+});
+function recordKey(a,btn){
+  if(KEY_REC) return;
+  KEY_REC=true; btn.classList.add("rec"); btn.textContent="Pressione…";
+  let finished=false;
+  const done=()=>{ if(finished) return; finished=true; window.removeEventListener("keydown",onKey,true); btn.removeEventListener("blur",done); KEY_REC=false; refreshConfig(); };
+  const onKey=e=>{
+    e.preventDefault(); e.stopPropagation();
+    if(e.key==="Escape"){ done(); return; }
+    let c;
+    if(e.key==="Backspace"||e.key==="Delete") c="";
+    else{
+      c=comboOf(e); if(!c) return;
+      if(c==="/"||c==="Enter"){ toast(c==="/"?"A tecla / já abre a pesquisa.":"Enter não pode ser usado."); return; }
+      const other=KEY_ACTIONS.find(x=>x.id!==a.id&&KEYS[x.id]===c);
+      if(other){ KEYS[other.id]=""; toast(`${fmtCombo(c)} foi tirado de “${other.label}”.`); }
+    }
+    KEYS[a.id]=c; saveKeys(); done();
+  };
+  window.addEventListener("keydown",onKey,true);
+  btn.addEventListener("blur",done);
+}
+function keysSection(){
+  const sec=h("div",{class:"settings-sec",id:"setKeys"},h("h4",{},"Atalhos de teclado"),
+    h("p",{},"Já vêm com sugestões. Para trocar, clique na tecla e pressione a nova combinação (Esc cancela, Backspace deixa sem atalho). Os atalhos não funcionam enquanto você digita num campo. Os de classificação e prazo valem para a tarefa aberta nos detalhes ou selecionada na lista."));
+  const list=h("div",{class:"keys"});
+  for(const [g,label] of [["nav","Navegação"],["task","Tarefa: classificação e prazo"]]){
+    list.append(h("div",{class:"keys-sub"},label));
+    for(const a of KEY_ACTIONS.filter(x=>x.grp===g)){
+      const b=h("button",{class:"btn small kbd"+(KEYS[a.id]?"":" none"),"aria-label":`Atalho de ${a.label}: ${KEYS[a.id]?fmtCombo(KEYS[a.id]):"nenhum"}. Clique para trocar.`},fmtCombo(KEYS[a.id]));
+      b.addEventListener("click",()=>recordKey(a,b));
+      list.append(h("div",{class:"key-row"},h("span",{},a.label),b));
+    }
+  }
+  sec.append(list,h("div",{class:"row-end",style:"justify-content:flex-start"},
+    h("button",{class:"btn small",onclick:()=>{ KEYS=defaultKeys(); saveKeys(); refreshConfig(); toast("Atalhos sugeridos restaurados"); }},"Restaurar sugestões")));
+  return sec;
+}
+function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
+function openConfig(){ openModal("Configurações",configBody(),[]); }
+function configBody(){
+  const box=h("div",{id:"cfgBody",style:"display:flex;flex-direction:column;gap:14px"});
+  box.append(h("div",{class:"settings-sec",style:"border-top:0;padding-top:0"},h("h4",{},"Tamanho do texto no computador"),
+    h("p",{},"Vale para telas de computador; no celular o tamanho não muda. Padrão: 90%."),
+    h("div",{},h("span",{class:"seg"},[[0.8,"80%"],[0.9,"90%"],[1,"100%"],[1.1,"110%"]].map(([z,l])=>h("button",{class:PREFS.zoom===z?"on":"",onclick:()=>{ PREFS.zoom=z; lsSet(PREF_KEY,PREFS); applyZoom(); refreshConfig(); }},l))))));
+  const fsKey=KEYS.full?` Atalho: ${fmtCombo(KEYS.full)}.`:"";
+  box.append(h("div",{class:"settings-sec"},h("h4",{},"Tela cheia"),
+    h("p",{},"Esconde as barras do navegador e do sistema. Para sair, use Esc ou o mesmo botão."+fsKey),
+    h("div",{},h("button",{class:"btn",onclick:toggleFullscreen},fsEl()?"Sair da tela cheia":"Entrar em tela cheia"))));
+  box.append(keysSection());
+  box.append(h("div",{class:"settings-sec"},h("h4",{},"Dados"),
+    h("div",{class:"row-end",style:"justify-content:flex-start"},
+      h("button",{class:"btn",onclick:()=>openSettings()},"Sincronização e backup"),
+      h("button",{class:"btn",onclick:()=>openImport()},"Importar lista de tarefas"))));
+  return box;
+}
+
 /* ================= Eventos globais ================= */
 $("#q").addEventListener("input",e=>{UI.q=e.target.value.trim();render();});
 $("#menuBtn").addEventListener("click",()=>$("#app").classList.add("nav-open"));
 $("#scrim").addEventListener("click",closeNav);
 $("#importBtn").addEventListener("click",()=>{closeNav();openImport();});
+$("#configBtn").addEventListener("click",()=>{closeNav();openConfig();});
 document.addEventListener("keydown",e=>{
   if(e.key==="/"&&!e.target.matches("input,textarea,select")){e.preventDefault();$("#app").classList.add("nav-open");$("#q").focus();}
   if(e.key==="Escape"){ if($("#modalRoot").firstChild){$("#modalRoot").replaceChildren();return;} if(UI.sel&&!e.target.matches("input,textarea")){UI.sel=null;render();} closeNav(); }
