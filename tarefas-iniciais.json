@@ -1,0 +1,132 @@
+{
+ "version": 1,
+ "exportedAt": "2026-09-26T23:55:00.000Z",
+ "tasks": {
+  "seed01": {
+   "title": "Leitura tedesco no Classroom",
+   "tags": [
+    "preparar-aula"
+   ],
+   "due": "2026-09-25",
+   "importance": 2,
+   "priority": 2,
+   "done": false,
+   "doneAt": null,
+   "myDay": null,
+   "notes": "",
+   "createdAt": "2026-09-26T23:10:00.000Z"
+  },
+  "seed02": {
+   "title": "Projeto colaborativo UNAM e uso ao redor da direção de fotografia da Vera Cruz",
+   "tags": [
+    "pesquisa"
+   ],
+   "due": "2026-09-25",
+   "importance": 2,
+   "priority": 2,
+   "done": false,
+   "doneAt": null,
+   "myDay": null,
+   "notes": "",
+   "createdAt": "2026-09-26T23:10:00.000Z"
+  },
+  "seed03": {
+   "title": "Aula: distribuir manual de pós-produção",
+   "tags": [
+    "imagem4",
+    "preparar-aula"
+   ],
+   "due": "2026-09-28",
+   "importance": 2,
+   "priority": 2,
+   "done": false,
+   "doneAt": null,
+   "myDay": null,
+   "notes": "",
+   "createdAt": "2026-09-26T23:10:00.000Z"
+  },
+  "seed04": {
+   "title": "Terminar tabela refletores e mapa iluminação",
+   "tags": [
+    "imagem4",
+    "imagem2"
+   ],
+   "due": "2026-09-28",
+   "importance": 3,
+   "priority": 1,
+   "done": false,
+   "doneAt": null,
+   "myDay": null,
+   "notes": "",
+   "createdAt": "2026-09-26T23:10:00.000Z"
+  },
+  "seed05": {
+   "title": "Escrever pro João Paulo para dizer que Semana de volta de Semana Santa (abril)+1. Semana de 5 a 9/04.",
+   "tags": [
+    "semana-fotografia"
+   ],
+   "due": "2026-09-30",
+   "importance": 2,
+   "priority": 2,
+   "done": false,
+   "doneAt": null,
+   "myDay": null,
+   "notes": "",
+   "createdAt": "2026-09-26T23:10:00.000Z"
+  },
+  "seed06": {
+   "title": "Pedir lista de material para bancadas",
+   "tags": [
+    "gabriel"
+   ],
+   "due": "2026-09-30",
+   "importance": 2,
+   "priority": 2,
+   "done": false,
+   "doneAt": null,
+   "myDay": null,
+   "notes": "",
+   "createdAt": "2026-09-26T23:10:00.000Z"
+  },
+  "seed07": {
+   "title": "Reunião Daniel",
+   "tags": [
+    "imagem"
+   ],
+   "due": "2026-09-30",
+   "importance": 3,
+   "priority": 2,
+   "done": false,
+   "doneAt": null,
+   "myDay": null,
+   "notes": "",
+   "createdAt": "2026-09-26T23:10:00.000Z"
+  }
+ },
+ "tags": {
+  "pesquisa": {
+   "color": "#2F6FB0"
+  },
+  "preparar-aula": {
+   "color": "#3C8A5E"
+  },
+  "pub": {
+   "color": "#5C6BC0"
+  },
+  "imagem": {
+   "color": "#B5563A"
+  },
+  "imagem2": {
+   "color": "#8A5AB5"
+  },
+  "imagem4": {
+   "color": "#B08A2F"
+  },
+  "semana-fotografia": {
+   "color": "#2F8C95"
+  },
+  "gabriel": {
+   "color": "#B54A7A"
+  }
+ }
+}

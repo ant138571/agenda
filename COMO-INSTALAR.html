@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agenda de Tarefas: como instalar</title>
+<style>
+:root{--bg:#EDF1F5;--panel:#fff;--ink:#17202A;--muted:#5A6776;--line:#DCE2E9;--accent:#1F5C99;--band:#1E4467;--warn:#8A5A12;--warnbg:#FBF1DE}
+@media (prefers-color-scheme:dark){:root{--bg:#0E141B;--panel:#151E28;--ink:#E4EAF0;--muted:#98A6B5;--line:#243140;--accent:#6EA7DE;--band:#15324E;--warn:#E0A94A;--warnbg:#2A2214}}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Segoe UI",system-ui,-apple-system,sans-serif}
+header{background:var(--band);color:#F3F7FB;padding:28px 20px}
+header div,main{max-width:760px;margin:0 auto}
+header h1{margin:0 0 4px;font-size:28px}
+header p{margin:0;color:#B9CCE0}
+main{padding:20px 20px 60px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 22px 16px;margin:18px 0}
+h2{font-size:20px;display:flex;gap:10px;align-items:baseline}
+h2 span{font-size:13px;font-weight:600;color:#fff;background:var(--accent);border-radius:999px;padding:1px 9px}
+ol{padding-left:22px} li{margin:6px 0}
+code{font-family:Consolas,Menlo,monospace;font-size:14px;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:0 5px}
+.note{background:var(--warnbg);color:var(--ink);border-left:4px solid var(--warn);padding:10px 14px;border-radius:6px;margin:12px 0;font-size:15px}
+.muted{color:var(--muted);font-size:15px}
+table{border-collapse:collapse;width:100%;font-size:15px}td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header><div><h1>Agenda de Tarefas</h1><p>Como colocar o aplicativo no ar e instalar no computador e no celular. Tempo total: cerca de 20 minutos, uma única vez.</p></div></header>
+<main>
+
+<section>
+<h2>O que tem nesta pasta</h2>
+<table>
+<tr><td><code>index.html</code>, <code>sw.js</code>, <code>manifest.webmanifest</code>, <code>icons/</code>, <code>vendor/</code></td><td>O aplicativo. Envie todos juntos, mantendo as pastas.</td></tr>
+<tr><td><code>supabase.sql</code></td><td>Script que cria o banco de dados da sincronização.</td></tr>
+<tr><td><code>tarefas-iniciais.json</code></td><td>Backup com as 7 tarefas do seu Microsoft To Do, para restaurar no app.</td></tr>
+</table>
+<p class="muted">Sem os passos 1 e 3, o app já funciona, mas salva só no aparelho em que foi aberto. A sincronização é o que faz computador e celular mostrarem as mesmas tarefas.</p>
+</section>
+
+<section>
+<h2><span>1</span> Criar o banco de dados gratuito (Supabase)</h2>
+<ol>
+<li>Acesse <a href="https://supabase.com" target="_blank" rel="noopener">supabase.com</a> e crie uma conta (pode entrar com o GitHub ou e-mail).</li>
+<li>Clique em <b>New project</b>. Dê um nome (ex.: <code>agenda</code>), crie uma senha do banco (guarde-a) e escolha a região <b>South America (São Paulo)</b>. Plano <b>Free</b>.</li>
+<li>Quando o projeto estiver pronto, abra <b>SQL Editor</b> no menu lateral, clique em <b>New query</b>, cole todo o conteúdo do arquivo <code>supabase.sql</code> e clique em <b>Run</b>. Deve aparecer “Success”.</li>
+<li>Clique em <b>Connect</b> (topo da página) ou em <b>Project Settings › API Keys</b> e anote dois valores:
+  <ul><li><b>Project URL</b>, algo como <code>https://abcdxyz.supabase.co</code></li>
+  <li>a chave pública: <b>anon</b> ou <b>publishable</b> (começa com <code>eyJ</code> ou <code>sb_publishable_</code>). Nunca use a chave <i>service_role/secret</i>.</li></ul></li>
+<li><i>Opcional, recomendado:</i> em <b>Authentication › Sign In / Providers › Email</b>, desligue <b>Confirm email</b>. Assim você entra direto ao criar a conta, sem precisar confirmar pelo e-mail.</li>
+</ol>
+<div class="note">No plano gratuito, o Supabase <b>pausa o projeto após 7 dias sem nenhum uso</b>. Se você abrir a agenda pelo menos uma vez por semana, isso não acontece. Se pausar, nada se perde: entre no painel do Supabase e clique em <b>Restore project</b>. Enquanto isso, o app continua funcionando com a cópia local e envia as alterações quando o projeto voltar.</div>
+</section>
+
+<section>
+<h2><span>2</span> Colocar o aplicativo no ar (GitHub Pages, grátis)</h2>
+<ol>
+<li>Crie uma conta em <a href="https://github.com" target="_blank" rel="noopener">github.com</a>.</li>
+<li>Clique em <b>+ › New repository</b>. Nome: <code>agenda</code>. Marque <b>Public</b> e clique em <b>Create repository</b>.</li>
+<li>Na página do repositório, clique em <b>uploading an existing file</b> e arraste <b>todo o conteúdo desta pasta</b> (arquivos e as pastas <code>icons</code> e <code>vendor</code>). Clique em <b>Commit changes</b>.</li>
+<li>Vá em <b>Settings › Pages</b>. Em <b>Source</b>, escolha <b>Deploy from a branch</b>, branch <b>main</b>, pasta <b>/ (root)</b>, e clique em <b>Save</b>.</li>
+<li>Em 1 a 2 minutos o endereço aparece no topo dessa página: <code>https://SEU-USUARIO.github.io/agenda/</code>.</li>
+</ol>
+<p class="muted">O código do app fica público, mas suas tarefas não: elas ficam no seu Supabase, protegidas pela sua senha. Alternativas equivalentes ao GitHub Pages: Netlify ou Cloudflare Pages (arrastar a pasta).</p>
+<p class="muted">Se você desligou “Confirm email” no passo 1.5, pule isto. Caso contrário, no Supabase, em <b>Authentication › URL Configuration</b>, coloque esse endereço em <b>Site URL</b>, para o link de confirmação voltar ao app.</p>
+</section>
+
+<section>
+<h2><span>3</span> Ligar a sincronização</h2>
+<ol>
+<li>Abra o endereço do app no computador. No menu lateral, clique em <b>Sincronização e backup</b>.</li>
+<li>Cole o <b>Project URL</b> e a <b>chave pública</b> e clique em <b>Salvar servidor</b>.</li>
+<li>Digite seu e-mail e uma senha e clique em <b>Criar conta</b> (na primeira vez). Depois, e em outros aparelhos, use <b>Entrar</b>.</li>
+<li>Para trazer as tarefas do To Do: no mesmo painel, <b>Restaurar backup</b> › escolha <code>tarefas-iniciais.json</code>. Para importar mais tarefas, use <b>Importar lista de tarefas</b> e cole uma por linha.</li>
+</ol>
+</section>
+
+<section>
+<h2><span>4</span> Instalar no computador e no celular</h2>
+<table>
+<tr><th>Onde</th><th>Como</th></tr>
+<tr><td>Windows (Chrome ou Edge)</td><td>Abra o endereço e clique no ícone de instalar à direita da barra de endereço (ou menu › <i>Aplicativos › Instalar</i>). O app ganha ícone no menu Iniciar e abre em janela própria.</td></tr>
+<tr><td>Android (Chrome)</td><td>Menu <b>⋮</b> › <b>Instalar app</b> (ou <i>Adicionar à tela inicial</i>).</td></tr>
+<tr><td>iPhone/iPad (Safari)</td><td>Botão <b>Compartilhar</b> › <b>Adicionar à Tela de Início</b>.</td></tr>
+</table>
+<p>Em cada aparelho, faça o passo 3 uma vez (servidor + <b>Entrar</b>).</p>
+</section>
+
+<section>
+<h2>Uso offline</h2>
+<p>Depois da primeira abertura com internet, o app abre e funciona <b>sem conexão</b>: criar, editar, concluir e excluir tarefas continua normal. As alterações ficam guardadas no aparelho e são enviadas automaticamente quando a internet volta. O status no topo do menu mostra “Offline · N alterações a enviar” ou “Sincronizado”.</p>
+<p class="muted">Se o mesmo item for alterado em dois aparelhos enquanto ambos estão offline, vale a última alteração enviada.</p>
+</section>
+
+<section>
+<h2>Atalhos úteis</h2>
+<table>
+<tr><td><code>#grupo</code></td><td>no nome da tarefa, adiciona ao grupo (ex.: <code>#pesquisa</code>, <code>#preparar-aula</code>, <code>#pub</code>)</td></tr>
+<tr><td><code>!alta</code> <code>!media</code> <code>!baixa</code></td><td>importância</td></tr>
+<tr><td><code>p1</code> <code>p2</code> <code>p3</code></td><td>prioridade (P1 = urgente)</td></tr>
+<tr><td><code>/</code></td><td>pesquisar</td></tr>
+</table>
+</section>
+
+<section>
+<h2>Atualizar o aplicativo no futuro</h2>
+<p>Substitua os arquivos no repositório do GitHub (mesmo processo de upload). Ao trocar o <code>index.html</code>, mude também a linha <code>const VERSION = "agenda-v1";</code> em <code>sw.js</code> (para <code>agenda-v2</code> etc.), para os aparelhos baixarem a nova versão. Suas tarefas não são afetadas.</p>
+</section>
+</main>
+</body>
+</html>
