@@ -15,7 +15,7 @@
 <meta name="apple-mobile-web-app-title" content="Agenda">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Bricolage+Grotesque:wght@700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap">
 <style>
 :root{
   --bg:#FFFFFF; --panel:#FFFFFF; --side:#FAF9F7; --soft:#F6F5F2; --ink:#1C1B1A; --muted:#6B665F; --faint:#A19D96;
@@ -221,6 +221,30 @@ button{cursor:pointer}
 .later-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .later-row{display:flex;justify-content:space-between;color:var(--muted);font-variant-numeric:tabular-nums}
 .later-row b{color:var(--ink);font-weight:600}
+/* painéis recolhíveis da coluna direita (Lembretes, Urgentes, Importantes) */
+.pn{display:flex;flex-direction:column;gap:8px}
+.pn+.pn,.pn+.wk-head{border-top:1px solid var(--line);padding-top:12px}
+.pn-head{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;padding:2px 0;text-align:left;color:var(--ink);border-radius:8px}
+.pn-head>span:first-child{color:var(--muted)}
+.pn-head.urg>span:first-child{color:var(--p1)} .pn-head.imp>span:first-child{color:var(--imp)} .pn-head.rem>span:first-child{color:var(--accent-text)}
+.pn-title{font-size:16px;font-weight:800}
+.pn-n{font-size:12px;font-weight:700;color:var(--muted);background:var(--soft);border-radius:999px;padding:0 8px;line-height:20px;font-variant-numeric:tabular-nums}
+.pn-chev{margin-left:auto;color:var(--faint);transition:transform .15s}
+.pn-head[aria-expanded="false"] .pn-chev{transform:rotate(-90deg)}
+.pn-more{border:0;background:none;padding:2px 0;font-size:12.5px;font-weight:700;color:var(--accent-text);text-align:left}
+.pn-empty{font-size:13px;color:var(--faint);padding:2px 0 4px}
+.to-day{border:0;background:var(--accent-soft);color:var(--accent-text);border-radius:999px;font-size:12px;font-weight:700;padding:4px 9px 4px 7px;display:inline-flex;align-items:center;gap:4px;flex:none;margin-right:2px}
+.to-day:hover{filter:brightness(.96)}
+.m-rem{display:inline-flex;align-items:center;gap:3px;color:var(--accent-text);font-weight:700}
+.m-rem.past{color:var(--muted)}
+/* alarme de lembrete */
+.alarms{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;gap:8px;width:min(440px,calc(100% - 24px))}
+.alarm{background:var(--panel);border:1px solid var(--line-strong);border-left:4px solid var(--accent);border-radius:14px;box-shadow:var(--shadow);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.alarm-top{display:flex;gap:10px;align-items:flex-start}
+.alarm-top>span:first-child{color:var(--accent);margin-top:2px}
+.alarm-title{font-weight:700;overflow-wrap:anywhere}
+.alarm-time{font-size:12.5px;color:var(--muted)}
+.alarm .row-end{justify-content:flex-start}
 
 /* ---------- Detalhe ---------- */
 .detail{background:var(--side);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
@@ -234,7 +258,7 @@ button{cursor:pointer}
 .circle.p1{border-color:var(--p1)} .circle.p3{border-color:var(--p3)}
 .field{display:flex;flex-direction:column;gap:6px}
 .field>label,.field>.lbl{font-size:12px;color:var(--muted);font-weight:600}
-.field input[type=date],.field textarea,.field input[type=text]{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)}
+.field input[type=date],.field input[type=datetime-local],.field textarea,.field input[type=text]{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)}
 .field textarea{min-height:90px;resize:vertical}
 .opts{display:flex;gap:6px;flex-wrap:wrap}
 .opt{border:1px solid var(--line);background:var(--panel);padding:6px 11px;border-radius:999px;font-size:13px;display:inline-flex;gap:6px;align-items:center;font-weight:600}
@@ -310,8 +334,139 @@ tr:last-child td{border-bottom:0}
   .stats{grid-template-columns:repeat(2,1fr)}
   .detail{width:100%}
 }
+@media (max-width:860px){ .pn-urg,.pn-imp{display:none} }  /* Urgentes e Importantes: só na versão para computador */
 @media (max-width:640px){ .hint{display:none} .add input[type=date]{max-width:118px;font-size:12px} }
 @media (prefers-reduced-motion:reduce){ .side,.task,.t-card{transition:none} }
+
+/* ---------- Projetos ---------- */
+.proj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:16px}
+.proj-cols{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:24px;align-items:start}
+.proj-tasks{display:flex;flex-direction:column;gap:10px;min-width:0}
+.proj-tasks .add input[type=date]{max-width:118px}
+.proj-empty{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+.cr-mini{cursor:pointer;transition:box-shadow .15s}
+.cr-mini:hover{box-shadow:0 0 0 1.5px var(--line-strong)}
+.home-proj{margin-top:18px;display:flex;flex-direction:column;gap:12px}
+.home-proj .proj-grid{grid-template-columns:repeat(auto-fill,minmax(460px,1fr))}
+/* modo de edição do cronograma */
+.ce{display:flex;flex-direction:column;gap:14px;background:var(--side);border:1px solid var(--line);border-radius:16px;padding:16px}
+.ce-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ce-badge{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-text);background:var(--accent-soft);border-radius:999px;padding:3px 10px}
+.ce-top .row-end{margin-left:auto}
+.ce input[type=text],.ce input[type=date],.ce textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)}
+.ce textarea{min-height:84px;resize:vertical;line-height:1.4}
+.ce-ev{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--c,var(--line-strong));border-radius:12px;padding:12px;display:grid;grid-template-columns:150px 1fr 1fr auto;gap:8px 10px;align-items:end}
+.ce-ev .field{min-width:0}
+.ce-ev .wide{grid-column:1/-1}
+.ce-ev .check-lbl{padding-bottom:9px;white-space:nowrap}
+.ce-del{align-self:start}
+.ce-hint{font-size:12.5px;color:var(--muted)}
+@media (max-width:1100px){ .proj-cols{grid-template-columns:1fr} }
+@media (max-width:860px){ .crono.cr-card{padding:1.4rem 1.1rem 1rem} .proj-grid,.home-proj .proj-grid{grid-template-columns:1fr} .ce-ev{grid-template-columns:1fr 1fr} .ce-ev .ce-del{grid-column:2;justify-self:end;grid-row:1} }
+</style>
+<style id="cronoCss">
+/* Cronograma de projeto: estrutura e design da ferramenta “Cronograma do projeto” */
+.crono{
+  --fundo:#f4f5f7; --texto:#16181d; --suave:#565c67; --linha:#c9cdd5; --erro:#b3261e;
+  --azul:#2f6fdb; --cinza:#8b9099; --verde:#2a9d5c; --rosa:#e0709a; --amarelo:#e3b400;
+  --display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+  --corpo:"Source Serif 4",Georgia,"Times New Roman",serif;
+  container-type:inline-size;
+  background:var(--fundo); color:var(--texto); font-family:var(--corpo); font-size:1.0625rem; line-height:1.6;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .crono{ --fundo:#14161a; --texto:#eceef2; --suave:#a0a7b2; --linha:#333842; --erro:#ff8a80; --azul:#5b95ff; --cinza:#8b9099; --verde:#43c17c; --rosa:#f08db2; --amarelo:#f0c928; } }
+:root[data-theme="dark"] .crono{ --fundo:#14161a; --texto:#eceef2; --suave:#a0a7b2; --linha:#333842; --erro:#ff8a80; --azul:#5b95ff; --cinza:#8b9099; --verde:#43c17c; --rosa:#f08db2; --amarelo:#f0c928; }
+.crono *,.crono *::before,.crono *::after{box-sizing:border-box}
+.crono.cr-card{border-radius:16px;padding:2rem 2.25rem 1.5rem}
+.crono.cr-mini{border-radius:16px;padding:1.1rem 1.4rem .4rem}
+.crono .cr-titulo{margin:0;font-family:var(--display);font-weight:700;font-size:clamp(1.9rem,5.2vw,3.1rem);line-height:1.06;letter-spacing:-.02em;text-wrap:balance}
+.crono.cr-card .cr-titulo{font-size:clamp(1.7rem,4vw,2.6rem)}
+.crono.cr-mini .cr-titulo{font-size:1.3rem;line-height:1.15;letter-spacing:-.01em}
+.crono .periodo{margin:1.1rem 0 0;color:var(--suave);font-size:1.05rem}
+.crono.cr-mini .periodo{margin-top:.25rem;font-size:.95rem}
+.crono .faixa{margin:3rem 0 3.5rem}
+.crono.cr-mini .faixa{margin:.6rem 0 .4rem}
+.crono .escala{position:relative;height:8rem;margin:0 12px}
+.crono .barra{position:absolute;left:0;right:0;top:3.75rem;height:10px;border-radius:5px;background:var(--cinza)}
+.crono .ticks{position:absolute;left:0;right:0;top:calc(3.75rem + 16px);height:6px;border-right:1px solid var(--linha);background-image:linear-gradient(to right,var(--linha) 1px,transparent 1px)}
+.crono .marca{position:absolute;top:0;left:var(--x);height:100%}
+.crono .ponto{position:absolute;left:0;top:calc(3.75rem - 4px);width:18px;height:18px;border-radius:50%;transform:translateX(-50%);background:var(--c);box-shadow:0 0 0 3px var(--fundo)}
+.crono .marca.vazia .ponto{background:var(--fundo);border:2px solid var(--c)}
+.crono .rotulo{position:absolute;white-space:nowrap;text-align:center;transform:translateX(-50%);line-height:1.25}
+.crono .rotulo b{display:block;font-family:var(--display);font-weight:700;font-size:.95rem}
+.crono .rotulo small{display:block;font-size:.85rem;color:var(--suave)}
+.crono .rotulo.sem-legenda small{display:none}
+.crono .rotulo.oculto{visibility:hidden}
+.crono .acima .rotulo{bottom:4.85rem}
+.crono .abaixo .rotulo{top:5.15rem}
+.crono .ini .rotulo{transform:none;text-align:left;left:-12px}
+.crono .fim .rotulo{transform:none;text-align:right;right:-12px;left:auto}
+.crono .hoje{position:absolute;top:.9rem;bottom:.5rem;width:1px;background:var(--texto);opacity:.55}
+.crono .hoje span{position:absolute;top:-1.1rem;left:50%;transform:translateX(-50%);font-family:var(--display);font-size:.8rem}
+.crono .linha{list-style:none;margin:0;padding:0}
+.crono .evento{display:grid;grid-template-columns:9.5rem 2.25rem minmax(0,1fr)}
+.crono .data{grid-column:1;padding-bottom:2.75rem}
+.crono .trilho{grid-column:2;position:relative}
+.crono .corpo{grid-column:3;padding-bottom:2.75rem}
+.crono .trilho::before{content:"";position:absolute;left:50%;top:1.1rem;bottom:0;width:2px;transform:translateX(-50%);background:linear-gradient(var(--c),var(--cn,var(--c)))}
+.crono .evento:last-child .trilho::before{display:none}
+.crono .trilho::after{content:"";position:absolute;left:50%;top:calc(1.1rem - 8px);width:16px;height:16px;border-radius:50%;transform:translateX(-50%);background:var(--c);box-shadow:0 0 0 4px var(--fundo)}
+.crono .evento[data-sem] .trilho::after{background:var(--fundo);border:2px solid var(--c)}
+.crono .dia{display:block;font-family:var(--display);font-weight:700;font-size:2rem;line-height:1.1;letter-spacing:-.01em}
+.crono .sem,.crono .hora{display:block}
+.crono .sem{color:var(--suave)}
+.crono .hora{font-weight:600}
+.crono .proximo{display:inline-block;margin-top:.6rem;padding:.1rem .65rem;border:1.5px solid var(--c);border-radius:999px;font-family:var(--display);font-size:.82rem;line-height:1.5}
+.crono .corpo>:first-child{margin-top:.3rem}
+.crono .contexto{margin:0 0 .9rem;color:var(--suave);font-style:italic}
+.crono .evento[data-sem] .contexto{margin:.3rem 0 0}
+.crono .evento[data-sem] .contexto+.contexto{margin-top:.4rem}
+.crono .corpo ul{list-style:none;margin:0;padding:0;max-width:38rem}
+.crono .corpo li{position:relative;padding-left:1.5rem;margin:0 0 .85rem}
+.crono .corpo li::before{content:"";position:absolute;left:0;top:.82em;width:.75rem;height:2px;background:var(--c)}
+.crono .passou .data,.crono .passou .corpo{opacity:.6}
+.crono .cr-vazio{margin:1.5rem 0 1rem;color:var(--suave);font-style:italic}
+@container (max-width:40rem){
+  .crono .rotulo small{display:none}
+  .crono .evento{grid-template-columns:1.75rem minmax(0,1fr)}
+  .crono .trilho{grid-column:1;grid-row:1/span 2}
+  .crono .data{grid-column:2;grid-row:1;padding-bottom:.7rem;display:flex;flex-wrap:wrap;align-items:baseline;gap:.15rem .8rem}
+  .crono .corpo{grid-column:2;grid-row:2}
+  .crono .proximo{margin-top:0}
+  .crono .escala{height:7rem}
+  .crono .barra{top:3.25rem}
+  .crono .ticks{top:calc(3.25rem + 16px)}
+  .crono .ponto{top:calc(3.25rem - 4px)}
+  .crono .acima .rotulo{bottom:4.35rem}
+  .crono .abaixo .rotulo{top:4.65rem}
+}
+/* página de impressão (Exportar PDF): mesma folha A4 da ferramenta */
+.crono.cr-print{max-width:52rem;margin:0 auto;padding:2.5rem 1.25rem 4rem;min-height:100vh}
+@media print{
+  @page{size:A4;margin:0}
+  html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .crono .hoje{display:none!important}
+  .crono.cr-print{font-size:.92rem;line-height:1.45;max-width:none;padding:13mm 16mm 10mm;min-height:0}
+  .crono.cr-print .cr-titulo{font-size:1.95rem}
+  .crono.cr-print .periodo{margin-top:.6rem;font-size:.98rem}
+  .crono.cr-print .faixa{margin:1.6rem 0 1.7rem}
+  .crono.cr-print .escala{height:7.6rem}
+  .crono.cr-print .barra{top:3.5rem}
+  .crono.cr-print .ticks{top:calc(3.5rem + 16px)}
+  .crono.cr-print .ponto{top:calc(3.5rem - 4px)}
+  .crono.cr-print .acima .rotulo{bottom:4.6rem}
+  .crono.cr-print .abaixo .rotulo{top:4.9rem}
+  .crono.cr-print .evento{grid-template-columns:7.75rem 2.25rem minmax(0,1fr);break-inside:avoid}
+  .crono.cr-print .data,.crono.cr-print .corpo{padding-bottom:1.3rem}
+  .crono.cr-print .dia{font-size:1.7rem}
+  .crono.cr-print .trilho::before{top:.935rem}
+  .crono.cr-print .trilho::after{top:calc(.935rem - 8px)}
+  .crono.cr-print .contexto{margin-bottom:.5rem}
+  .crono.cr-print .corpo ul{max-width:none}
+  .crono.cr-print .corpo li{margin-bottom:.5rem}
+  .crono.cr-print .passou .data,.crono.cr-print .passou .corpo{opacity:1}
+  .crono.cr-print .proximo{display:none}
+}
 </style>
 </head>
 <body>
@@ -398,6 +553,10 @@ const ICON={
   tag:'<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.3"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
   edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  bell:'<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
+  chev:'<path d="M6 9l6 6 6-6"/>',
+  bolt:'<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>',
   grip:'<circle cx="9" cy="6" r=".8"/><circle cx="15" cy="6" r=".8"/><circle cx="9" cy="12" r=".8"/><circle cx="15" cy="12" r=".8"/><circle cx="9" cy="18" r=".8"/><circle cx="15" cy="18" r=".8"/>'
 };
 const esc = s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -412,6 +571,10 @@ const fmtShort=s=>{const d=parseYmd(s);return `${DIAS[d.getDay()]}, ${d.getDate(
 const fmtBR=s=>{if(!s)return "";const [y,m,d]=s.slice(0,10).split("-");return `${d}/${m}/${y}`;};
 const fmtLong=d=>d.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"});
 const fmtDue=s=>{const d=parseYmd(s);return `${DIAS[d.getDay()]} ${pad(d.getDate())}/${pad(d.getMonth()+1)}`;};
+const hm=d=>`${pad(d.getHours())}:${pad(d.getMinutes())}`;
+/* lembrete: guardado como data/hora ISO (UTC); exibido no horário local */
+const fmtRemind=iso=>{const d=new Date(iso), k=ymd(d); if(k===today()) return "hoje "+hm(d); if(k===ymd(addDays(new Date(),1))) return "amanhã "+hm(d); return `${DIAS[d.getDay()]} ${pad(d.getDate())}/${pad(d.getMonth()+1)} ${hm(d)}`;};
+const toLocalInput=iso=>{const d=new Date(iso); return isNaN(d)?"":`${ymd(d)}T${hm(d)}`;};
 const uid=()=> "t"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const normTag=s=>String(s).trim().replace(/^#+/,"").toLowerCase().replace(/\s+/g,"-").replace(/[^\p{L}\p{N}_.\-]/gu,"").slice(0,40);
 const TAG_COLORS=["#2F6FB0","#B5563A","#3C8A5E","#8A5AB5","#B08A2F","#2F8C95","#B54A7A","#5C6BC0","#7A8B2F","#C0662F"];
@@ -433,7 +596,7 @@ const CACHE_KEY="agenda-cache-v1", QUEUE_KEY="agenda-queue-v1", UI_KEY="agenda-u
 const cache=lsGet(CACHE_KEY,{tasks:{},tags:{}});
 let CFG=lsGet(CFG_KEY,{url:"",key:""});
 const S={
-  server:{tasks:cache.tasks||{},tags:cache.tags||{}},  // último estado confirmado (cópia local)
+  server:{tasks:cache.tasks||{},tags:cache.tags||{},projects:cache.projects||{}},  // último estado confirmado (cópia local)
   queue:lsGet(QUEUE_KEY,[]),                            // alterações ainda não enviadas
   lastPull:lsGet(PULL_KEY,0),
   sb:null, user:null, mode:"local", busy:false, again:false, lastError:""
@@ -441,13 +604,14 @@ const S={
 function applyToServer(op){
   if(op.path.startsWith("tasks/")){const id=op.path.slice(6); if(op.op==="delete") delete S.server.tasks[id]; else S.server.tasks[id]=op.data;}
   else if(op.path==="meta/tags"){ S.server.tags=(op.op==="delete"||!op.data)?{}:(op.data.map||{}); }
+  else if(op.path.startsWith("projects/")){ const id=op.path.slice(9); S.server.projects=S.server.projects||{}; if(op.op==="delete"||!op.data) delete S.server.projects[id]; else S.server.projects[id]=op.data; }
 }
 function applyQueue(base){
-  const saved=S.server; S.server={tasks:{...base.tasks},tags:{...base.tags}};
+  const saved=S.server; S.server={tasks:{...base.tasks},tags:{...base.tags},projects:{...(base.projects||{})}};
   for(const op of S.queue) applyToServer(op);
   const out=S.server; S.server=saved; return out;
 }
-let VIEW={tasks:{},tags:{}};
+let VIEW={tasks:{},tags:{},projects:{}};
 function recompute(){ VIEW=applyQueue(S.server); }
 function saveCache(){ lsSet(CACHE_KEY,S.server); lsSet(QUEUE_KEY,S.queue); lsSet(PULL_KEY,S.lastPull); }
 function enqueueMany(ops){
@@ -518,7 +682,7 @@ function initClient(){
   }catch(e){ S.sb=null; S.lastError="Endereço ou chave do Supabase inválidos."; updateSync(); return; }
   S.sb.auth.onAuthStateChange((ev,session)=>{
     S.user=session?session.user:null;
-    setTimeout(()=>{ updateSync(); renderSettingsIfOpen(); if(S.user) sync(); },0);
+    setTimeout(()=>{ updateSync(); renderSettingsIfOpen(); if(S.user){ sync(); ensurePush(); } },0);
   });
 }
 window.addEventListener("online",()=>scheduleSync(200));
@@ -536,7 +700,8 @@ function allTags(){
   return {names,map:m};
 }
 function hash(s){let x=0;for(const c of s)x=(x*31+c.codePointAt(0))>>>0;return x;}
-const tagColor=n=>{const m=VIEW.tags[n];return (m&&m.color)||TAG_COLORS[hash(n)%TAG_COLORS.length];};
+const safeColor=c=>typeof c==="string"&&/^#[0-9a-f]{3,8}$/i.test(c)?c:null;  // só cores #hex (a cor vai para atributos style)
+const tagColor=n=>{const m=VIEW.tags[n];return (m&&safeColor(m.color))||TAG_COLORS[hash(n)%TAG_COLORS.length];};
 function saveTags(map){ enqueue({op:"set",path:"meta/tags",data:{map}}); }
 function ensureTags(list){
   const m={...VIEW.tags}; let changed=false;
@@ -546,9 +711,23 @@ function ensureTags(list){
 function putTask(id,data){ const clean={...data}; delete clean.id; clean.updatedAt=new Date().toISOString(); enqueue({op:"set",path:"tasks/"+id,data:clean}); }
 function patchTask(id,patch){ const cur=VIEW.tasks[id]; if(!cur) return; putTask(id,{...cur,...patch}); }
 function deleteTask(id){ if(UI.sel===id){UI.sel=null;} enqueue({op:"delete",path:"tasks/"+id}); }
+/* valida uma tarefa vinda de arquivo de backup: só campos conhecidos e com o tipo certo */
+function cleanTask(t){
+  if(!t||typeof t!=="object"||typeof t.title!=="string"||!t.title.trim()) return null;
+  const str=(v,max=40)=>typeof v==="string"?v.slice(0,max):null, lvl=v=>[1,2,3].includes(v)?v:2;
+  const c={title:t.title.slice(0,500),tags:Array.isArray(t.tags)?[...new Set(t.tags.map(normTag).filter(Boolean))]:[],
+    due:typeof t.due==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(t.due)?t.due:null,importance:lvl(t.importance),priority:lvl(t.priority),
+    done:t.done===true,doneAt:str(t.doneAt),myDay:str(t.myDay),notes:typeof t.notes==="string"?t.notes.slice(0,20000):"",createdAt:str(t.createdAt)||new Date().toISOString()};
+  if(Array.isArray(t.steps)) c.steps=t.steps.filter(x=>x&&typeof x.title==="string").slice(0,200).map((x,i)=>({id:str(x.id)||"s"+(i+1),title:x.title.slice(0,500),done:x.done===true}));
+  if(typeof t.ord==="number"&&isFinite(t.ord)) c.ord=t.ord;
+  if(str(t.remindAt)&&!isNaN(Date.parse(t.remindAt))) c.remindAt=t.remindAt;
+  return c;
+}
+/* posição manual acima de todas as tarefas existentes: nova tarefa entra no topo da lista */
+function topOrd(){ let min=Infinity; for(const t of Object.values(VIEW.tasks)) if(typeof t.ord==="number"&&t.ord<min) min=t.ord; return (min===Infinity?1000:min)-1000; }
 function createTask(title,extra={}){
   const id=uid(); const now=new Date().toISOString();
-  const t={title,tags:[],due:null,importance:2,priority:2,done:false,doneAt:null,myDay:null,notes:"",createdAt:now,...extra};
+  const t={title,tags:[],due:null,importance:2,priority:2,done:false,doneAt:null,myDay:null,notes:"",createdAt:now,ord:topOrd(),...extra};
   if(t.tags.length) ensureTags(t.tags);
   putTask(id,t); return id;
 }
@@ -589,15 +768,17 @@ function applyOrder(ids){
 }
 
 /* ================= Estado de UI ================= */
-const UI=Object.assign({view:"home",imp:0,pri:0,sort:"due",showDone:false,sel:null,q:"",rep:{from:null,to:null,tags:[]}},lsGet(UI_KEY,{}),{sel:null,q:"",homeDay:null,tlLeft:null});
-function saveUI(){ lsSet(UI_KEY,{view:UI.view,imp:UI.imp,pri:UI.pri,sort:UI.sort,showDone:UI.showDone}); }
-function go(view){ UI.view=view; UI.q=""; $("#q").value=""; saveUI(); closeNav(); render(); $("#content").scrollTop=0; }
+const UI=Object.assign({view:"home",imp:0,pri:0,sort:"due",showDone:false,sel:null,q:"",rep:{from:null,to:null,tags:[]},panels:{}},lsGet(UI_KEY,{}),{sel:null,q:"",homeDay:null,tlLeft:null});
+function saveUI(){ lsSet(UI_KEY,{view:UI.view,imp:UI.imp,pri:UI.pri,sort:UI.sort,showDone:UI.showDone,panels:UI.panels}); }
+function go(view){ if(UI.cronEdit&&view!=="proj:"+UI.cronEdit){ UI.cronEdit=null; UI.cronDraft=null; } UI.view=view; UI.q=""; $("#q").value=""; saveUI(); closeNav(); render(); $("#content").scrollTop=0; }
 function closeNav(){ $("#app").classList.remove("nav-open"); }
 
 /* ================= Render ================= */
 let GESTURE=false, pendingRender=false;
-function render(){
+function render(force){
   if(GESTURE){ pendingRender=true; return; }   // não redesenha no meio de um gesto
+  // modo de edição do cronograma: não apaga o que está sendo digitado (o rascunho é redesenhado quando o próprio editor pede)
+  if(!force&&UI.cronEdit&&document.activeElement&&document.activeElement.closest&&document.activeElement.closest("#cronEditor")){ renderNav(); return; }
   pendingRender=false;
   renderNav();
   const wrap=$("#wrap"); wrap.replaceChildren(); wrap.classList.remove("wide");
@@ -605,6 +786,8 @@ function render(){
   const v=UI.q?"search":UI.view;
   if(v==="home") renderHome(wrap);
   else if(v==="report") renderReport(wrap);
+  else if(v==="projects") renderProjects(wrap);
+  else if(v.startsWith("proj:")) renderProject(wrap,v.slice(5));
   else renderList(wrap,v);
   renderDetail();
   placeTimeline();
@@ -625,11 +808,12 @@ function renderNav(){
     ["planned","Planejado",ICON.cal,open.filter(t=>t.due).length],
     ["all","Tarefas",ICON.list,open.length],
     ["done","Concluídas",ICON.check,all.filter(t=>t.done).length],
+    ["projects","Projetos",ICON.folder,Object.keys(VIEW.projects||{}).length],
     ["report","Relatório",ICON.report,null]
   ];
   nav.replaceChildren();
   for(const [id,label,ic,n] of items){
-    nav.append(h("button",{class:"nav-item"+(UI.view===id&&!UI.q?" active":""),onclick:()=>go(id)},svg(ic),label,n?h("span",{class:"count"},n):null));
+    nav.append(h("button",{class:"nav-item"+((UI.view===id||(id==="projects"&&UI.view.startsWith("proj:")))&&!UI.q?" active":""),onclick:()=>go(id)},svg(ic),label,n?h("span",{class:"count"},n):null));
   }
   nav.append(h("div",{class:"nav-sep"}));
   const {names}=allTags();
@@ -692,8 +876,15 @@ function renderHome(wrap){
   const rows=[...dayOpen.map(t=>taskRow(t,{drag:true,dayKey:sel})),...dayDone.filter(t=>!seen.has(t.id)).map(t=>taskRow(t,{dayKey:sel}))];
   if(rows.length){ left.append(h("div",{class:"list"},rows)); if(dayOpen.length) left.append(gestureHint()); }
   else left.append(h("div",{class:"empty"},isToday?"Nada para hoje. Adicione uma tarefa acima.":"Nenhuma tarefa com prazo neste dia."));
-  // ----- Próxima semana
-  const right=h("aside",{class:"col-week"},h("div",{class:"col-head"},h("h3",{},"Próxima semana")));
+  // ----- Coluna direita: Lembretes, Urgentes e Importantes (recolhíveis) + Próxima semana
+  const right=h("aside",{class:"col-week"});
+  const nowMs=Date.now(), notToday=t=>!inMyDay(t);
+  const rems=open.filter(t=>{const at=t.remindAt?tsOf(t.remindAt):0; return at&&at>nowMs-864e5&&at<=nowMs+7*864e5&&(at>nowMs||t.remindAck!==t.remindAt);}).sort((a,b)=>tsOf(a.remindAt)-tsOf(b.remindAt));
+  right.append(
+    homePanel("rem","Lembretes",ICON.bell,rems,{empty:"Nenhum lembrete nos próximos 7 dias."}),
+    homePanel("urg","Urgentes",ICON.bolt,sortTasks(open.filter(t=>(t.priority||2)===1&&notToday(t)),"due"),{toDay:true,more:"priority",empty:"Nenhuma tarefa P1 fora do Meu Dia."}),
+    homePanel("imp","Importantes",ICON.star,sortTasks(open.filter(t=>t.importance===3&&notToday(t)),"due"),{toDay:true,more:"important",empty:"Nenhuma tarefa importante fora do Meu Dia."}));
+  right.append(h("div",{class:"col-head wk-head"},h("h3",{},"Próxima semana")));
   let any=false;
   for(let i=1;i<=7;i++){
     const d=addDays(now,i), key=ymd(d);
@@ -707,7 +898,33 @@ function renderHome(wrap){
   right.append(h("div",{class:"later"},h("div",{class:"later-title"},"Depois"),later.map(x=>h("div",{class:"later-row"},
     h("span",{},`${pad(x.a.getDate())}/${pad(x.a.getMonth()+1)} – ${pad(x.b.getDate())}/${pad(x.b.getMonth()+1)}`),h("b",{},x.n+" tarefa"+(x.n===1?"":"s"))))));
   cols.append(left,right); wrap.append(cols);
+  // ----- Cronogramas dos projetos (faixa no design da ferramenta)
+  const projs=projectsArr().filter(p=>p.eventos.length);
+  if(projs.length){
+    const nextOf=p=>{ const t=Date.UTC(now.getFullYear(),now.getMonth(),now.getDate()); const n=p.eventos.map(crUtc).filter(x=>x>=t).sort((a,b)=>a-b)[0]; return n==null?Infinity:n; };
+    projs.sort((a,b)=>nextOf(a)-nextOf(b));
+    wrap.append(h("section",{class:"home-proj","aria-label":"Cronogramas dos projetos"},
+      h("div",{class:"col-head"},h("h3",{},"Projetos"),h("button",{class:"btn small",onclick:()=>go("projects")},"Ver todos")),
+      h("div",{class:"proj-grid"},projs.map(p=>{ const c=cronoView(p,"mini"); c.setAttribute("role","link"); c.tabIndex=0; c.title="Abrir projeto #"+p.tag;
+        c.addEventListener("click",()=>go("proj:"+p.tag)); c.addEventListener("keydown",e=>{ if(e.key==="Enter") go("proj:"+p.tag); }); return c; }))));
+    crAjustarTudo();
+  }
 }
+/* Painel recolhível da coluna direita da home; o estado aberto/fechado fica salvo */
+const PANEL_MAX=6;
+function homePanel(key,title,icon,items,o={}){
+  const open=UI.panels[key]!==false;
+  const sec=h("section",{class:"pn pn-"+key,"aria-label":title},
+    h("button",{class:"pn-head "+key,"aria-expanded":open?"true":"false",onclick:()=>{UI.panels={...UI.panels,[key]:!open};saveUI();render();}},
+      svg(icon,17,key==="imp"?'fill="currentColor"':""),h("span",{class:"pn-title"},title),h("span",{class:"pn-n"},items.length),h("span",{class:"pn-chev"},svg(ICON.chev,16))));
+  if(!open) return sec;
+  if(!items.length){ sec.append(h("div",{class:"pn-empty"},o.empty||"Nada aqui.")); return sec; }
+  sec.append(h("div",{class:"list"},items.slice(0,PANEL_MAX).map(t=>taskRow(t,{toDay:o.toDay}))));
+  if(items.length>PANEL_MAX) sec.append(o.more?h("button",{class:"pn-more",onclick:()=>go(o.more)},`Ver todas (${items.length})`):h("div",{class:"pn-empty"},`+ ${items.length-PANEL_MAX} depois`));
+  return sec;
+}
+/* traz uma tarefa para o Meu Dia (botão “Hoje” dos painéis) */
+function bringToday(id){ const prev=VIEW.tasks[id]; if(!prev) return; patchTask(id,{myDay:today()}); toast("Adicionada ao Meu Dia",()=>restoreTask(id,prev)); }
 /* Linha do tempo contínua: 90 dias para trás, 180 para a frente; hoje fica encostado à esquerda */
 const TL_PAST=90, TL_FUT=180;
 function timeline(sel){
@@ -790,6 +1007,7 @@ function renderList(wrap,v){
 function tagActions(g){
   const ba=$("#bandActions");
   ba.append(h("button",{class:"btn small",onclick:()=>openTagModal(g)},svg(ICON.edit,15),"Renomear / excluir grupo"));
+  ba.append((VIEW.projects||{})[g]?h("button",{class:"btn small",onclick:()=>go("proj:"+g)},svg(ICON.folder,15),"Abrir projeto"):h("button",{class:"btn small",onclick:()=>createProject(g)},svg(ICON.folder,15),"Transformar em projeto"));
 }
 function filterBar(v){
   const seg=(label,val,opts,set)=>h("span",{},h("span",{class:"flabel"},label),h("span",{class:"seg"},opts.map(([k,t])=>h("button",{class:val===k?"on":"",onclick:()=>{set(k);saveUI();render();}},t))));
@@ -835,6 +1053,7 @@ function taskRow(t,opt={}){
   if(t.done&&t.doneAt) meta.push(h("span",{class:"m-due"},"feita em "+fmtBR(t.doneAt).slice(0,5)));
   else if(late) meta.push(h("span",{class:"m-late"},"atrasada · "+fmtBR(t.due).slice(0,5)));
   else if(t.due&&t.due!==opt.dayKey) meta.push(h("span",{class:"m-due"+(t.due===td?" today":"")},t.due===td?"hoje":fmtDue(t.due)));
+  if(!t.done&&t.remindAt&&tsOf(t.remindAt)) meta.push(h("span",{class:"m-rem"+(tsOf(t.remindAt)<=Date.now()?" past":""),title:"Lembrete"},svg(ICON.bell,12),fmtRemind(t.remindAt)));
   if(!t.done&&p===1) meta.push(h("span",{class:"m-p1",title:PRI[1]},"P1"));
   if(!t.done&&p===3) meta.push(h("span",{class:"m-p3",title:PRI[3]},"P3"));
   if(!t.done&&t.importance===1) meta.push(h("span",{class:"m-low"},"baixa imp."));
@@ -851,6 +1070,7 @@ function taskRow(t,opt={}){
         h("span",{},t.done?svg(ICON.check,13,'stroke-width="3.2"'):null)),
       h("div",{class:"t-main"},h("div",{class:"t-title",title:t.title},t.title),meta.length?h("div",{class:"t-meta"},meta):null),
       t.importance===3&&!t.done?h("span",{class:"star-ic",title:"Importância alta"},svg(ICON.star,15,'fill="currentColor"')):null,
+      opt.toDay&&!t.done&&!mine?h("button",{class:"to-day",title:"Trazer para o Meu Dia","aria-label":"Trazer para o Meu Dia",onclick:e=>{e.stopPropagation();bringToday(t.id);}},svg(ICON.sun,14),"Hoje"):null,
       h("div",{class:"t-actions"},
         !t.done?act("act-sun",mine?"Tirar do Meu Dia":"Adicionar ao Meu Dia",ICON.sun,()=>toggleMyDay(t),mine):null,
         act("act-del","Apagar",ICON.trash,()=>removeTask(t.id))),
@@ -1008,6 +1228,16 @@ function renderDetail(){
   const notes=h("textarea",{id:"dNotes",placeholder:"Anotações, links, passos…"}); notes.value=t.notes||"";
   notes.addEventListener("blur",()=>{ if(notes.value!==(VIEW.tasks[id]?.notes||"")) patchTask(id,{notes:notes.value}); });
   const quickDue=(n,l)=>h("button",{class:"opt",onclick:()=>patchTask(id,{due:ymd(addDays(new Date(),n))})},l);
+  // ----- lembrete (alarme)
+  const setRemind=d=>patchTask(id,{remindAt:d?d.toISOString():null});
+  const remIn=h("input",{type:"datetime-local",id:"dRemind",value:t.remindAt?toLocalInput(t.remindAt):"",onchange:e=>{ const d=e.target.value?new Date(e.target.value):null; if(d&&isNaN(d)) return; setRemind(d); if(d) toast("Lembrete: "+fmtRemind(d.toISOString())); }});
+  const at=(days,hh,mm)=>{const d=addDays(new Date(),days); d.setHours(hh,mm,0,0); return d;};
+  const quickRem=(l,fn)=>h("button",{class:"opt",onclick:()=>{const d=fn(); setRemind(d); toast("Lembrete: "+fmtRemind(d.toISOString()));}},l);
+  const remOpts=h("div",{class:"opts"},quickRem("Em 1 hora",()=>{const d=new Date(Date.now()+3600e3); d.setSeconds(0,0); return d;}),
+    new Date().getHours()<18?quickRem("Hoje 18:00",()=>at(0,18,0)):null, quickRem("Amanhã 9:00",()=>at(1,9,0)),
+    t.due&&t.due>=today()?quickRem("No prazo 9:00",()=>{const d=parseYmd(t.due); d.setHours(9,0,0,0); return d;}):null,
+    t.remindAt?h("button",{class:"opt",onclick:()=>setRemind(null)},"Sem lembrete"):null);
+  const noPerm=("Notification" in window)&&Notification.permission!=="granted";
   const myDayOn=inMyDay({...t,id});
   const delZone=h("div",{});
   const askDel=()=>{ delZone.replaceChildren(h("span",{class:"confirm"},"Excluir esta tarefa?",
@@ -1022,6 +1252,8 @@ function renderDetail(){
       h("div",{class:"toggle-row"},h("span",{style:"display:inline-flex;gap:8px;align-items:center"},svg(ICON.sun,17),myDayOn?"Está no Meu Dia":"Fora do Meu Dia"),
         h("button",{class:"btn small"+(myDayOn?"":" primary"),onclick:()=>toggleMyDay({...t,id})},myDayOn?"Tirar":"Adicionar")),
       h("div",{class:"field"},h("label",{for:"dDue"},"Prazo de execução"),dueIn,h("div",{class:"opts"},quickDue(0,"Hoje"),quickDue(1,"Amanhã"),quickDue(7,"Em 1 semana"),t.due?h("button",{class:"opt",onclick:()=>patchTask(id,{due:null})},"Sem prazo"):null)),
+      h("div",{class:"field"},h("label",{for:"dRemind"},"Lembrete (alarme)"),remIn,remOpts,
+        noPerm?h("button",{class:"pn-more",onclick:()=>openSettings("rem")},"Ativar notificações neste aparelho ›"):null),
       h("div",{class:"field"},h("span",{class:"lbl"},"Importância  (quanto a tarefa pesa nos seus objetivos)"),
         h("div",{class:"opts"},[3,2,1].map(v=>opt(t.importance||2,v,IMP[v],val=>patchTask(id,{importance:val}))))),
       h("div",{class:"field"},h("span",{class:"lbl"},"Prioridade  (em que ordem fazer)"),
@@ -1089,8 +1321,8 @@ function reportCSV(){
 }
 function reportHTML(){
   const R=UI.rep, rows=reportRows();
-  const tr=rows.map(t=>`<tr><td>${fmtBR(t.doneAt)}</td><td>${esc(t.title)}</td><td>${esc((t.tags||[]).map(g=>"#"+g).join(" "))}</td><td>${IMP[t.importance||2]}</td><td>P${t.priority||2}</td><td>${t.due?fmtBR(t.due):"—"}</td></tr>`).join("");
-  return `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Relatório de tarefas ${fmtBR(R.from)} a ${fmtBR(R.to)}</title>
+  const tr=rows.map(t=>`<tr><td>${esc(fmtBR(t.doneAt))}</td><td>${esc(t.title)}</td><td>${esc((t.tags||[]).map(g=>"#"+g).join(" "))}</td><td>${esc(IMP[t.importance||2])}</td><td>P${esc(t.priority||2)}</td><td>${t.due?esc(fmtBR(t.due)):"—"}</td></tr>`).join("");
+  return `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Relatório de tarefas ${esc(fmtBR(R.from))} a ${esc(fmtBR(R.to))}</title>
 <style>body{font-family:system-ui,sans-serif;max-width:900px;margin:32px auto;padding:0 16px;color:#1c1b1a}h1{font-size:22px}table{border-collapse:collapse;width:100%;font-size:14px}th,td{border-bottom:1px solid #ece9e4;padding:6px 10px;text-align:left}th{background:#faf9f7}</style>
 <h1>Relatório de tarefas concluídas</h1><p>Período: ${fmtBR(R.from)} a ${fmtBR(R.to)} · Grupos: ${R.tags.length?esc(R.tags.map(g=>"#"+g).join(", ")):"todos"} · Total: ${rows.length}</p>
 <table><thead><tr><th>Concluída em</th><th>Tarefa</th><th>Grupos</th><th>Importância</th><th>Prioridade</th><th>Prazo</th></tr></thead><tbody>${tr}</tbody></table></html>`;
@@ -1128,17 +1360,20 @@ function openTagModal(g){
   const inp=h("input",{type:"text",id:"tagRename",value:g,style:"border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)"});
   const colors=h("div",{class:"opts"},TAG_COLORS.map(c=>h("button",{class:"opt"+(tagColor(g)===c?" on":""),"aria-label":"Cor",style:`width:30px;height:30px;padding:0;background:${c}`,onclick:e=>{colors.querySelectorAll(".opt").forEach(x=>x.classList.remove("on"));e.currentTarget.classList.add("on");colors.dataset.c=c;}})));
   const n=tasksArr().filter(t=>(t.tags||[]).includes(g)).length;
-  const delWrap=h("div",{style:"font-size:13px;color:var(--muted)"},`Excluir o grupo remove a tag de ${n} tarefa(s). As tarefas não são apagadas.`);
+  const isProj=!!(VIEW.projects||{})[g];
+  const delWrap=h("div",{style:"font-size:13px;color:var(--muted)"},`Excluir o grupo remove a tag de ${n} tarefa(s). As tarefas não são apagadas.`+(isProj?" O cronograma do projeto também é apagado.":""));
   openModal("Grupo #"+g,h("div",{style:"display:flex;flex-direction:column;gap:12px"},
     h("div",{class:"field"},h("label",{for:"tagRename"},"Nome"),inp),h("div",{class:"field"},h("span",{class:"lbl"},"Cor"),colors),delWrap),[
     {label:"Excluir grupo",cls:"danger",run:()=>{
       for(const t of tasksArr()) if((t.tags||[]).includes(g)) patchTask(t.id,{tags:t.tags.filter(x=>x!==g)});
+      if(isProj) enqueue({op:"delete",path:"projects/"+g});
       const m={...VIEW.tags}; delete m[g]; saveTags(m); go("home"); toast("Grupo excluído");}},
     {label:"Salvar",cls:"primary",run:()=>{
       const nn=normTag(inp.value); if(!nn){toast("Nome inválido");return false;}
       const m={...VIEW.tags}; const color=colors.dataset.c||tagColor(g);
       delete m[g]; m[nn]={color}; saveTags(m);
-      if(nn!==g){ for(const t of tasksArr()) if((t.tags||[]).includes(g)) patchTask(t.id,{tags:[...new Set(t.tags.map(x=>x===g?nn:x))]}); }
+      if(nn!==g){ for(const t of tasksArr()) if((t.tags||[]).includes(g)) patchTask(t.id,{tags:[...new Set(t.tags.map(x=>x===g?nn:x))]});
+        if(isProj&&!(VIEW.projects||{})[nn]){ enqueueMany([{op:"set",path:"projects/"+nn,data:VIEW.projects[g]},{op:"delete",path:"projects/"+g}]); } }
       go("tag:"+nn); toast("Grupo atualizado");}}
   ]);
 }
@@ -1154,10 +1389,374 @@ function openImport(){
         if(/^[-–•]\s*/.test(l)&&todo.length){ const st=l.replace(/^[-–•]\s*/,""); const L=todo[todo.length-1].steps; if(st) L.push({id:"s"+(L.length+1),title:st,done:false}); continue; }
         const p=parseQuick(l); if(!p.title) continue;
         todo.push({title:p.title,extra:{tags:p.tags,importance:p.importance||2,priority:p.priority||2,due:date.value||null},steps:[]}); }
-      for(const x of todo) createTask(x.title,{...x.extra,steps:x.steps});
+      for(const x of [...todo].reverse()) createTask(x.title,{...x.extra,steps:x.steps});  // de trás para frente: entram no topo mantendo a ordem colada
       const n=todo.length;
       toast(`${n} tarefa(s) importada(s)`);}}
   ]);
+}
+
+/* ================= Projetos e cronogramas =================
+   Um projeto é um grupo (#tag) com cronograma, guardado em "projects/<grupo>".
+   Estrutura do cronograma igual à da ferramenta “Cronograma do projeto”:
+   { titulo, subtitulo, eventos:[{ y, m, d, horario, contexto, atividades:[texto], rotulo, sem }] } */
+const MESES_LONGOS=["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+const DIAS_LONGOS=["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"];
+const CR_PAL=["var(--azul)","var(--verde)","var(--rosa)","var(--amarelo)"];
+const DIA_MS=86400000;
+const crUtc=e=>Date.UTC(e.y,e.m-1,e.d);
+const crIso=e=>`${e.y}-${pad(e.m)}-${pad(e.d)}`;
+const projectsArr=()=>Object.entries(VIEW.projects||{}).map(([tag,p])=>({tag,...cleanProject(p)}));
+const getProject=tag=>VIEW.projects&&VIEW.projects[tag]?{tag,...cleanProject(VIEW.projects[tag])}:null;
+const projTitle=tag=>cap(String(tag).replace(/[-_]+/g," "));
+/* valida o cronograma (vem da sincronização ou de backup) */
+function cleanEvent(e){
+  if(!e||typeof e!=="object") return null;
+  const y=+e.y, m=+e.m, d=+e.d, t=new Date(Date.UTC(y,m-1,d));
+  if(!(y>=1900&&y<=2200)||t.getUTCMonth()!==m-1||t.getUTCDate()!==d) return null;
+  const s=(v,n=300)=>typeof v==="string"?v.slice(0,n):"";
+  return {y,m,d,horario:s(e.horario,80),contexto:s(e.contexto,500),atividades:Array.isArray(e.atividades)?e.atividades.filter(a=>typeof a==="string"&&a.trim()).map(a=>a.slice(0,1000)).slice(0,100):[],rotulo:s(e.rotulo,60),sem:e.sem===true};
+}
+function cleanProject(p){
+  p=p&&typeof p==="object"?p:{};
+  return {titulo:typeof p.titulo==="string"?p.titulo.slice(0,200):"",subtitulo:typeof p.subtitulo==="string"?p.subtitulo.slice(0,200):"",
+    eventos:(Array.isArray(p.eventos)?p.eventos:[]).map(cleanEvent).filter(Boolean).slice(0,300),createdAt:typeof p.createdAt==="string"?p.createdAt:null};
+}
+function putProject(tag,p){ const c=cleanProject(p); enqueue({op:"set",path:"projects/"+tag,data:{...c,createdAt:c.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()}}); }
+/* datas do cronograma a partir das tarefas do grupo que têm prazo (uma atividade por tarefa) */
+function mergeTasksInto(eventos,tag){
+  const ev=eventos.map(e=>({...e,atividades:[...e.atividades]})); let n=0;
+  const list=sortTasks(tasksArr().filter(t=>(t.tags||[]).includes(tag)&&t.due),"manual");
+  for(const t of list){
+    const [y,m,d]=t.due.split("-").map(Number);
+    let e=ev.find(x=>x.y===y&&x.m===m&&x.d===d);
+    if(!e){ e={y,m,d,horario:"",contexto:"",atividades:[],rotulo:"",sem:false}; ev.push(e); }
+    if(!e.atividades.includes(t.title)){ e.atividades.push(t.title); n++; }
+  }
+  return {eventos:ev.sort((a,b)=>crUtc(a)-crUtc(b)),added:n};
+}
+function createProject(tag){
+  tag=normTag(tag); if(!tag) return null;
+  if(VIEW.projects&&VIEW.projects[tag]){ go("proj:"+tag); return tag; }
+  ensureTags([tag]);
+  putProject(tag,{titulo:projTitle(tag),subtitulo:"",eventos:mergeTasksInto([],tag).eventos});
+  go("proj:"+tag); return tag;
+}
+/* ---- desenho (mesmas regras da ferramenta) ---- */
+function crPeriodo(ev){
+  const a=ev[0], b=ev[ev.length-1], A=a.d+" de "+MESES_LONGOS[a.m-1], B=b.d+" de "+MESES_LONGOS[b.m-1];
+  if(crUtc(a)===crUtc(b)) return "Cronograma de "+A+" de "+a.y;
+  if(a.y!==b.y) return "Cronograma de "+A+" de "+a.y+" a "+B+" de "+b.y;
+  if(a.m===b.m) return "Cronograma de "+a.d+" a "+B+" de "+a.y;
+  return "Cronograma de "+A+" a "+B+" de "+a.y;
+}
+function crCor(t){ const k=Math.min(Math.floor(t),2), f=t-k; if(f<.001) return CR_PAL[k]; if(f>.999) return CR_PAL[k+1]; return `color-mix(in srgb, ${CR_PAL[k+1]} ${Math.round(f*100)}%, ${CR_PAL[k]})`; }
+function crCores(ev){
+  const n=ev.filter(e=>!e.sem).length; let i=0;
+  ev.forEach(e=>{ if(e.sem){ e.cor="var(--cinza)"; return; } e.cor=crCor(n<=1?0:i/(n-1)*3); i++; });
+  ev.forEach((e,j)=>{ e.corProx=ev[j+1]?ev[j+1].cor:e.cor; });
+}
+function crFaixa(ev){
+  const esc=h("div",{class:"escala","aria-hidden":"true"});
+  const t0=crUtc(ev[0]), t1=crUtc(ev[ev.length-1]), span=t1-t0;
+  const barra=h("div",{class:"barra"});
+  barra.style.background=ev.length>1?"linear-gradient(to right, "+ev.map(e=>e.cor+" "+(span?(crUtc(e)-t0)/span*100:0).toFixed(3)+"%").join(", ")+")":ev[0].cor;
+  esc.append(barra);
+  const dias=Math.round(span/DIA_MS);
+  if(dias>0){ const tk=h("div",{class:"ticks"}); tk.style.backgroundSize="calc(100% / "+(dias<=60?dias:dias/7)+") 100%"; esc.append(tk); }
+  const d=new Date(), hoje=Date.UTC(d.getFullYear(),d.getMonth(),d.getDate());
+  if(t1>t0&&hoje>=t0&&hoje<=t1){ const hj=h("div",{class:"hoje"},h("span",{},"hoje")); hj.style.left=((hoje-t0)/(t1-t0)*100)+"%"; esc.append(hj); }
+  ev.forEach((e,i)=>{
+    const mk=h("div",{class:"marca "+(i%2===0?"acima":"abaixo")+(i===0?" ini":"")+(i===ev.length-1&&i>0?" fim":"")+(e.sem?" vazia":"")});
+    mk.style.setProperty("--x",(span?(crUtc(e)-t0)/span*100:0).toFixed(3)+"%"); mk.style.setProperty("--c",e.cor);
+    const leg=e.rotulo||(e.sem?"Sem encontro":"");
+    mk.append(h("span",{class:"ponto"}),h("span",{class:"rotulo"},h("b",{},pad(e.d)+"/"+pad(e.m)),leg?h("small",{},leg):null));
+    esc.append(mk);
+  });
+  return h("figure",{class:"faixa",style:"margin-inline:0"},esc);
+}
+function crLista(ev){
+  const d=new Date(), hoje=Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()); let achou=false;
+  return h("ol",{class:"linha"},ev.map(e=>{
+    const dia=crUtc(e);
+    const li=h("li",{class:"evento"+(dia<hoje?" passou":""),"data-dia":crIso(e),"data-sem":e.sem?"":null});
+    li.style.setProperty("--c",e.cor); li.style.setProperty("--cn",e.corProx);
+    const data=h("div",{class:"data"},h("time",{class:"dia",datetime:crIso(e)},pad(e.d)+"/"+pad(e.m)),h("span",{class:"sem"},DIAS_LONGOS[new Date(dia).getUTCDay()]),e.horario?h("span",{class:"hora"},e.horario):null);
+    if(dia>=hoje&&!achou&&!e.sem){ achou=true; data.append(h("span",{class:"proximo"},dia===hoje?"Hoje":"Próximo encontro")); }
+    const corpo=h("div",{class:"corpo"});
+    if(e.sem){ let f=[e.contexto,...e.atividades].filter(Boolean); if(!f.length) f=["Não haverá encontro."]; f.forEach(x=>corpo.append(h("p",{class:"contexto"},x))); }
+    else { if(e.contexto) corpo.append(h("p",{class:"contexto"},e.contexto)); if(e.atividades.length) corpo.append(h("ul",{},e.atividades.map(a=>h("li",{},a)))); }
+    li.append(data,h("span",{class:"trilho","aria-hidden":"true"}),corpo);
+    return li;
+  }));
+}
+/* cronograma completo (cr-card), resumo da home (cr-mini) ou folha de impressão (cr-print) */
+function cronoView(p,kind){
+  const ev=p.eventos.map(e=>({...e})).sort((a,b)=>crUtc(a)-crUtc(b));
+  const titulo=p.titulo||projTitle(p.tag||"")||"Cronograma do projeto";
+  const box=h("div",{class:"crono cr-"+kind},h("header",{},h(kind==="mini"?"h3":kind==="print"?"h1":"h2",{class:"cr-titulo"},titulo),h("p",{class:"periodo"},ev.length?(p.subtitulo||crPeriodo(ev)):"Cronograma sem datas.")));
+  if(!ev.length){ if(kind!=="mini") box.append(h("p",{class:"cr-vazio"},"Ainda não há datas. Use “Editar cronograma” ou dê prazo às tarefas do projeto e escolha “Trazer tarefas”.")); return box; }
+  crCores(ev);
+  box.append(crFaixa(ev));
+  if(kind!=="mini") box.append(crLista(ev));
+  return box;
+}
+/* evita rótulos sobrepostos na faixa: primeiro some a legenda, depois a própria data (autocontida: também roda na página de impressão) */
+function crAjustar(root){
+  root.querySelectorAll(".escala").forEach(function(esc){
+    var marcas=Array.prototype.slice.call(esc.querySelectorAll(".marca")), limite=esc.getBoundingClientRect();
+    if(!limite.width) return;
+    ["acima","abaixo"].forEach(function(lado){
+      var ultimo=-Infinity;
+      marcas.filter(function(m){return m.classList.contains(lado);}).forEach(function(m){
+        var r=m.querySelector(".rotulo"); r.classList.remove("sem-legenda","oculto"); r.style.transform=""; r.style.left=""; r.style.textAlign="";
+        var box=r.getBoundingClientRect();
+        if(!m.classList.contains("ini")&&!m.classList.contains("fim")){
+          if(box.left<limite.left-12){ r.style.transform="none"; r.style.left="-12px"; r.style.textAlign="left"; box=r.getBoundingClientRect(); }
+          else if(box.right>limite.right+12){ r.style.transform="translateX(-100%)"; r.style.left="12px"; r.style.textAlign="right"; box=r.getBoundingClientRect(); }
+        }
+        if(box.left<ultimo+8){ r.classList.add("sem-legenda"); box=r.getBoundingClientRect(); }
+        if(box.left<ultimo+8){ r.classList.add("oculto"); return; }
+        ultimo=box.right;
+      });
+    });
+  });
+}
+function crAjustarTudo(){ requestAnimationFrame(()=>crAjustar(document)); }
+window.addEventListener("resize",()=>{ clearTimeout(crAjustarTudo.t); crAjustarTudo.t=setTimeout(crAjustarTudo,80); });
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(crAjustarTudo);
+
+/* ---- Exportar PDF: folha A4 no design da ferramenta; o navegador oferece “Salvar como PDF” ---- */
+function exportCronoPDF(tag){
+  const p=getProject(tag); if(!p) return;
+  if(!p.eventos.length){ toast("O cronograma ainda não tem datas."); return; }
+  const titulo=p.titulo||projTitle(tag);
+  const fonts=[...document.querySelectorAll('link[rel=stylesheet][href*="fonts.googleapis"]')].map(l=>l.outerHTML).join("");
+  const html=`<!doctype html><html lang="pt-BR" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cronograma: ${esc(titulo)}</title>${fonts}<style>html,body{margin:0;background:#f4f5f7}${$("#cronoCss").textContent}</style></head><body>${cronoView(p,"print").outerHTML}<script>(function(){var aj=${crAjustar.toString()};function ir(){aj(document);setTimeout(function(){window.focus();window.print();},250);}(document.fonts&&document.fonts.ready?Promise.race([document.fonts.ready,new Promise(function(r){setTimeout(r,2500);})]):Promise.resolve()).then(ir);})();<\/script></body></html>`;
+  const w=window.open("","_blank");
+  if(w){ w.document.open(); w.document.write(html); w.document.close(); toast("Escolha “Salvar como PDF” na janela de impressão."); return; }
+  // janela bloqueada: imprime por um quadro oculto
+  const fr=h("iframe",{style:"position:fixed;right:0;bottom:0;width:794px;height:1123px;border:0;opacity:0;pointer-events:none","aria-hidden":"true"});
+  document.body.append(fr); fr.contentDocument.open(); fr.contentDocument.write(html); fr.contentDocument.close();
+  setTimeout(()=>fr.remove(),60000);
+}
+
+/* ---- Tela Projetos ---- */
+function renderProjects(wrap){
+  setHeader("Projetos","Grupos de tarefas com cronograma");
+  wrap.classList.add("wide");
+  $("#bandActions").append(h("button",{class:"btn primary",onclick:openNewProject},svg(ICON.plus,16),"Novo projeto"));
+  const list=projectsArr().sort((a,b)=>(a.titulo||a.tag).localeCompare(b.titulo||b.tag,"pt-BR"));
+  if(!list.length){ wrap.append(h("div",{class:"empty"},"Nenhum projeto ainda. Um projeto é um grupo (#tag) com cronograma: clique em “Novo projeto” e escolha o grupo.")); return; }
+  wrap.append(h("div",{class:"proj-grid"},list.map(p=>{
+    const n=tasksArr().filter(t=>!t.done&&(t.tags||[]).includes(p.tag)).length;
+    const card=cronoView(p,"mini"); card.setAttribute("role","link"); card.tabIndex=0; card.title="Abrir projeto #"+p.tag;
+    card.addEventListener("click",()=>go("proj:"+p.tag)); card.addEventListener("keydown",e=>{ if(e.key==="Enter") go("proj:"+p.tag); });
+    card.querySelector("header").append(h("p",{class:"periodo",style:"margin-top:.1rem;font-size:.9rem"},`#${p.tag} · ${n} tarefa${n===1?"":"s"} aberta${n===1?"":"s"}`));
+    return card;
+  })));
+  crAjustarTudo();
+}
+function openNewProject(){
+  const groups=allTags().names.filter(n=>!(VIEW.projects||{})[n]);
+  const inp=h("input",{type:"text",id:"newProj",list:"projTags",placeholder:"grupo existente ou novo, ex.: pesquisa-foto",style:"border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)"});
+  openModal("Novo projeto",h("div",{style:"display:flex;flex-direction:column;gap:10px"},
+    h("p",{style:"margin:0;color:var(--muted);font-size:14px"},"O projeto usa as tarefas de um grupo (#tag). As tarefas do grupo que têm prazo já entram no cronograma, uma atividade por tarefa, na data do prazo; depois é só ajustar no modo de edição."),
+    h("div",{class:"field"},h("label",{for:"newProj"},"Grupo do projeto"),inp,h("datalist",{id:"projTags"},groups.map(n=>h("option",{value:n})))),
+    groups.length?h("div",{class:"opts"},groups.slice(0,12).map(n=>h("button",{class:"opt",onclick:()=>{inp.value=n;}},"#"+n))):null),[
+    {label:"Criar projeto",cls:"primary",run:()=>{ const t=normTag(inp.value); if(!t){ toast("Informe o nome do grupo."); return false; } createProject(t); }}]);
+  setTimeout(()=>inp.focus(),30);
+}
+function renderProject(wrap,tag){
+  const p=getProject(tag);
+  if(!p){ setHeader("Projeto","Não encontrado"); wrap.append(h("div",{class:"empty proj-empty"},`O grupo #${tag} não é um projeto.`,h("button",{class:"btn primary",onclick:()=>createProject(tag)},"Transformar em projeto"))); return; }
+  wrap.classList.add("wide");
+  $("#viewEyebrow").append("Projeto");
+  setHeader("#"+tag,"");
+  const editing=UI.cronEdit===tag;
+  // ----- cronograma (ou modo de edição)
+  const left=h("section",{class:"col-day","aria-label":"Cronograma"});
+  if(!editing) left.append(h("div",{class:"row-end",style:"justify-content:flex-start"},
+    h("button",{class:"btn",onclick:()=>startCronoEdit(tag)},svg(ICON.edit,15),"Editar cronograma"),
+    h("button",{class:"btn primary",onclick:()=>exportCronoPDF(tag)},svg(ICON.report,15),"Exportar PDF"),
+    h("button",{class:"btn",title:"Remover projeto","aria-label":"Remover projeto",style:"margin-left:auto",onclick:()=>confirmRemoveProject(tag)},svg(ICON.trash,15))));
+  left.append(editing?cronoEditor(tag):cronoView(p,"card"));
+  if(!editing){
+    const semData=tasksArr().filter(t=>!t.done&&(t.tags||[]).includes(tag)&&t.due).filter(t=>{ const [y,m,d]=t.due.split("-").map(Number); const e=p.eventos.find(x=>x.y===y&&x.m===m&&x.d===d); return !e||!e.atividades.includes(t.title); }).length;
+    if(semData) left.append(h("div",{class:"row-end",style:"justify-content:flex-start;align-items:center"},h("span",{class:"ce-hint"},`${semData} tarefa${semData===1?"":"s"} com prazo ainda fora do cronograma.`),
+      h("button",{class:"btn small",onclick:()=>{ const r=mergeTasksInto(p.eventos,tag); putProject(tag,{...p,eventos:r.eventos}); toast(`${r.added} atividade(s) adicionada(s) ao cronograma`); }},"Trazer tarefas")));
+  }
+  // ----- tarefas só deste projeto
+  const right=h("aside",{class:"proj-tasks"},h("div",{class:"col-head"},h("h3",{},"Tarefas do projeto")));
+  right.append(addBar({tags:[tag]}));
+  const all=tasksArr().filter(t=>(t.tags||[]).includes(tag));
+  const open=sortTasks(all.filter(t=>!t.done),"manual"), done=all.filter(t=>t.done).sort((a,b)=>(b.doneAt||"").localeCompare(a.doneAt||""));
+  if(open.length){ right.append(h("div",{class:"list"},open.map(t=>taskRow(t,{drag:true}))),gestureHint()); }
+  else right.append(h("div",{class:"empty"},"Nenhuma tarefa aberta neste projeto."));
+  if(done.length) right.append(h("div",{class:"group-title"},"Concluídas",h("span",{class:"n"},done.length)),h("div",{class:"list"},done.slice(0,20).map(t=>taskRow(t,{}))));
+  wrap.append(h("div",{class:"proj-cols"},left,right));
+  if(!editing) crAjustarTudo();
+}
+function confirmRemoveProject(tag){
+  openModal("Remover projeto #"+tag,h("p",{style:"margin:0;color:var(--muted)"},"O cronograma deste projeto será apagado. O grupo e as tarefas continuam como estão."),[
+    {label:"Remover projeto",cls:"danger",run:()=>{ const prev=VIEW.projects[tag]; enqueue({op:"delete",path:"projects/"+tag}); go("projects"); toast("Projeto removido",()=>enqueue({op:"set",path:"projects/"+tag,data:prev})); }}]);
+}
+
+/* ---- Modo de edição do cronograma (rascunho; só grava ao salvar) ---- */
+function startCronoEdit(tag){
+  const p=getProject(tag); if(!p) return;
+  UI.cronEdit=tag;
+  UI.cronDraft={titulo:p.titulo,subtitulo:p.subtitulo,createdAt:p.createdAt,eventos:p.eventos.map(e=>({...e,atividades:[...e.atividades],k:uid()})).sort((a,b)=>crUtc(a)-crUtc(b))};
+  render();
+}
+function stopCronoEdit(){ UI.cronEdit=null; UI.cronDraft=null; render(true); }
+function cronoEditor(tag){
+  const D=UI.cronDraft, again=()=>render(true);
+  const txtIn=(id,val,ph,set)=>{ const i=h("input",{type:"text",id,placeholder:ph||""}); i.value=val||""; i.addEventListener("input",()=>set(i.value)); return i; };
+  const save=()=>{
+    const bad=D.eventos.find(e=>!cleanEvent(e)); if(bad){ toast("Há uma data inválida no cronograma."); return; }
+    putProject(tag,{titulo:D.titulo.trim(),subtitulo:D.subtitulo.trim(),createdAt:D.createdAt,eventos:D.eventos.map(({k,...e})=>({...e,horario:e.horario.trim(),contexto:e.contexto.trim(),rotulo:e.rotulo.trim()})).sort((a,b)=>crUtc(a)-crUtc(b))});
+    UI.cronEdit=null; UI.cronDraft=null; render(true); toast("Cronograma salvo");
+  };
+  const ordered=D.eventos.filter(e=>cleanEvent(e)).map(e=>({...e})).sort((a,b)=>crUtc(a)-crUtc(b)); crCores(ordered);
+  const corDe=k=>{ const o=ordered.find(x=>x.k===k); return o?o.cor:null; };
+  const box=h("div",{class:"ce crono-edit",id:"cronEditor"},
+    h("div",{class:"ce-top"},h("span",{class:"ce-badge"},"Modo de edição"),
+      h("div",{class:"row-end"},h("button",{class:"btn",onclick:stopCronoEdit},"Cancelar"),h("button",{class:"btn primary",onclick:save},"Salvar cronograma"))),
+    h("div",{class:"field"},h("label",{for:"ceTitulo"},"Título"),txtIn("ceTitulo",D.titulo,projTitle(tag),v=>D.titulo=v)),
+    h("div",{class:"field"},h("label",{for:"ceSub"},"Subtítulo (vazio = período calculado pelas datas)"),txtIn("ceSub",D.subtitulo,"Cronograma de … a …",v=>D.subtitulo=v)));
+  D.eventos.forEach((e,i)=>{
+    const dt=h("input",{type:"date",id:"ceD"+i,value:cleanEvent(e)?crIso(e):""});
+    dt.addEventListener("change",()=>{ const [y,m,d]=(dt.value||"").split("-").map(Number); if(y){ e.y=y; e.m=m; e.d=d; again(); } });
+    const sem=h("input",{type:"checkbox",id:"ceS"+i,checked:e.sem,onchange:()=>{ e.sem=sem.checked; again(); }});
+    const at=h("textarea",{id:"ceA"+i,placeholder:"Uma atividade por linha"}); at.value=e.atividades.join("\n");
+    at.addEventListener("input",()=>{ e.atividades=at.value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean); });
+    const row=h("div",{class:"ce-ev"},
+      h("div",{class:"field"},h("label",{for:"ceD"+i},"Data"),dt),
+      h("div",{class:"field"},h("label",{for:"ceH"+i},"Horário"),txtIn("ceH"+i,e.horario,"ex.: 15h às 17h",v=>e.horario=v)),
+      h("div",{class:"field"},h("label",{for:"ceR"+i},"Rótulo (faixa do topo)"),txtIn("ceR"+i,e.rotulo,"nome curto",v=>e.rotulo=v)),
+      h("button",{class:"act act-del ce-del",title:"Excluir data","aria-label":"Excluir data",onclick:()=>{ D.eventos.splice(i,1); again(); }},svg(ICON.trash,16)),
+      h("div",{class:"field wide"},h("label",{for:"ceC"+i},"Contexto (frase em itálico)"),txtIn("ceC"+i,e.contexto,"opcional",v=>e.contexto=v)),
+      h("div",{class:"field wide"},h("label",{for:"ceA"+i},e.sem?"Observação (uma por linha)":"Atividades (uma por linha)"),at),
+      h("label",{class:"check-lbl wide",for:"ceS"+i},sem,"Sem encontro nesta data"));
+    const c=corDe(e.k); if(c) row.style.setProperty("--c",c);
+    box.append(row);
+  });
+  box.append(h("div",{class:"row-end",style:"justify-content:flex-start"},
+    h("button",{class:"btn",onclick:()=>{ const last=D.eventos.length?D.eventos.reduce((a,b)=>crUtc(a)>crUtc(b)?a:b):null; const base=last?new Date(crUtc(last)+7*DIA_MS):new Date(Date.UTC(new Date().getFullYear(),new Date().getMonth(),new Date().getDate()));
+      D.eventos.push({y:base.getUTCFullYear(),m:base.getUTCMonth()+1,d:base.getUTCDate(),horario:"",contexto:"",atividades:[],rotulo:"",sem:false,k:uid()}); again(); }},svg(ICON.plus,16),"Adicionar data"),
+    h("button",{class:"btn",onclick:()=>{ const r=mergeTasksInto(D.eventos.filter(e=>cleanEvent(e)),tag); const keep=new Map(D.eventos.map(e=>[crIso(e),e.k])); D.eventos=r.eventos.map(e=>({...e,k:keep.get(crIso(e))||uid()})); again(); toast(r.added?`${r.added} tarefa(s) trazida(s) para o cronograma`:"Todas as tarefas com prazo já estão no cronograma"); }},svg(ICON.list,16),"Trazer tarefas do projeto"),
+    h("span",{class:"ce-hint"},"As datas são ordenadas ao salvar. Tarefas sem prazo não entram no cronograma.")));
+  return box;
+}
+
+/* ================= Lembretes: alarme no app + notificações no aparelho ================= */
+const FIRED_KEY="agenda-fired-v1", PUSH_KEY="agenda-push-v1", CATCHUP=12*3600e3;
+let FIRED=lsGet(FIRED_KEY,{}), ALARMS=[], audioCtx=null;
+// o navegador só libera som depois de um toque/clique na página
+document.addEventListener("pointerdown",()=>{ try{ if(!audioCtx){ const A=window.AudioContext||window.webkitAudioContext; if(A) audioCtx=new A(); } if(audioCtx&&audioCtx.state==="suspended") audioCtx.resume(); }catch(e){} },{capture:true,passive:true});
+function beep(){
+  try{ if(!audioCtx) return; const t0=audioCtx.currentTime;
+    [0,.25,.5].forEach((dt,i)=>{ const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.frequency.value=i===2?1175:880;
+      g.gain.setValueAtTime(.0001,t0+dt); g.gain.exponentialRampToValueAtTime(.25,t0+dt+.02); g.gain.exponentialRampToValueAtTime(.0001,t0+dt+.2);
+      o.connect(g); g.connect(audioCtx.destination); o.start(t0+dt); o.stop(t0+dt+.22); }); }catch(e){}
+}
+function checkReminders(){
+  const now=Date.now(); let changed=false;
+  for(const t of tasksArr()){
+    if(t.done||!t.remindAt||t.remindAck===t.remindAt) continue;
+    const at=tsOf(t.remindAt); if(!at||at>now||now-at>CATCHUP||FIRED[t.id]===t.remindAt) continue;
+    FIRED[t.id]=t.remindAt; changed=true;
+    if(!ALARMS.includes(t.id)) ALARMS.push(t.id);
+    if(document.visibilityState==="visible") beep(); else notifyLocal(t);
+  }
+  if(changed){ for(const k of Object.keys(FIRED)) if(!VIEW.tasks[k]) delete FIRED[k]; lsSet(FIRED_KEY,FIRED); }
+  renderAlarms();
+}
+async function notifyLocal(t){
+  try{
+    if(!("Notification" in window)||Notification.permission!=="granted") return;
+    const opts={body:t.title,tag:"rem-"+t.id,renotify:true,requireInteraction:true,icon:"icons/icon-192.png",badge:"icons/icon-192.png",data:{id:t.id}};
+    const reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();
+    if(reg) await reg.showNotification("Lembrete",opts); else new Notification("Lembrete",opts);
+  }catch(e){}
+}
+async function closeNotif(id){ try{ const reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration(); if(reg) (await reg.getNotifications({tag:"rem-"+id})).forEach(n=>n.close()); }catch(e){} }
+function dropAlarm(id,ack){
+  ALARMS=ALARMS.filter(x=>x!==id); closeNotif(id);
+  const t=VIEW.tasks[id]; if(ack&&t&&t.remindAt&&t.remindAck!==t.remindAt) patchTask(id,{remindAck:t.remindAt});  // silencia nos outros aparelhos também
+  renderAlarms();
+}
+function renderAlarms(){
+  ALARMS=ALARMS.filter(id=>VIEW.tasks[id]&&!VIEW.tasks[id].done);
+  let root=$("#alarms");
+  if(!ALARMS.length){ if(root) root.remove(); return; }
+  if(!root){ root=h("div",{class:"alarms",id:"alarms",role:"alert"}); document.body.append(root); }
+  root.replaceChildren(...ALARMS.map(id=>{ const t=VIEW.tasks[id];
+    return h("div",{class:"alarm"},
+      h("div",{class:"alarm-top"},svg(ICON.bell,20),h("div",{},h("div",{class:"alarm-title"},t.title),h("div",{class:"alarm-time"},"Lembrete · "+fmtRemind(t.remindAt)))),
+      h("div",{class:"row-end"},
+        h("button",{class:"btn small primary",onclick:()=>{dropAlarm(id,true);select(id);}},"Abrir"),
+        h("button",{class:"btn small",onclick:()=>{ const d=new Date(Date.now()+10*60e3); d.setSeconds(0,0); dropAlarm(id,false); patchTask(id,{remindAt:d.toISOString()}); toast("Adiado para "+hm(d)); }},"Adiar 10 min"),
+        h("button",{class:"btn small",onclick:()=>{dropAlarm(id,true);toggleDone(id);}},"Concluir"),
+        h("button",{class:"btn small",onclick:()=>dropAlarm(id,true)},"OK")));
+  }));
+}
+setInterval(checkReminders,10000);
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") checkReminders(); });
+// toque numa notificação com o app já aberto
+if("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message",e=>{
+  const d=e.data||{}; if(d.type==="open-task"&&typeof d.id==="string"&&VIEW.tasks[d.id]){ dropAlarm(d.id,true); select(d.id); }
+});
+/* push: inscrição do aparelho no servidor de lembretes (função "lembretes" do Supabase) */
+const pushSupported=()=>location.protocol.startsWith("http")&&"serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;
+const fnURL=()=>CFG.url.trim().replace(/\/+$/,"")+"/functions/v1/lembretes";
+const b64uBytes=s=>{ s=String(s).replace(/-/g,"+").replace(/_/g,"/"); while(s.length%4) s+="="; return Uint8Array.from(atob(s),c=>c.charCodeAt(0)); };
+async function fnCall(opts={}){
+  const headers={apikey:CFG.key,"Content-Type":"application/json"};
+  if(S.sb){ const {data}=await S.sb.auth.getSession(); if(data&&data.session) headers.Authorization="Bearer "+data.session.access_token; }
+  const r=await fetch(fnURL(),{...opts,headers}); let j={}; try{ j=await r.json(); }catch(e){}
+  if(!r.ok) throw new Error(j.error||("HTTP "+r.status)); return j;
+}
+async function subscribePush(interactive){
+  if(!pushSupported()) throw new Error("unsupported");
+  if(Notification.permission!=="granted"){ if(!interactive) return "off"; if(await Notification.requestPermission()!=="granted") throw new Error("denied"); }
+  if(!S.sb||!S.user) return "local";
+  let pk; try{ pk=(await fnCall({method:"GET"})).publicKey; }catch(e){ throw new Error("noserver"); }
+  if(typeof pk!=="string"||pk.length<80) throw new Error("noserver");
+  const key=b64uBytes(pk), reg=await navigator.serviceWorker.ready;
+  let sub=await reg.pushManager.getSubscription();
+  if(sub&&sub.options&&sub.options.applicationServerKey){ const cur=new Uint8Array(sub.options.applicationServerKey); if(cur.length!==key.length||cur.some((b,i)=>b!==key[i])){ await sub.unsubscribe(); sub=null; } }
+  if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
+  const j=sub.toJSON();
+  const {error}=await S.sb.from("push_subs").upsert({user_id:S.user.id,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth,device:navigator.userAgent.slice(0,180)},{onConflict:"endpoint"});
+  if(error) throw error;
+  lsSet(PUSH_KEY,true); return "push";
+}
+async function unsubscribePush(){
+  lsSet(PUSH_KEY,false);
+  try{ const reg=await navigator.serviceWorker.getRegistration(); const sub=reg&&await reg.pushManager.getSubscription();
+    if(sub){ if(S.sb&&S.user) await S.sb.from("push_subs").delete().eq("endpoint",sub.endpoint); await sub.unsubscribe(); } }catch(e){}
+}
+async function ensurePush(){ try{ if(lsGet(PUSH_KEY,false)&&pushSupported()&&Notification.permission==="granted"&&S.user) await subscribePush(false); }catch(e){} }
+function remindersSection(){
+  const sec=h("div",{class:"settings-sec",id:"setRem"},h("h4",{},"Lembretes e alarmes"));
+  if(!pushSupported()){
+    sec.append(h("p",{},"Os alarmes aparecem na tela enquanto o app está aberto. Este navegador não permite notificações; no iPhone/iPad, instale o app (Compartilhar › Adicionar à Tela de Início, iOS 16.4 ou mais novo) e abra por lá."));
+    return sec;
+  }
+  const perm=Notification.permission, on=lsGet(PUSH_KEY,false)&&perm==="granted";
+  let txt;
+  if(perm==="denied") txt="As notificações estão bloqueadas para este site. Libere nas configurações do navegador (cadeado na barra de endereço) e volte aqui.";
+  else if(on&&S.user) txt="Ativado neste aparelho: os lembretes chegam como notificação, mesmo com o app fechado.";
+  else if(perm==="granted") txt="Notificações permitidas: os alarmes aparecem enquanto o app está aberto ou em segundo plano. "+(S.user?"Toque em “Ativar neste aparelho” para receber também com o app fechado.":"Entre na conta (acima) para receber também com o app fechado.");
+  else txt="Ative para receber os alarmes dos lembretes neste aparelho (computador ou celular).";
+  const fail=e=>{ const m=e&&e.message; toast(m==="denied"?"Permissão de notificação negada.":m==="noserver"?"Servidor de lembretes não encontrado (veja o guia). Alarmes funcionam com o app aberto.":"Não foi possível ativar: "+(m||e)); renderSettingsIfOpen(); };
+  sec.append(h("p",{},txt),h("div",{class:"row-end",style:"justify-content:flex-start"},
+    perm!=="denied"&&!(on&&S.user)?h("button",{class:"btn primary",onclick:async()=>{ try{ const r=await subscribePush(true); toast(r==="push"?"Lembretes ativados neste aparelho.":"Notificações permitidas."); }catch(e){ return fail(e); } renderSettingsIfOpen(); }},"Ativar neste aparelho"):null,
+    on&&S.user?h("button",{class:"btn",onclick:async()=>{ try{ const r=await fnCall({method:"POST",body:JSON.stringify({action:"test"})}); toast(`Teste enviado para ${r.sent} de ${r.devices} aparelho(s).`); }catch(e){ toast("Falha no teste: "+e.message); } }},"Enviar teste"):null,
+    on?h("button",{class:"btn small",onclick:async()=>{ await unsubscribePush(); toast("Notificações desativadas neste aparelho."); renderSettingsIfOpen(); }},"Desativar"):null),
+    h("p",{},"Receber com o app fechado exige o servidor de lembretes no Supabase (guia LEMBRETES.html). No iPhone, só funciona com o app instalado na Tela de Início."));
+  return sec;
 }
 
 /* ================= Eventos globais ================= */
@@ -1176,7 +1775,7 @@ $("#settingsBtn").addEventListener("click",()=>{closeNav();openSettings();});
 let installEvt=null;
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installEvt=e;renderSettingsIfOpen();});
 function renderSettingsIfOpen(){ const b=$("#settingsBody"); if(b) b.replaceWith(settingsBody()); }
-function openSettings(){ openModal("Sincronização e backup",settingsBody(),[]); }
+function openSettings(focus){ openModal("Sincronização e backup",settingsBody(),[]); if(focus==="rem") setTimeout(()=>{ const s=$("#setRem"); if(s) s.scrollIntoView({block:"start"}); },30); }
 function settingsBody(){
   const box=h("div",{id:"settingsBody",style:"display:flex;flex-direction:column;gap:14px"});
   const msg=h("div",{class:"msg",hidden:true});
@@ -1219,19 +1818,22 @@ function settingsBody(){
     if(S.mode==="error"&&S.lastError) say("Erro: "+S.lastError+" — confira se o script SQL do guia foi executado.",true);
   }
   sec.append(msg); box.append(sec);
+  // --- Lembretes
+  box.append(remindersSection());
   // --- Backup
   const file=h("input",{type:"file",id:"restoreFile",accept:"application/json,.json",hidden:true,onchange:e=>{
     const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
-    rd.onload=()=>{ try{ const d=JSON.parse(rd.result); const ts=d.tasks||{}; let n=0; const ops=[], now=new Date().toISOString();
-      if(d.tags) ops.push({op:"set",path:"meta/tags",data:{map:{...d.tags,...VIEW.tags}}});
-      for(const [id,t] of Object.entries(ts)){ if(t&&t.title){ const c={...t}; delete c.id; c.updatedAt=now; ops.push({op:"set",path:"tasks/"+id,data:c}); n++; } }
+    rd.onload=()=>{ try{ const d=JSON.parse(rd.result); const ts=(d&&typeof d.tasks==="object"&&d.tasks)||{}; let n=0; const ops=[], now=new Date().toISOString();
+      if(d.tags&&typeof d.tags==="object"){ const m={}; for(const [k,v] of Object.entries(d.tags)){ const nk=normTag(k); if(nk) m[nk]={color:safeColor(v&&v.color)}; } ops.push({op:"set",path:"meta/tags",data:{map:{...m,...VIEW.tags}}}); }
+      for(const [id,t] of Object.entries(ts)){ const c=cleanTask(t); if(c&&/^[\w-]{1,80}$/.test(id)){ c.updatedAt=now; ops.push({op:"set",path:"tasks/"+id,data:c}); n++; } }
+      if(d.projects&&typeof d.projects==="object") for(const [k,v] of Object.entries(d.projects)){ const nk=normTag(k); if(nk) ops.push({op:"set",path:"projects/"+nk,data:{...cleanProject(v),updatedAt:now}}); }
       enqueueMany(ops);
       toast(`${n} tarefa(s) restaurada(s)`); }catch(err){ toast("Arquivo de backup inválido."); } };
     rd.readAsText(f);}});
   box.append(h("div",{class:"settings-sec"},h("h4",{},"Backup"),
     h("p",{},"Guarde uma cópia de todas as tarefas num arquivo. Serve também para passar os dados para outro aparelho sem sincronização."),
     h("div",{class:"row-end",style:"justify-content:flex-start"},
-      h("button",{class:"btn",onclick:()=>{downloadFile(`agenda-backup_${today()}.json`,JSON.stringify({version:1,exportedAt:new Date().toISOString(),tasks:VIEW.tasks,tags:VIEW.tags},null,1),"application/json");}},"Baixar backup (.json)"),
+      h("button",{class:"btn",onclick:()=>{downloadFile(`agenda-backup_${today()}.json`,JSON.stringify({version:1,exportedAt:new Date().toISOString(),tasks:VIEW.tasks,tags:VIEW.tags,projects:VIEW.projects||{}},null,1),"application/json");}},"Baixar backup (.json)"),
       h("button",{class:"btn",onclick:()=>file.click()},"Restaurar backup"),file)));
   // --- Instalar
   const inst=h("div",{class:"settings-sec"},h("h4",{},"Instalar como aplicativo"));
@@ -1254,7 +1856,10 @@ function traduz(m){
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
   window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 }
-recompute(); render(); updateSync(); initClient();
+recompute();
+// aberto por uma notificação de lembrete (?t=id): já mostra a tarefa
+{ const qt=new URLSearchParams(location.search).get("t"); if(qt){ if(VIEW.tasks[qt]) UI.sel=qt; try{ history.replaceState(null,"",location.pathname); }catch(e){} } }
+render(); updateSync(); initClient(); checkReminders();
 })();
 </script>
 </body>

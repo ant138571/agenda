@@ -1,5 +1,5 @@
 /* Service worker da Agenda de Tarefas: permite abrir e usar o app sem internet. */
-const VERSION = "agenda-v3";
+const VERSION = "agenda-v5";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./vendor/supabase.js",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png"];
 
@@ -30,5 +30,27 @@ self.addEventListener("fetch", e => {
     const hit = await cache.match(req);
     const net = fetch(req).then(res => { if (res && (res.ok || res.type === "opaque")) cache.put(req, res.clone()); return res; }).catch(() => hit);
     return hit || net;
+  }));
+});
+
+/* Lembretes: notificação enviada pelo servidor (chega mesmo com o app fechado). */
+self.addEventListener("push", e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data ? e.data.text() : "" }; }
+  const id = typeof d.id === "string" ? d.id.slice(0, 80) : "";
+  e.waitUntil(self.registration.showNotification(String(d.title || "Lembrete").slice(0, 80), {
+    body: String(d.body || "").slice(0, 300), tag: id ? "rem-" + id : "rem-teste", renotify: true, requireInteraction: true,
+    icon: "icons/icon-192.png", badge: "icons/icon-192.png", data: { id }
+  }));
+});
+/* Toque na notificação: abre o app (ou traz para frente) já na tarefa. */
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  const id = (e.notification.data && e.notification.data.id) || "";
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+    for (const c of list) {
+      if (new URL(c.url).origin === self.location.origin && "focus" in c) { c.postMessage({ type: "open-task", id }); return c.focus(); }
+    }
+    return self.clients.openWindow("./" + (id ? "?t=" + encodeURIComponent(id) : ""));
   }));
 });
