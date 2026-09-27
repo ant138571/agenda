@@ -1527,7 +1527,9 @@ if(document.fonts&&document.fonts.ready) document.fonts.ready.then(crAjustarTudo
 
 /* ---- Exportar PDF: folha A4 no design da ferramenta; o navegador oferece “Salvar como PDF” ---- */
 function exportCronoPDF(tag){
-  const p=getProject(tag); if(!p) return;
+  let p=getProject(tag); if(!p) return;
+  // cronograma vazio: usa as tarefas do projeto que têm prazo (mesma regra do botão “Trazer tarefas”) e salva
+  if(!p.eventos.length){ const r=mergeTasksInto([],tag); if(r.eventos.length){ putProject(tag,{...p,eventos:r.eventos}); p={...p,eventos:r.eventos}; } }
   if(!p.eventos.length){ toast("O cronograma ainda não tem datas."); return; }
   const titulo=p.titulo||projTitle(tag);
   const fonts=[...document.querySelectorAll('link[rel=stylesheet][href*="fonts.googleapis"]')].map(l=>l.outerHTML).join("");
