@@ -1,5 +1,5 @@
 /* Service worker da Agenda de Tarefas: permite abrir e usar o app sem internet. */
-const VERSION = "agenda-v2";
+const VERSION = "agenda-v3";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./vendor/supabase.js",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png"];
 
