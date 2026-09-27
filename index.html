@@ -1342,7 +1342,7 @@ function renderReport(wrap){
   // tarefas concluídas sem data de conclusão (ex.: importadas do Microsoft To Do): usam o prazo; sem prazo, só entram se marcado abaixo
   const byTags=t=>!R.tags.length||(t.tags||[]).some(g=>R.tags.includes(g));
   const semData=tasksArr().filter(t=>t.done&&!repDate(t)&&byTags(t)).length;
-  if(semData) card.append(h("label",{class:"check-lbl",for:"repUndated"},h("input",{type:"checkbox",id:"repUndated",checked:!!R.undated,onchange:e=>{R.undated=e.target.checked;render();}}),
+  if(semData) card.append(h("label",{class:"check-lbl",for:"repUndated"},h("input",{type:"checkbox",id:"repUndated",checked:R.undated!==false,onchange:e=>{R.undated=e.target.checked;render();}}),
     `Incluir ${semData} tarefa${semData===1?"":"s"} concluída${semData===1?"":"s"} sem data (sem data de conclusão nem prazo, ex.: importadas)`));
   const rows=reportRows();
   const byTag={}; rows.forEach(t=>((t.tags&&t.tags.length)?t.tags:["(sem grupo)"]).forEach(g=>byTag[g]=(byTag[g]||0)+1));
@@ -1373,7 +1373,7 @@ function repDate(t){
 const repCell=t=>{ const d=repDate(t); return d?fmtBR(d)+(t.doneAt?"":" (prazo)"):"sem data"; };
 function reportRows(){
   const R=UI.rep;
-  return tasksArr().filter(t=>t.done).filter(t=>{ const d=repDate(t); return d?((!R.from||d>=R.from)&&(!R.to||d<=R.to)):!!R.undated; })
+  return tasksArr().filter(t=>t.done).filter(t=>{ const d=repDate(t); return d?((!R.from||d>=R.from)&&(!R.to||d<=R.to)):R.undated!==false; })
     .filter(t=>!R.tags.length||(t.tags||[]).some(g=>R.tags.includes(g)))
     .sort((a,b)=>{ const x=repDate(a)||"9999", y=repDate(b)||"9999"; return x<y?-1:x>y?1:(a.doneAt||"").localeCompare(b.doneAt||"")||a.title.localeCompare(b.title,"pt-BR"); });
 }
