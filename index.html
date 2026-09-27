@@ -296,6 +296,11 @@ tr:last-child td{border-bottom:0}
 /* ---------- Avisos e janelas ---------- */
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:6px 6px 6px 16px;min-height:44px;border-radius:14px;font-size:14px;box-shadow:var(--shadow);z-index:50;display:flex;align-items:center;gap:6px;max-width:calc(100% - 32px)}
 .toast>span{padding-right:10px;white-space:nowrap}
+/* busca de grupo pelo teclado ( # + nome ) */
+.gq{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--panel);color:var(--ink);border:1px solid var(--line-strong);padding:8px 14px;border-radius:14px;font-size:14px;box-shadow:var(--shadow);z-index:66;display:flex;align-items:center;gap:10px;max-width:calc(100% - 32px);white-space:nowrap}
+.gq b{font-weight:800}
+.gq .gq-to{color:var(--muted);overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+.gq .gq-k{color:var(--faint);font-size:12px}
 .toast-undo{border:0;background:none;color:var(--accent);font-weight:800;padding:8px 10px;border-radius:9px}
 .scrim{display:none}
 .modal-bg{position:fixed;inset:0;background:rgba(20,16,12,.4);display:grid;place-items:center;z-index:40;padding:16px}
@@ -406,17 +411,20 @@ tr:last-child td{border-bottom:0}
 .opt.wd{width:36px;justify-content:center;padding:6px 0}
 /* toque longo: classificar sem abrir a tarefa */
 .wheel-bg{position:fixed;inset:0;z-index:65;background:rgba(20,16,12,.28)}
-.wheel{position:fixed;width:240px;background:var(--panel);border:1px solid var(--line-strong);border-radius:18px;box-shadow:var(--shadow);padding:8px 0 8px;display:flex;flex-direction:column}
-.wheel-title{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:center;padding:2px 0 6px}
-.wheel-box{position:relative;height:220px}
-.wheel-band{position:absolute;left:10px;right:10px;top:88px;height:44px;border-radius:12px;background:var(--accent-soft);pointer-events:none}
+/* sem seleção de texto nem menu do sistema durante o toque longo (o navegador não pode “roubar” o gesto) */
+.wheel-bg,.wheel-bg *,body.wheel-hold,body.wheel-hold *{user-select:none!important;-webkit-user-select:none!important;-webkit-touch-callout:none!important}
+.wheel{position:fixed;width:240px;background:var(--panel);border:1px solid var(--line-strong);border-radius:16px;box-shadow:var(--shadow);padding:6px 0 6px;display:flex;flex-direction:column}
+.wheel-title{font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:center;padding:2px 0 4px}
+/* 3 opções visíveis: a do centro (selecionada), uma acima e uma abaixo */
+.wheel-box{position:relative;height:120px}
+.wheel-band{position:absolute;left:10px;right:10px;top:40px;height:40px;border-radius:11px;background:var(--accent-soft);pointer-events:none}
 .wheel-view{position:absolute;inset:0;overflow-y:auto;scroll-snap-type:y mandatory;scrollbar-width:none;overscroll-behavior:contain;touch-action:pan-y;
-  -webkit-mask-image:linear-gradient(transparent,#000 32%,#000 68%,transparent);mask-image:linear-gradient(transparent,#000 32%,#000 68%,transparent)}
+  -webkit-mask-image:linear-gradient(rgba(0,0,0,.25),#000 34%,#000 66%,rgba(0,0,0,.25));mask-image:linear-gradient(rgba(0,0,0,.25),#000 34%,#000 66%,rgba(0,0,0,.25))}
 .wheel-view::-webkit-scrollbar{display:none}
-.wheel-sp{height:88px}
-.wheel-it{height:44px;scroll-snap-align:center;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:600;font-size:16px;color:var(--muted);white-space:nowrap;overflow:hidden;padding:0 14px}
+.wheel-sp{height:40px}
+.wheel-it{height:40px;scroll-snap-align:center;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:600;font-size:15.5px;color:var(--muted);white-space:nowrap;overflow:hidden;padding:0 14px}
 .wheel-it.on{color:var(--accent-text);font-weight:800}
-.wheel-hint{font-size:11.5px;color:var(--faint);text-align:center;padding:6px 8px 0}
+.wheel-hint{font-size:11px;color:var(--faint);text-align:center;padding:4px 8px 0}
 .msel-home{display:none}
 @media (max-width:860px){ #mselBtn.home-v{display:none} .col-head .msel-home{display:inline-flex;padding:5px 9px} #mselBtn .msel-lbl{display:none} #mselBtn{width:44px;height:44px;border-radius:14px;justify-content:center;padding:0} }
 /* seleção múltipla */
@@ -1151,6 +1159,15 @@ function tokenScore(tok,ws,text){
   if(!best&&text.includes(tok)) best=2;
   return best;
 }
+/* #grupo: grupos cujo nome combina (ignora acentos): nome exato; senão, começo do nome; senão, parte do nome */
+function matchTags(q){
+  const g=normTag(q); if(!g) return [];
+  const names=allTags().names, f=fold(g);
+  const exact=names.find(n=>n===g||fold(n)===f); if(exact) return [exact];
+  const pre=names.filter(n=>fold(n).startsWith(f)); if(pre.length) return pre;
+  return names.filter(n=>fold(n).includes(f));
+}
+const isTagQuery=q=>/^#[^\s#]+$/.test(q||"");
 function searchTasks(list,q){
   const toks=wordsOf(q); if(!toks.length) return list;
   const out=[];
@@ -1165,7 +1182,12 @@ function searchTasks(list,q){
 function renderList(wrap,v){
   let list=tasksArr(), title="", sub="", defaults={}, groupBy=null, showDoneDefault=UI.showDone;
   const td=today();
-  if(v==="search"){ title="Pesquisa"; sub=`Resultados para “${UI.q}”`; list=searchTasks(list,UI.q); showDoneDefault=true; }
+  if(v==="search"&&isTagQuery(UI.q)){   // #grupo na pesquisa: só as tarefas do grupo; Enter abre o grupo
+    const tags=matchTags(UI.q); title="Pesquisa"; showDoneDefault=true;
+    list=list.filter(t=>(t.tags||[]).some(g=>tags.includes(g)));
+    sub=!tags.length?`Nenhum grupo “${UI.q}”`:tags.length===1?`Grupo #${tags[0]} · Enter abre o grupo`:`Grupos ${tags.slice(0,4).map(g=>"#"+g).join(", ")}${tags.length>4?"…":""} · Enter abre #${tags[0]}`;
+  }
+  else if(v==="search"){ title="Pesquisa"; sub=`Resultados para “${UI.q}”`; list=searchTasks(list,UI.q); showDoneDefault=true; }
   else if(v==="today"){ title="Meu Dia"; sub=fmtLong(new Date());
     const recDone=list.filter(t=>isRec(t)&&(t.doneDates||[]).includes(td)&&!inMyDay(t)).map(t=>occView(t,td));
     list=[...list.filter(t=>inMyDay(t)||(t.done&&t.myDay===td)),...recDone]; defaults={myDay:td}; }
@@ -1347,14 +1369,14 @@ document.addEventListener("pointerdown",e=>{
   const row=card.parentElement;
   if(e.target.closest(".grip")) return startDrag(e,row);
   if(e.target.closest("input,textarea,select")) return;
-  G={type:"pending",row,card,x:e.clientX,y:e.clientY,pid:e.pointerId,dx:0};
+  G={type:"pending",row,card,x:e.clientX,y:e.clientY,pid:e.pointerId,dx:0,tgt:e.target};
   // toque longo (celular): grupo, importância e prioridade sem abrir a tarefa
   if(e.pointerType==="touch"&&!UI.multiOn&&!e.target.closest(".check,.act,.tagchip,.to-day")){
     const g=G;
     g.lp=setTimeout(()=>{ if(G!==g||g.type!=="pending") return; G=null; LP_FIRED=true;
       try{ if(navigator.vibrate) navigator.vibrate(12); }catch(err){}
       const r=g.card.getBoundingClientRect(), fx=(g.x-r.left)/(r.width||1);
-      openWheel(g.row.dataset.id,fx<1/3?"group":fx<2/3?"imp":"pri",g.x,g.y); },LP_MS);
+      openWheel(g.row.dataset.id,fx<1/3?"group":fx<2/3?"imp":"pri",g.x,g.y,g.tgt); },LP_MS);
   }
 });
 // no celular, o toque longo não abre o menu do sistema nem o do clique direito
@@ -1429,11 +1451,13 @@ window.addEventListener("pointerup",e=>{ if(LP_FIRED){ LP_FIRED=false; swallowNe
 window.addEventListener("pointercancel",e=>{ LP_FIRED=false; endGesture(e,true); });
 
 /* ---------- Toque longo: roleta infinita para grupo (esquerda), importância (meio) e prioridade (direita) ----------
-   Segurando: arraste para cima/baixo para girar e solte para aplicar.
-   Soltou sem arrastar: a roleta fica aberta; gire com o dedo e toque no valor (ou fora, para aplicar o do centro). */
-const WH_IT=44;
+   Segurando: arraste para cima/baixo para girar e solte para aplicar (sem segundo toque).
+   Soltou sem arrastar: a roleta fica aberta; gire com o dedo e toque no valor (ou fora, para aplicar o do centro).
+   Mostra 3 opções por vez (a do centro, uma acima e uma abaixo). Grupo: escolhe um só (vários: #grupo ou Detalhes).
+   Enquanto o dedo está pressionado: sem seleção de texto, sem menu do sistema e sem redesenhar a tela. */
+const WH_IT=40;
 let WH=null;
-function openWheel(id,kind,x,y){
+function openWheel(id,kind,x,y,tgt){
   const t=VIEW.tasks[id]; if(!t) return;
   closeWheel(false);
   let opts, cur, title;
@@ -1486,18 +1510,34 @@ function openWheel(id,kind,x,y){
     patchTask(id,patch); toast(msg,()=>restoreTask(id,now));
   }
   try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){}
-  WH={bg,view,finish,holding:true,sy:y/z,st:view.scrollTop,moved:false};
+  WH={bg,view,finish,holding:true,sy:y/z,st:view.scrollTop,moved:false,tgt:null};
+  wheelHold(true,tgt);
 }
-function closeWheel(apply){ if(!WH) return; const w=WH; if(apply){ w.finish(true); return; } WH=null; w.bg.remove(); }
+function closeWheel(apply){ if(!WH) return; const w=WH; if(apply){ w.finish(true); return; } if(w.holding){ w.holding=false; wheelHold(false); } WH=null; w.bg.remove(); if(!GESTURE&&pendingRender) render(); }
+// dedo ainda pressionado: bloqueia seleção de texto e redesenho; se a tarefa sair da tela (redesenho), os eventos
+// do dedo continuam chegando pelo elemento tocado (tgt), que recebe os mesmos ouvintes
+function wheelHold(on,tgt){
+  document.body.classList.toggle("wheel-hold",on);
+  try{ const sel=window.getSelection&&window.getSelection(); if(sel&&sel.removeAllRanges) sel.removeAllRanges(); }catch(e){}
+  if(on){ GESTURE=true; if(tgt&&tgt.addEventListener&&WH){ WH.tgt=tgt; tgt.addEventListener("touchmove",wheelMove,{passive:false}); tgt.addEventListener("touchend",wheelRelease,{passive:true}); tgt.addEventListener("touchcancel",wheelRelease,{passive:true}); } }
+  else{
+    GESTURE=false;
+    const t=WH&&WH.tgt; if(t){ WH.tgt=null; t.removeEventListener("touchmove",wheelMove,{passive:false}); t.removeEventListener("touchend",wheelRelease,{passive:true}); t.removeEventListener("touchcancel",wheelRelease,{passive:true}); }
+  }
+}
 // segurando o dedo depois do toque longo: arrastar gira a roleta (sem rolar a página)
-document.addEventListener("touchmove",e=>{
-  if(!WH||!WH.holding) return;
+function wheelMove(e){
+  if(!WH||!WH.holding||e._wh) return; e._wh=true;
   if(e.cancelable) e.preventDefault();
   const z=parseFloat(getComputedStyle(document.documentElement).zoom)||1, dy=e.touches[0].clientY/z-WH.sy;
   if(Math.abs(dy)>6) WH.moved=true;
   if(WH.moved) WH.view.scrollTop=WH.st-dy*1.3;
-},{passive:false});
-const wheelRelease=()=>{ if(!WH||!WH.holding) return; WH.holding=false; if(WH.moved) WH.finish(true); };
+}
+document.addEventListener("touchmove",wheelMove,{passive:false});
+function wheelRelease(){ if(!WH||!WH.holding) return; WH.holding=false; wheelHold(false); if(WH.moved) WH.finish(true); else if(pendingRender) render(); }
+// sem seleção de texto nem menu do sistema enquanto a roleta está na tela
+document.addEventListener("selectstart",e=>{ if(WH) e.preventDefault(); },true);
+document.addEventListener("contextmenu",e=>{ if(WH){ e.preventDefault(); e.stopPropagation(); } },true);
 document.addEventListener("touchend",wheelRelease,{passive:true});
 document.addEventListener("touchcancel",wheelRelease,{passive:true});
 window.addEventListener("keydown",e=>{ if(e.key==="Escape"&&WH){ closeWheel(false); e.stopPropagation(); } },true);
@@ -2348,7 +2388,7 @@ const KEY_ACTIONS=[
   {id:"p3",grp:"task",label:"Prioridade P3 · Pode esperar",def:"3",run:taskKey(()=>({priority:3}),()=>"Prioridade P3")},
   {id:"impA",grp:"task",label:"Importância alta",def:"Shift+1",run:taskKey(()=>({importance:3}),()=>"Importância alta")},
   {id:"impM",grp:"task",label:"Importância média",def:"Shift+2",run:taskKey(()=>({importance:2}),()=>"Importância média")},
-  {id:"impB",grp:"task",label:"Importância baixa",def:"Shift+3",run:taskKey(()=>({importance:1}),()=>"Importância baixa")},
+  {id:"impB",grp:"task",label:"Importância baixa",def:"Shift+B",run:taskKey(()=>({importance:1}),()=>"Importância baixa")},
   {id:"dueToday",grp:"task",label:"Prazo: hoje",def:"Shift+H",run:taskKey(()=>({due:today()}),()=>"Prazo: hoje")},
   {id:"dueTom",grp:"task",label:"Prazo: amanhã",def:"Shift+A",run:taskKey(()=>({due:ymd(addDays(new Date(),1))}),()=>"Prazo: amanhã")},
   {id:"dueWeek",grp:"task",label:"Prazo: em 1 semana",def:"Shift+S",run:taskKey(()=>({due:ymd(addDays(new Date(),7))}),()=>"Prazo: em 1 semana")},
@@ -2362,6 +2402,8 @@ let KEYS=Object.assign(defaultKeys(),KEYS_SAVED);
 // atalho novo cuja tecla sugerida já foi escolhida pelo usuário para outra ação: fica sem atalho (sem conflito)
 for(const a of KEY_ACTIONS) if(!(a.id in KEYS_SAVED)&&Object.keys(KEYS_SAVED).length&&KEY_ACTIONS.some(x=>x.id!==a.id&&x.id in KEYS_SAVED&&KEYS_SAVED[x.id]===a.def)) KEYS[a.id]="";
 for(const k of Object.keys(KEYS)) if(typeof KEYS[k]!=="string") KEYS[k]="";
+// v8: Shift+3 (#) passou a abrir a busca de grupo; Importância baixa guardada com Shift+3 vai para Shift+B (se estiver livre)
+if(KEYS.impB==="Shift+3"){ KEYS.impB=Object.keys(KEYS).some(k=>k!=="impB"&&KEYS[k]==="Shift+B")?"":"Shift+B"; lsSet(KEYS_KEY,KEYS); }
 const saveKeys=()=>lsSet(KEYS_KEY,KEYS);
 let KEY_REC=false;
 function comboOf(e){
@@ -2395,6 +2437,7 @@ function recordKey(a,btn){
     else{
       c=comboOf(e); if(!c) return;
       if(c==="/"||c==="Enter"){ toast(c==="/"?"A tecla / já abre a pesquisa.":"Enter não pode ser usado."); return; }
+      if(e.key==="#"){ toast("A tecla # já abre a busca de grupo."); return; }
       const other=KEY_ACTIONS.find(x=>x.id!==a.id&&KEYS[x.id]===c);
       if(other){ KEYS[other.id]=""; toast(`${fmtCombo(c)} foi tirado de “${other.label}”.`); }
     }
@@ -2441,6 +2484,40 @@ function configBody(){
 
 /* ================= Eventos globais ================= */
 $("#q").addEventListener("input",e=>{UI.q=e.target.value.trim();render();});
+$("#q").addEventListener("keydown",e=>{
+  if(e.key!=="Enter"||e.isComposing||!isTagQuery(UI.q)) return;
+  e.preventDefault(); const g=matchTags(UI.q)[0];
+  if(g){ $("#q").blur(); go("tag:"+g); } else toast(`Nenhum grupo “${UI.q}”.`);
+});
+/* # fora dos campos de escrita: digite o nome do grupo; Enter abre, Esc cancela, Backspace apaga */
+let GQ=null;
+function gqPaint(){
+  if(!GQ) return;
+  const tags=GQ.text?matchTags(GQ.text):[], g=tags[0];
+  GQ.el.replaceChildren(h("b",{},"#"+GQ.text),
+    h("span",{class:"gq-to"},!GQ.text?"digite o nome do grupo":g?["→",h("span",{class:"tag-swatch",style:`background:${tagColor(g)}`}),"#"+g+(tags.length>1?` (+${tags.length-1})`:"")]:"nenhum grupo"),
+    h("span",{class:"gq-k"},GQ.text&&g?"Enter abre · Esc":"Esc"));
+}
+function gqClose(){ if(!GQ) return; GQ.el.remove(); GQ=null; }
+window.addEventListener("keydown",e=>{
+  if(KEY_REC||e.isComposing) return;
+  if(GQ){
+    if(["Shift","Control","Alt","Meta","AltGraph","CapsLock"].includes(e.key)) return;
+    e.preventDefault(); e.stopPropagation();
+    if(e.key==="Escape"){ gqClose(); return; }
+    if(e.key==="Enter"){ const g=GQ.text&&matchTags(GQ.text)[0]; if(g){ gqClose(); go("tag:"+g); } else if(GQ.text) toast("Nenhum grupo “#"+GQ.text+"”."); return; }
+    if(e.key==="Backspace"){ if(!GQ.text){ gqClose(); return; } GQ.text=GQ.text.slice(0,-1); gqPaint(); return; }
+    if(e.key.length===1&&!e.metaKey&&!(e.ctrlKey&&!e.altKey)){ const add=normTag(GQ.text+(e.key===" "?"-":e.key)); if(add.length>GQ.text.length) GQ.text=add; gqPaint(); return; }
+    gqClose(); return;
+  }
+  if(e.key!=="#"||e.metaKey||(e.ctrlKey&&!e.altKey)) return;
+  const tg=e.target;
+  if(tg&&tg.closest&&tg.closest("input,textarea,select,[contenteditable]")) return;   // digitando: # continua atribuindo grupo
+  if($("#modalRoot").firstChild||$("#ctx")||WH) return;
+  e.preventDefault(); e.stopPropagation();
+  GQ={text:"",el:h("div",{class:"gq",role:"status","aria-live":"polite"})}; document.body.append(GQ.el); gqPaint();
+},true);
+document.addEventListener("pointerdown",e=>{ if(GQ&&!GQ.el.contains(e.target)) gqClose(); },true);
 $("#menuBtn").addEventListener("click",()=>$("#app").classList.add("nav-open"));
 $("#scrim").addEventListener("click",closeNav);
 $("#mselBtn").addEventListener("click",()=>setMulti(!UI.multiOn));
