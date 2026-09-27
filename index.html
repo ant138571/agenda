@@ -387,6 +387,31 @@ tr:last-child td{border-bottom:0}
 .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;min-width:104px;justify-content:center;flex:none}
 .kbd.rec{border-color:var(--accent);color:var(--accent-text);background:var(--accent-soft)}
 .kbd.none{color:var(--faint)}
+/* tamanho do texto no computador: a largura das listas acompanha o zoom, sem sobrar faixas vazias nas laterais */
+@media (min-width:861px){ .wrap{max-width:calc(900px / var(--ui-zoom,1))} .wrap.wide{max-width:calc(1280px / var(--ui-zoom,1))} }
+/* grupo: lista + painéis Urgentes e Importantes (como na home) */
+.grp-main{display:flex;flex-direction:column;gap:14px;min-width:0}
+@media (max-width:860px){ .grp-side{display:none} }
+/* recorrência */
+.m-rep{display:inline-flex;align-items:center;gap:3px;color:var(--muted);font-weight:700}
+.opt.wd{width:36px;justify-content:center;padding:6px 0}
+/* toque longo: classificar sem abrir a tarefa */
+.lp-sheet{display:flex;flex-direction:column;gap:14px}
+/* seleção múltipla */
+.task.msel .t-card{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent)}
+.bulk{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:33;background:var(--panel);border:1px solid var(--line-strong);border-radius:16px;box-shadow:var(--shadow);padding:6px;display:flex;align-items:center;gap:2px;max-width:calc(100% - 24px);overflow-x:auto;scrollbar-width:none}
+.bulk::-webkit-scrollbar{display:none}
+.bulk-n{font-weight:800;padding:0 10px 0 8px;white-space:nowrap;font-variant-numeric:tabular-nums;font-size:14px}
+.bulk button{flex:none;border:0;background:none;border-radius:10px;padding:8px 10px;display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:13.5px;white-space:nowrap;color:var(--ink)}
+.bulk button:hover:not(:disabled){background:var(--hover)}
+.bulk button:disabled{opacity:.4;cursor:default}
+.bulk button>span{color:var(--muted)}
+.bulk .b-del,.bulk .b-del>span{color:var(--danger)}
+.bulk-sep{width:1px;align-self:stretch;background:var(--line);margin:4px 2px;flex:none}
+body.has-bulk .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+body.has-bulk .content{padding-bottom:110px}
+#mselBtn.on{border-color:var(--accent);color:var(--accent-text);background:var(--accent-soft)}
+@media (max-width:860px){ .bulk{left:10px;right:10px;transform:none;max-width:none;flex-wrap:wrap;justify-content:center;overflow:visible} .bulk-n{flex-basis:100%;text-align:center;padding:4px 0 2px} .bulk-sep{display:none} #mselBtn{order:2} body.has-bulk .toast{bottom:calc(150px + env(safe-area-inset-bottom,0px))} body.has-bulk .content{padding-bottom:170px} }
 </style>
 <style id="cronoCss">
 /* Cronograma de projeto: estrutura e design da ferramenta “Cronograma do projeto” */
@@ -530,6 +555,7 @@ tr:last-child td{border-bottom:0}
         <div class="sub" id="viewSub"></div>
       </div>
       <div class="band-actions" id="bandActions"></div>
+      <button class="btn small mouse-only" id="mselBtn" hidden title="Selecionar várias tarefas (ou Ctrl + clique)"></button>
     </header>
     <div class="content" id="content"><div class="wrap" id="wrap"></div></div>
   </main>
@@ -577,6 +603,8 @@ const ICON={
   bell:'<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
   chev:'<path d="M6 9l6 6 6-6"/>',
   bolt:'<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>',
+  repeat:'<path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>',
+  select:'<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><path d="M5.3 7.2l1.3 1.3L9 6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><path d="M14 7h7M14 17h7"/>',
   grip:'<circle cx="9" cy="6" r=".8"/><circle cx="15" cy="6" r=".8"/><circle cx="9" cy="12" r=".8"/><circle cx="15" cy="12" r=".8"/><circle cx="9" cy="18" r=".8"/><circle cx="15" cy="18" r=".8"/>'
 };
 const esc = s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -741,6 +769,17 @@ function cleanTask(t){
   if(Array.isArray(t.steps)) c.steps=t.steps.filter(x=>x&&typeof x.title==="string").slice(0,200).map((x,i)=>({id:str(x.id)||"s"+(i+1),title:x.title.slice(0,500),done:x.done===true}));
   if(typeof t.ord==="number"&&isFinite(t.ord)) c.ord=t.ord;
   if(str(t.remindAt)&&!isNaN(Date.parse(t.remindAt))) c.remindAt=t.remindAt;
+  // recorrência
+  if(t.repeat&&typeof t.repeat==="object"&&["daily","weekdays","weekly","monthly"].includes(t.repeat.freq)){
+    const r={freq:t.repeat.freq};
+    if(Array.isArray(t.repeat.days)) r.days=[...new Set(t.repeat.days.filter(x=>Number.isInteger(x)&&x>=0&&x<=6))];
+    if(Number.isInteger(t.repeat.day)&&t.repeat.day>=1&&t.repeat.day<=31) r.day=t.repeat.day;
+    c.repeat=r;
+  }
+  const dates=v=>Array.isArray(v)?[...new Set(v.filter(x=>typeof x==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(x)))].sort().slice(-400):null;
+  if(dates(t.doneDates)) c.doneDates=dates(t.doneDates);
+  if(dates(t.skipDates)) c.skipDates=dates(t.skipDates);
+  if(str(t.lastDoneAt)) c.lastDoneAt=t.lastDoneAt;
   return c;
 }
 /* posição manual acima de todas as tarefas existentes: nova tarefa entra no topo da lista */
@@ -758,8 +797,54 @@ function parseQuick(text){
   title=title.replace(/(^|\s)p([123])(?=\s|$)/giu,(m,sp,v)=>{priority=+v;return sp;});
   return {title:title.replace(/\s+/g," ").trim(),tags:[...new Set(tags.filter(Boolean))],importance,priority};
 }
-function toggleDone(id){
+/* ---------- Recorrência ----------
+   repeat:{freq:"daily"|"weekdays"|"weekly"|"monthly", days:[0-6] (semanal), day:1-31 (mensal)}
+   O prazo (due) é a próxima ocorrência em aberto; doneDates guarda as datas já concluídas e skipDates as puladas.
+   A tarefa nunca fica “concluída”: ao concluir uma data, o prazo passa para a próxima ocorrência. */
+const REP_LABEL={daily:"Diária",weekdays:"Dias úteis",weekly:"Semanal",monthly:"Mensal"};
+const isRec=t=>!!(t&&t.repeat&&REP_LABEL[t.repeat.freq]&&t.due);
+function occursOn(t,key){
+  const r=t.repeat, d=parseYmd(key), w=d.getDay();
+  if(r.freq==="daily") return true;
+  if(r.freq==="weekdays") return w>=1&&w<=5;
+  if(r.freq==="weekly") return (Array.isArray(r.days)&&r.days.length?r.days:[parseYmd(t.due).getDay()]).includes(w);
+  if(r.freq==="monthly"){ const md=r.day||parseYmd(t.due).getDate(), last=new Date(d.getFullYear(),d.getMonth()+1,0).getDate(); return d.getDate()===Math.min(md,last); }
+  return false;
+}
+const recClosed=(t,key)=>(t.doneDates||[]).includes(key)||(t.skipDates||[]).includes(key);
+/* próxima ocorrência em aberto depois de “after” (exclusivo) */
+function nextOcc(t,after){ let d=addDays(parseYmd(after),1); for(let i=0;i<800;i++,d=addDays(d,1)){ const k=ymd(d); if(occursOn(t,k)&&!recClosed(t,k)) return k; } return null; }
+const firstOcc=(t,key)=>occursOn(t,key)&&!recClosed(t,key)?key:nextOcc(t,key);
+/* a tarefa recorrente tem ocorrência em aberto neste dia (do prazo atual em diante) */
+const recOn=(t,key)=>isRec(t)&&!t.done&&(key===t.due||(key>t.due&&occursOn(t,key)&&!recClosed(t,key)));
+/* tarefa aberta com prazo neste dia (inclui as próximas ocorrências das recorrentes) */
+const dueOn=(t,key)=>!t.done&&(t.due===key||recOn(t,key));
+/* cópia da tarefa recorrente vista numa data específica (concluída ou não naquela data) */
+const occView=(t,key)=>({...t,_occ:key,done:(t.doneDates||[]).includes(key),doneAt:(t.doneDates||[]).includes(key)?null:t.doneAt});
+const repShort=t=>({daily:"diária",weekdays:"dias úteis",weekly:"semanal",monthly:"mensal"})[t.repeat.freq];
+function repText(t){
+  const r=t.repeat;
+  if(r.freq==="weekly") return "semanal ("+(Array.isArray(r.days)&&r.days.length?r.days:[parseYmd(t.due).getDay()]).slice().sort((a,b)=>((a+6)%7)-((b+6)%7)).map(w=>DIAS[w]).join(", ")+")";
+  if(r.freq==="monthly") return "mensal (dia "+(r.day||parseYmd(t.due).getDate())+")";
+  return repShort(t);
+}
+function recDonePatch(t,key){
+  const td=today(), done=[...new Set([...(t.doneDates||[]),key])].sort().slice(-400);
+  const p={doneDates:done,lastDoneAt:new Date().toISOString()};
+  if(key===t.due){ p.due=nextOcc({...t,doneDates:done},key<td?ymd(addDays(new Date(),-1)):key)||t.due; if(t.myDay===td) p.myDay=null; }
+  return p;
+}
+function recUndoPatch(t,key){ const p={doneDates:(t.doneDates||[]).filter(x=>x!==key)}; if(!t.due||key<t.due) p.due=key; return p; }
+function recSkipPatch(t,key){ const skip=[...new Set([...(t.skipDates||[]),key])].sort().slice(-400); const p={skipDates:skip}; if(key===t.due) p.due=nextOcc({...t,skipDates:skip},key)||t.due; return p; }
+function toggleDone(id,occ){
   const t=VIEW.tasks[id]; if(!t) return;
+  if(isRec(t)){
+    const key=occ||t.due;
+    if((t.doneDates||[]).includes(key)){ patchTask(id,recUndoPatch(t,key)); return; }
+    const p=recDonePatch(t,key); patchTask(id,p);
+    toast(p.due&&p.due!==t.due?"Concluída · próxima: "+fmtDue(p.due):"Concluída nesta data",()=>restoreTask(id,t));
+    return;
+  }
   patchTask(id,{done:!t.done,doneAt:!t.done?new Date().toISOString():null});
   if(!t.done) toast("Tarefa concluída",()=>patchTask(id,{done:false,doneAt:null}));
 }
@@ -775,6 +860,11 @@ function removeTask(id){
 /* o que o gesto “deslizar para a direita” faz, conforme onde a tarefa aparece */
 function rightAction(t,dayKey){
   const td=today();
+  // recorrente numa data futura: pula só aquela data (a repetição continua)
+  if(isRec(t)&&dayKey&&dayKey!==td){
+    if(t.done) return {label:"Reabrir",msg:"Data reaberta",run:()=>toggleDone(t.id,dayKey)};
+    return {label:"Pular esta data",msg:"Data pulada",run:()=>{ const cur=VIEW.tasks[t.id]; if(cur) patchTask(t.id,recSkipPatch(cur,dayKey)); }};
+  }
   if(dayKey&&dayKey!==td) return {label:"Tirar do dia",msg:"Prazo removido",run:()=>patchTask(t.id,{due:null})};
   if(inMyDay(t)) return {label:"Tirar de hoje",msg:"Retirada de hoje",run:()=>patchTask(t.id,{myDay:"no:"+td})};
   return {label:"Fazer hoje",msg:"Adicionada a hoje",run:()=>patchTask(t.id,{myDay:td})};
@@ -788,9 +878,9 @@ function applyOrder(ids){
 }
 
 /* ================= Estado de UI ================= */
-const UI=Object.assign({view:"home",imp:0,pri:0,sort:"due",showDone:false,sel:null,q:"",rep:{from:null,to:null,tags:[]},panels:{}},lsGet(UI_KEY,{}),{sel:null,q:"",homeDay:null,tlLeft:null});
+const UI=Object.assign({view:"home",imp:0,pri:0,sort:"due",showDone:false,sel:null,q:"",rep:{from:null,to:null,tags:[]},panels:{}},lsGet(UI_KEY,{}),{sel:null,q:"",homeDay:null,tlLeft:null,multi:new Set(),multiOn:false});
 function saveUI(){ lsSet(UI_KEY,{view:UI.view,imp:UI.imp,pri:UI.pri,sort:UI.sort,showDone:UI.showDone,panels:UI.panels}); }
-function go(view){ if(UI.cronEdit&&view!=="proj:"+UI.cronEdit){ UI.cronEdit=null; UI.cronDraft=null; } UI.view=view; UI.q=""; $("#q").value=""; saveUI(); closeNav(); render(); $("#content").scrollTop=0; }
+function go(view){ if(UI.cronEdit&&view!=="proj:"+UI.cronEdit){ UI.cronEdit=null; UI.cronDraft=null; } UI.multiOn=false; UI.multi=new Set(); UI.view=view; UI.q=""; $("#q").value=""; saveUI(); closeNav(); render(); $("#content").scrollTop=0; }
 function closeNav(){ $("#app").classList.remove("nav-open"); }
 
 /* ================= Render ================= */
@@ -811,6 +901,10 @@ function render(force){
   else renderList(wrap,v);
   renderDetail();
   placeTimeline();
+  const mb=$("#mselBtn");
+  mb.hidden=v==="report"||v==="projects"||!!(v.startsWith("proj:")&&UI.cronEdit);
+  mb.classList.toggle("on",UI.multiOn); mb.replaceChildren(svg(ICON.select,15),UI.multiOn?"Cancelar seleção":"Selecionar");
+  renderBulk();
 }
 function placeTimeline(){
   const sc=$(".tl-scroll"); if(!sc) return;
@@ -866,8 +960,8 @@ function goToday(){
 }
 function gestureHint(){
   return h("div",{class:"gest-hint"},
-    h("span",{class:"touch-only"},"Deslize ← para apagar · → para tirar do dia · segure ⋮⋮ para reordenar"),
-    h("span",{class:"mouse-only"},"Arraste ⋮⋮ para reordenar (ou Alt + ↑/↓) · arraste a tarefa para os lados para apagar ou tirar do dia"));
+    h("span",{class:"touch-only"},"Deslize ← para apagar · → para tirar do dia · segure ⋮⋮ para reordenar · toque longo para grupo e prioridade"),
+    h("span",{class:"mouse-only"},"Arraste ⋮⋮ para reordenar (ou Alt + ↑/↓) · arraste a tarefa para os lados para apagar ou tirar do dia · Ctrl + clique seleciona várias"));
 }
 function renderHome(wrap){
   const now=new Date(), td=today();
@@ -884,9 +978,11 @@ function renderHome(wrap){
   const left=h("section",{class:"col-day"});
   const isToday=sel===td;
   let dayOpen, dayDone;
-  if(isToday){ dayOpen=sortTasks(open.filter(inMyDay),"manual"); dayDone=all.filter(t=>t.done&&t.doneAt&&ymd(new Date(t.doneAt))===td); }
-  else { dayOpen=sortTasks(open.filter(t=>t.due===sel),"manual"); dayDone=all.filter(t=>t.done&&((t.doneAt&&ymd(new Date(t.doneAt))===sel)||t.due===sel)); }
-  const late=dayOpen.filter(isLate).length;
+  // recorrentes: a data concluída continua aparecendo no dia, como concluída
+  const recDoneOn=all.filter(t=>isRec(t)&&(t.doneDates||[]).includes(sel)).map(t=>occView(t,sel));
+  if(isToday){ dayOpen=sortTasks(open.filter(inMyDay),"manual"); dayDone=[...all.filter(t=>t.done&&t.doneAt&&ymd(new Date(t.doneAt))===td),...recDoneOn]; }
+  else { dayOpen=sortTasks(open.filter(t=>dueOn(t,sel)),"manual").map(t=>isRec(t)?occView(t,sel):t); dayDone=[...all.filter(t=>t.done&&((t.doneAt&&ymd(new Date(t.doneAt))===sel)||t.due===sel)),...recDoneOn]; }
+  const late=dayOpen.filter(t=>isLate(t)&&!(t._occ&&t._occ!==t.due)).length;
   left.append(h("div",{class:"col-head"},
     h("h3",{},isToday?"Hoje":cap(fmtShort(sel))),
     h("span",{class:"col-count"},`${dayOpen.length} tarefa${dayOpen.length===1?"":"s"}`+(late?` · ${late} atrasada${late>1?"s":""}`:"")),
@@ -908,13 +1004,14 @@ function renderHome(wrap){
   let any=false;
   for(let i=1;i<=7;i++){
     const d=addDays(now,i), key=ymd(d);
-    const items=sortTasks(open.filter(t=>t.due===key),"manual");
+    const items=sortTasks(open.filter(t=>dueOn(t,key)),"manual");
     if(!items.length) continue; any=true;
     right.append(h("div",{class:"wk-day"},h("button",{class:"wk-label",onclick:()=>{UI.homeDay=key;render();}},`${DIAS[d.getDay()]} ${pad(d.getDate())}/${pad(d.getMonth()+1)}`),
-      h("div",{class:"list"},items.map(t=>taskRow(t,{dayKey:key})))));
+      h("div",{class:"list"},items.map(t=>taskRow(isRec(t)?occView(t,key):t,{dayKey:key})))));
   }
   if(!any) right.append(h("div",{class:"empty"},"Sem prazos nos próximos 7 dias."));
-  const later=[0,1,2].map(w=>{const a=addDays(now,8+w*7),b=addDays(now,14+w*7);return {a,b,n:open.filter(t=>t.due&&t.due>=ymd(a)&&t.due<=ymd(b)).length};});
+  const dueIn=(t,a,b)=>{ if(t.due&&t.due>=a&&t.due<=b) return true; if(!isRec(t)) return false; for(let d=parseYmd(a);ymd(d)<=b;d=addDays(d,1)) if(recOn(t,ymd(d))) return true; return false; };
+  const later=[0,1,2].map(w=>{const a=addDays(now,8+w*7),b=addDays(now,14+w*7);return {a,b,n:open.filter(t=>dueIn(t,ymd(a),ymd(b))).length};});
   right.append(h("div",{class:"later"},h("div",{class:"later-title"},"Depois"),later.map(x=>h("div",{class:"later-row"},
     h("span",{},`${pad(x.a.getDate())}/${pad(x.a.getMonth()+1)} – ${pad(x.b.getDate())}/${pad(x.b.getMonth()+1)}`),h("b",{},x.n+" tarefa"+(x.n===1?"":"s"))))));
   cols.append(left,right); wrap.append(cols);
@@ -941,7 +1038,7 @@ function homePanel(key,title,icon,items,o={}){
   if(!items.length){ sec.append(h("div",{class:"pn-empty"},o.empty||"Nada aqui.")); return sec; }
   sec.append(h("div",{class:"list"},items.slice(0,PANEL_MAX).map(t=>taskRow(t,{toDay:o.toDay}))));
   if(o.toDay) sec.append(h("div",{class:"gest-hint mouse-only"},"Clique com o botão direito numa tarefa para trazê-la para o dia."));
-  if(items.length>PANEL_MAX) sec.append(o.more?h("button",{class:"pn-more",onclick:()=>go(o.more)},`Ver todas (${items.length})`):h("div",{class:"pn-empty"},`+ ${items.length-PANEL_MAX} depois`));
+  if(items.length>PANEL_MAX) sec.append(o.more?h("button",{class:"pn-more",onclick:()=>typeof o.more==="function"?o.more():go(o.more)},`Ver todas (${items.length})`):h("div",{class:"pn-empty"},`+ ${items.length-PANEL_MAX} depois`));
   return sec;
 }
 /* traz uma tarefa para o Meu Dia (botão “Hoje” dos painéis) */
@@ -952,9 +1049,10 @@ function timeline(sel){
   const td=today(), base=parseYmd(td);
   const byDay={};
   for(const t of tasksArr()) if(!t.done&&t.due) (byDay[t.due]=byDay[t.due]||[]).push(t);
+  const recs=tasksArr().filter(isRec);
   const track=h("div",{class:"tl-track"});
   for(let i=-TL_PAST;i<=TL_FUT;i++){
-    const d=addDays(base,i), key=ymd(d), items=sortTasks(byDay[key]||[],"manual"), n=items.length;
+    const d=addDays(base,i), key=ymd(d), items=sortTasks([...(byDay[key]||[]),...recs.filter(t=>key!==t.due&&recOn(t,key))],"manual"), n=items.length;
     const first=d.getDate()===1;
     const urg=items.some(t=>(t.priority||2)===1), imp=items.some(t=>t.importance===3);
     const tlIc=(d,c)=>{ const s=svg(d,10,'fill="currentColor" stroke-width="1.6"'); s.className="tl-ic "+c; return s; };
@@ -990,12 +1088,58 @@ function sortTasks(list,by){
   const k=key[by]||(t=>t.title);
   return [...list].sort((a,b)=>{const x=k(a),y=k(b);return x<y?-1:x>y?1:0;});
 }
+/* ---------- Pesquisa inteligente: ignora acentos e maiúsculas, aceita erros de digitação e palavras incompletas ---------- */
+const fold=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+const wordsOf=s=>fold(s).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+/* distância de edição (inclui letras trocadas de lugar), interrompida ao passar de “max” */
+function editDist(a,b,max){
+  if(Math.abs(a.length-b.length)>max) return max+1;
+  let p2=null, p=Array.from({length:b.length+1},(_,j)=>j);
+  for(let i=1;i<=a.length;i++){
+    const c=[i]; let rowMin=i;
+    for(let j=1;j<=b.length;j++){
+      let v=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));
+      if(p2&&i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1]) v=Math.min(v,p2[j-2]+1);
+      c[j]=v; if(v<rowMin) rowMin=v;
+    }
+    if(rowMin>max) return max+1;
+    p2=p; p=c;
+  }
+  return p[b.length];
+}
+const typoTol=n=>n<=2?0:n<=4?1:2;   // erros aceitos conforme o tamanho da palavra digitada
+function tokenScore(tok,ws,text){
+  let best=0; const tol=typoTol(tok.length);
+  for(const w of ws){
+    if(w===tok) return 3;
+    if(w.startsWith(tok)){ best=Math.max(best,2.5); continue; }
+    if(w.includes(tok)){ best=Math.max(best,2); continue; }
+    if(!tol||best>=1.5) continue;
+    let d=editDist(tok,w,tol);
+    if(d>tol&&w.length>tok.length&&tok.length>=4) d=Math.min(editDist(tok,w.slice(0,tok.length),tol),editDist(tok,w.slice(0,tok.length+1),tol));   // palavra ainda sendo digitada
+    if(d<=tol) best=Math.max(best,1.5-d*.4);
+  }
+  if(!best&&text.includes(tok)) best=2;
+  return best;
+}
+function searchTasks(list,q){
+  const toks=wordsOf(q); if(!toks.length) return list;
+  const out=[];
+  for(const t of list){
+    const fields=[[t.title,2],[(t.tags||[]).join(" "),1.5],[(t.notes||"")+" "+(t.steps||[]).map(x=>x.title).join(" "),1]].map(([s,w])=>({ws:wordsOf(s),text:fold(s),w}));
+    let total=0, ok=true;
+    for(const tok of toks){ let b=0; for(const f of fields) b=Math.max(b,tokenScore(tok,f.ws,f.text)*f.w); if(!b){ ok=false; break; } total+=b; }
+    if(ok) out.push([total,t]);
+  }
+  return out.sort((a,b)=>b[0]-a[0]).map(x=>x[1]);
+}
 function renderList(wrap,v){
   let list=tasksArr(), title="", sub="", defaults={}, groupBy=null, showDoneDefault=UI.showDone;
   const td=today();
-  if(v==="search"){ const q=UI.q.toLowerCase().replace(/^#/,""); title="Pesquisa"; sub=`Resultados para “${UI.q}”`;
-    list=list.filter(t=>(t.title+" "+(t.notes||"")+" "+(t.tags||[]).join(" ")+" "+(t.steps||[]).map(x=>x.title).join(" ")).toLowerCase().includes(q)); showDoneDefault=true; }
-  else if(v==="today"){ title="Meu Dia"; sub=fmtLong(new Date()); list=list.filter(t=>inMyDay(t)||(t.done&&t.myDay===td)); defaults={myDay:td}; }
+  if(v==="search"){ title="Pesquisa"; sub=`Resultados para “${UI.q}”`; list=searchTasks(list,UI.q); showDoneDefault=true; }
+  else if(v==="today"){ title="Meu Dia"; sub=fmtLong(new Date());
+    const recDone=list.filter(t=>isRec(t)&&(t.doneDates||[]).includes(td)&&!inMyDay(t)).map(t=>occView(t,td));
+    list=[...list.filter(t=>inMyDay(t)||(t.done&&t.myDay===td)),...recDone]; defaults={myDay:td}; }
   else if(v==="important"){ title="Importantes"; sub="Importância alta"; list=list.filter(t=>t.importance===3); defaults={importance:3}; }
   else if(v==="priority"){ title="Por prioridade"; sub="Agrupadas de P1 (urgente) a P3"; groupBy="priority"; }
   else if(v==="planned"){ title="Planejado"; sub="Tarefas com prazo"; list=list.filter(t=>t.due); groupBy="due"; }
@@ -1003,31 +1147,42 @@ function renderList(wrap,v){
   else if(v==="done"){ title="Concluídas"; sub="Histórico de tarefas feitas"; list=list.filter(t=>t.done); showDoneDefault=true; }
   else if(v.startsWith("tag:")){ const g=v.slice(4); title="#"+g; sub="Grupo de tarefas"; list=list.filter(t=>(t.tags||[]).includes(g)); defaults={tags:[g]}; tagActions(g); }
   setHeader(title,sub.replace(/^./,c=>c.toUpperCase()));
+  // grupo: lista à esquerda e, à direita, Urgentes e Importantes só deste grupo (como na home)
+  let out=wrap;
+  if(v.startsWith("tag:")){
+    const g=v.slice(4), gOpen=tasksArr().filter(t=>!t.done&&(t.tags||[]).includes(g)), notToday=t=>!inMyDay(t);
+    wrap.classList.add("wide");
+    const main=h("section",{class:"grp-main"});
+    const side=h("aside",{class:"col-week grp-side"},
+      homePanel("urg","Urgentes",ICON.bolt,sortTasks(gOpen.filter(t=>(t.priority||2)===1&&notToday(t)),"due"),{toDay:true,more:()=>{UI.pri=1;UI.imp=0;saveUI();render();},empty:"Nenhuma tarefa P1 deste grupo fora do Meu Dia."}),
+      homePanel("imp","Importantes",ICON.star,sortTasks(gOpen.filter(t=>t.importance===3&&notToday(t)),"due"),{toDay:true,more:()=>{UI.imp=3;UI.pri=0;saveUI();render();},empty:"Nenhuma tarefa importante deste grupo fora do Meu Dia."}));
+    wrap.append(h("div",{class:"home-cols"},main,side)); out=main;
+  }
   // filtros
   if(v!=="done") list=list.filter(t=>showDoneDefault||!t.done||(v==="today"));
   if(UI.imp) list=list.filter(t=>(t.importance||2)===UI.imp);
   if(UI.pri) list=list.filter(t=>(t.priority||2)===UI.pri);
-  if(v!=="done"&&v!=="search") wrap.append(addBar(defaults));
-  wrap.append(filterBar(v));
-  const manual = v==="today" || (UI.sort==="manual" && !groupBy && v!=="done");
+  if(v!=="done"&&v!=="search") out.append(addBar(defaults));
+  out.append(filterBar(v));
+  const manual = v==="today" || (UI.sort==="manual" && !groupBy && v!=="done" && v!=="search");
   if(v==="done") list=[...list].sort((a,b)=>(b.doneAt||"").localeCompare(a.doneAt||""));
-  else list=sortTasks(list,groupBy==="due"?"due":manual?"manual":UI.sort);
+  else if(v!=="search") list=sortTasks(list,groupBy==="due"?"due":manual?"manual":UI.sort);   // pesquisa: ordem por relevância
   const open=list.filter(t=>!t.done), done=list.filter(t=>t.done);
   const body = v==="done"?list:open;
   const row=t=>taskRow(t,{drag:manual&&!t.done});
-  if(!list.length){ wrap.append(h("div",{class:"empty"},v==="search"?"Nenhuma tarefa encontrada.":"Nenhuma tarefa aqui com estes filtros.")); return; }
+  if(!list.length){ out.append(h("div",{class:"empty"},v==="search"?"Nenhuma tarefa encontrada.":"Nenhuma tarefa aqui com estes filtros.")); return; }
   if(groupBy==="priority"){
     for(const p of [1,2,3]){ const g=body.filter(t=>(t.priority||2)===p); if(!g.length) continue;
-      wrap.append(h("div",{class:"group-title"},h("span",{class:"pill p"+p},"P"+p),PRI[p].split(" · ")[1],h("span",{class:"n"},g.length)),h("div",{class:"list"},g.map(row))); }
+      out.append(h("div",{class:"group-title"},h("span",{class:"pill p"+p},"P"+p),PRI[p].split(" · ")[1],h("span",{class:"n"},g.length)),h("div",{class:"list"},g.map(row))); }
   } else if(groupBy==="due"){
     const late=body.filter(t=>t.due<td), groups={};
-    if(late.length) wrap.append(h("div",{class:"group-title",style:"color:var(--danger)"},"Atrasadas",h("span",{class:"n"},late.length)),h("div",{class:"list"},late.map(row)));
+    if(late.length) out.append(h("div",{class:"group-title",style:"color:var(--danger)"},"Atrasadas",h("span",{class:"n"},late.length)),h("div",{class:"list"},late.map(row)));
     body.filter(t=>t.due>=td).forEach(t=>(groups[t.due]=groups[t.due]||[]).push(t));
-    for(const d of Object.keys(groups).sort()) wrap.append(h("div",{class:"group-title"},d===td?"Hoje":fmtShort(d),h("span",{class:"n"},groups[d].length)),h("div",{class:"list"},groups[d].map(t=>taskRow(t,{dayKey:d}))));
+    for(const d of Object.keys(groups).sort()) out.append(h("div",{class:"group-title"},d===td?"Hoje":fmtShort(d),h("span",{class:"n"},groups[d].length)),h("div",{class:"list"},groups[d].map(t=>taskRow(t,{dayKey:d}))));
   } else {
-    if(body.length){ wrap.append(h("div",{class:"list"},body.map(row))); if(manual&&open.length) wrap.append(gestureHint()); }
+    if(body.length){ out.append(h("div",{class:"list"},body.map(row))); if(manual&&open.length) out.append(gestureHint()); }
   }
-  if(v!=="done"&&done.length&&(showDoneDefault||v==="today")) wrap.append(h("div",{class:"group-title"},"Concluídas",h("span",{class:"n"},done.length)),h("div",{class:"list"},done.map(row)));
+  if(v!=="done"&&done.length&&(showDoneDefault||v==="today")) out.append(h("div",{class:"group-title"},"Concluídas",h("span",{class:"n"},done.length)),h("div",{class:"list"},done.map(row)));
 }
 function tagActions(g){
   const ba=$("#bandActions");
@@ -1039,7 +1194,7 @@ function filterBar(v){
   const f=h("div",{class:"filters"},
     seg("Importância",UI.imp,[[0,"Todas"],[3,"Alta"],[2,"Média"],[1,"Baixa"]],k=>UI.imp=k),
     seg("Prioridade",UI.pri,[[0,"Todas"],[1,"P1"],[2,"P2"],[3,"P3"]],k=>UI.pri=k));
-  if(v!=="priority"&&v!=="planned"&&v!=="done"&&v!=="today"){
+  if(v!=="priority"&&v!=="planned"&&v!=="done"&&v!=="today"&&v!=="search"){
     const sel=h("select",{id:"sortSel","aria-label":"Ordenar por",onchange:e=>{UI.sort=e.target.value;saveUI();render();}},
       [["manual","Manual (arrastar)"],["due","Prazo"],["priority","Prioridade"],["importance","Importância"],["created","Mais recentes"],["title","Nome"]].map(([k,t])=>h("option",{value:k,selected:UI.sort===k},t)));
     f.append(h("span",{},h("span",{class:"flabel"},"Ordenar"),sel));
@@ -1074,10 +1229,11 @@ function addBar(defaults){
 function taskRow(t,opt={}){
   const td=today(), p=t.priority||2, late=isLate(t);
   const ra=rightAction(t,opt.dayKey);
-  const meta=[];
+  const meta=[], rec=isRec(t), occ=rec&&t._occ;   // occ: ocorrência de uma recorrente vista num dia específico
   if(t.done&&t.doneAt) meta.push(h("span",{class:"m-due"},"feita em "+fmtBR(t.doneAt).slice(0,5)));
-  else if(late) meta.push(h("span",{class:"m-late"},"atrasada · "+fmtBR(t.due).slice(0,5)));
-  else if(t.due&&t.due!==opt.dayKey) meta.push(h("span",{class:"m-due"+(t.due===td?" today":"")},t.due===td?"hoje":fmtDue(t.due)));
+  else if(late&&!(occ&&occ!==t.due)) meta.push(h("span",{class:"m-late"},"atrasada · "+fmtBR(t.due).slice(0,5)));
+  else if(t.due&&t.due!==opt.dayKey&&!occ) meta.push(h("span",{class:"m-due"+(t.due===td?" today":"")},t.due===td?"hoje":fmtDue(t.due)));
+  if(rec) meta.push(h("span",{class:"m-rep",title:"Repete: "+repText(t)},svg(ICON.repeat,12),repShort(t)));
   if(!t.done&&t.remindAt&&tsOf(t.remindAt)) meta.push(h("span",{class:"m-rem"+(tsOf(t.remindAt)<=Date.now()?" past":""),title:"Lembrete"},svg(ICON.bell,12),fmtRemind(t.remindAt)));
   if(!t.done&&p===1) meta.push(h("span",{class:"m-p1",title:PRI[1]},"P1"));
   if(!t.done&&p===3) meta.push(h("span",{class:"m-p3",title:PRI[3]},"P3"));
@@ -1086,12 +1242,13 @@ function taskRow(t,opt={}){
   for(const g of (t.tags||[])) meta.push(h("button",{class:"tagchip",style:`--tc:${tagColor(g)}`,title:"Ver grupo #"+g,onclick:e=>{e.stopPropagation();go("tag:"+g);}},"#"+g));
   const mine=inMyDay(t);
   const act=(cls,label,icon,fn,on)=>h("button",{class:"act "+cls+(on?" on":""),title:label,"aria-label":label,onclick:e=>{e.stopPropagation();fn();}},svg(icon,17,on&&cls==="act-sun"?'fill="currentColor"':""));
-  const row=h("div",{class:"task p"+p+(t.done?" done":"")+(UI.sel===t.id?" sel":""),"data-id":t.id,tabindex:"0",
-      onclick:()=>select(t.id),onkeydown:e=>rowKey(e,t.id)},
+  const row=h("div",{class:"task p"+p+(t.done?" done":"")+(UI.sel===t.id?" sel":"")+(UI.multi.has(t.id)?" msel":""),"data-id":t.id,tabindex:"0",
+      "aria-selected":UI.multiOn?(UI.multi.has(t.id)?"true":"false"):null,
+      onclick:e=>{ if(UI.multiOn||e.ctrlKey||e.metaKey||e.shiftKey){ toggleMulti(t.id,e.shiftKey); return; } select(t.id); },onkeydown:e=>rowKey(e,t.id)},
     h("div",{class:"swipe-bg l","aria-hidden":"true"},svg(ICON.calx,18),h("span",{},ra.label)),
     h("div",{class:"swipe-bg r","aria-hidden":"true"},h("span",{},"Apagar"),svg(ICON.trash,18)),
     h("div",{class:"t-card"},
-      h("button",{class:"check","aria-label":t.done?"Marcar como pendente":"Concluir",onclick:e=>{e.stopPropagation();toggleDone(t.id);}},
+      h("button",{class:"check","aria-label":t.done?"Marcar como pendente":"Concluir",onclick:e=>{e.stopPropagation();toggleDone(t.id,occ||undefined);}},
         h("span",{},t.done?svg(ICON.check,13,'stroke-width="3.2"'):null)),
       h("div",{class:"t-main"},h("div",{class:"t-title",title:t.title},t.title),meta.length?h("div",{class:"t-meta"},meta):null),
       t.importance===3&&!t.done?h("span",{class:"star-ic",title:"Importância alta"},svg(ICON.star,15,'fill="currentColor"')):null,
@@ -1100,7 +1257,7 @@ function taskRow(t,opt={}){
         !t.done?act("act-sun",mine?"Tirar do Meu Dia":"Adicionar ao Meu Dia",ICON.sun,()=>toggleMyDay(t),mine):null,
         act("act-del","Apagar",ICON.trash,()=>removeTask(t.id))),
       opt.drag?h("button",{class:"grip","aria-label":"Arrastar para mudar a ordem (ou Alt + setas)",title:"Arraste para mudar a ordem",onclick:e=>e.stopPropagation()},svg(ICON.grip,16,'fill="currentColor"')):null));
-  row._right=ra;
+  row._right=ra; row._toDay=!!opt.toDay;
   // painéis Urgentes/Importantes: clique direito oferece trazer para o dia (o arraste lateral fica só para apagar/tirar)
   if(opt.toDay&&!t.done) row.addEventListener("contextmenu",e=>{ e.preventDefault(); openCtx(e.clientX,e.clientY,dayMenu(t)); });
   return row;
@@ -1149,14 +1306,25 @@ function swallowNextClick(){
   window.addEventListener("click",stop,{capture:true,once:true});
   setTimeout(()=>window.removeEventListener("click",stop,{capture:true}),400);
 }
+const LP_MS=500; let LP_FIRED=false, LAST_PTR="mouse", LAST_PTR_AT=0;
 document.addEventListener("pointerdown",e=>{
+  LAST_PTR=e.pointerType; LAST_PTR_AT=Date.now();
   if(G||e.button>0) return;
   const card=e.target.closest(".t-card"); if(!card) return;
   const row=card.parentElement;
   if(e.target.closest(".grip")) return startDrag(e,row);
   if(e.target.closest("input,textarea,select")) return;
   G={type:"pending",row,card,x:e.clientX,y:e.clientY,pid:e.pointerId,dx:0};
+  // toque longo (celular): grupo, importância e prioridade sem abrir a tarefa
+  if(e.pointerType==="touch"&&!UI.multiOn&&!e.target.closest(".check,.act,.tagchip,.to-day")){
+    const g=G;
+    g.lp=setTimeout(()=>{ if(G!==g||g.type!=="pending") return; G=null; LP_FIRED=true;
+      try{ if(navigator.vibrate) navigator.vibrate(12); }catch(err){}
+      openQuick(g.row.dataset.id,g.row); },LP_MS);
+  }
 });
+// no celular, o toque longo não abre o menu do sistema nem o do clique direito
+document.addEventListener("contextmenu",e=>{ if(LAST_PTR==="touch"&&Date.now()-LAST_PTR_AT<3000&&e.target.closest&&e.target.closest(".t-card")){ e.preventDefault(); e.stopPropagation(); } },true);
 function startDrag(e,row){
   const list=row.parentElement;
   const rows=[...list.children].filter(r=>r.classList.contains("task")&&r.querySelector(".grip"));
@@ -1173,6 +1341,8 @@ window.addEventListener("pointermove",e=>{
   if(G.type==="drag") return moveDrag(e);
   const dx=e.clientX-G.x, dy=e.clientY-G.y;
   if(G.type==="pending"){
+    if(UI.multiOn){ if(Math.abs(dx)>10||Math.abs(dy)>10){ clearTimeout(G.lp); G=null; } return; }   // selecionando: sem deslizar
+    if(Math.abs(dx)>10||Math.abs(dy)>10) clearTimeout(G.lp);
     if(Math.abs(dx)>10&&Math.abs(dx)>Math.abs(dy)*1.2){
       G.type="swipe"; GESTURE=true; G.row.classList.add("swiping");
       try{ G.card.setPointerCapture(G.pid); }catch(err){}
@@ -1201,7 +1371,7 @@ function moveDrag(e){
 function endGesture(e,cancelled){
   if(!G||(e&&e.pointerId!==G.pid)) return;
   const g=G; G=null;
-  if(g.type==="pending") return;
+  if(g.type==="pending"){ clearTimeout(g.lp); return; }
   swallowNextClick();
   if(g.type==="drag"){
     g.rows.forEach(r=>r.style.transform=""); g.row.classList.remove("dragging"); g.list.classList.remove("reordering");
@@ -1221,8 +1391,111 @@ function endGesture(e,cancelled){
     setTimeout(()=>{ reset(); GESTURE=false; if(pendingRender) render(); },220);
   }
 }
-window.addEventListener("pointerup",e=>endGesture(e,false));
-window.addEventListener("pointercancel",e=>endGesture(e,true));
+window.addEventListener("pointerup",e=>{ if(LP_FIRED){ LP_FIRED=false; swallowNextClick(); } endGesture(e,false); });
+window.addEventListener("pointercancel",e=>{ LP_FIRED=false; endGesture(e,true); });
+
+/* ---------- Toque longo: classificar a tarefa sem abrir os detalhes ---------- */
+function openQuick(id,row){
+  const t0=VIEW.tasks[id]; if(!t0) return;
+  const toDay=!!(row&&row._toDay);
+  const close=()=>$("#modalRoot").replaceChildren();
+  const refresh=()=>{ const b=$("#lpBody"); if(b) b.replaceWith(body()); };
+  const body=()=>{
+    const t=VIEW.tasks[id]; if(!t) return h("div",{id:"lpBody"},"Tarefa não encontrada.");
+    const tags=t.tags||[], names=allTags().names;
+    return h("div",{class:"lp-sheet",id:"lpBody"},
+      h("div",{class:"field"},h("span",{class:"lbl"},"Grupo"),
+        names.length?h("div",{class:"opts"},names.map(n=>{ const on=tags.includes(n);
+          return h("button",{class:"opt"+(on?" on":""),"aria-pressed":on?"true":"false",onclick:()=>{ patchTask(id,{tags:on?tags.filter(x=>x!==n):[...tags,n]}); refresh(); }},
+            h("span",{class:"tag-swatch",style:`background:${tagColor(n)}`}),"#"+n); }))
+        :h("div",{class:"pn-empty"},"Nenhum grupo criado ainda.")),
+      h("div",{class:"field"},h("span",{class:"lbl"},"Importância"),
+        h("div",{class:"opts"},[3,2,1].map(v=>h("button",{class:"opt"+((t.importance||2)===v?" on":""),onclick:()=>{ patchTask(id,{importance:v}); refresh(); }},IMP[v])))),
+      h("div",{class:"field"},h("span",{class:"lbl"},"Prioridade"),
+        h("div",{class:"opts"},[1,2,3].map(v=>h("button",{class:"opt"+((t.priority||2)===v?" on":""),onclick:()=>{ patchTask(id,{priority:v}); refresh(); }},h("span",{class:"pill p"+v},"P"+v),PRI[v].split(" · ")[1])))),
+      h("div",{class:"row-end",style:"justify-content:flex-start"},
+        toDay&&!t.done&&!inMyDay({...t,id})?h("button",{class:"btn small",onclick:()=>{ close(); bringToday(id); }},svg(ICON.sun,15),"Trazer para hoje"):null,
+        h("button",{class:"btn small",onclick:()=>{ close(); UI.sel=null; UI.multiOn=true; UI.multi=new Set([id]); render(); }},svg(ICON.select,15),"Selecionar várias"),
+        h("button",{class:"btn small",onclick:()=>{ close(); select(id); }},svg(ICON.edit,15),"Abrir detalhes")));
+  };
+  openModal(t0.title,body(),[]);
+}
+
+/* ================= Seleção múltipla ================= */
+let multiLast=null;
+function setMulti(on){ UI.multiOn=on; UI.multi=new Set(); multiLast=null; if(on) UI.sel=null; render(); }
+function toggleMulti(id,range){
+  if(!UI.multiOn){ UI.multiOn=true; UI.sel=null; }
+  if(range&&multiLast){
+    const ids=[...new Set([...document.querySelectorAll("#wrap .task[data-id]")].map(r=>r.dataset.id))], a=ids.indexOf(multiLast), b=ids.indexOf(id);
+    if(a>=0&&b>=0){ ids.slice(Math.min(a,b),Math.max(a,b)+1).forEach(x=>UI.multi.add(x)); multiLast=id; render(); return; }
+  }
+  if(UI.multi.has(id)) UI.multi.delete(id); else UI.multi.add(id);
+  multiLast=id; render();
+}
+/* aplica uma alteração a todas as selecionadas, com um único “Desfazer” */
+function bulkRun(fn,msg,exit){
+  const now=new Date().toISOString(), prev={}, ops=[];
+  for(const id of UI.multi){
+    const t=VIEW.tasks[id]; if(!t) continue;
+    const p=fn({...t,id}); if(p==null) continue;
+    prev[id]=t;
+    ops.push(p==="delete"?{op:"delete",path:"tasks/"+id}:{op:"set",path:"tasks/"+id,data:{...t,...p,updatedAt:now}});
+  }
+  if(!ops.length){ toast("Nada a alterar nas tarefas selecionadas."); return; }
+  if(exit){ UI.multiOn=false; UI.multi=new Set(); }
+  if(UI.sel&&prev[UI.sel]&&ops.some(o=>o.op==="delete"&&o.path==="tasks/"+UI.sel)) UI.sel=null;
+  enqueueMany(ops);
+  toast(msg(ops.length),()=>enqueueMany(Object.entries(prev).map(([id,d])=>({op:"set",path:"tasks/"+id,data:{...d,updatedAt:new Date().toISOString()}}))));
+}
+const nTxt=(n,s,p)=>`${n} ${n===1?s:p}`;
+function bulkDue(due,label){ bulkRun(t=>t.due===due?null:(due?{due}:(t.repeat?{due:null,repeat:null}:{due:null})),n=>nTxt(n,"tarefa","tarefas")+" · "+label); }
+function bulkPickDate(){
+  const inp=h("input",{type:"date",id:"bulkDate",style:"border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)"});
+  openModal("Prazo para "+nTxt(UI.multi.size,"tarefa","tarefas"),h("div",{class:"field"},h("label",{for:"bulkDate"},"Data"),inp),[
+    {label:"Aplicar",cls:"primary",run:()=>{ if(!inp.value){ toast("Escolha uma data."); return false; } bulkDue(inp.value,"prazo "+fmtShort(inp.value)); }}]);
+  setTimeout(()=>inp.focus(),30);
+}
+function bulkGroup(){
+  const names=allTags().names;
+  if(!names.length){ toast("Nenhum grupo criado ainda."); return; }
+  openModal("Adicionar "+nTxt(UI.multi.size,"tarefa","tarefas")+" a um grupo",h("div",{class:"opts"},names.map(n=>h("button",{class:"opt",onclick:()=>{ $("#modalRoot").replaceChildren();
+    bulkRun(t=>(t.tags||[]).includes(n)?null:{tags:[...(t.tags||[]),n]},c=>nTxt(c,"tarefa","tarefas")+" em #"+n); }},h("span",{class:"tag-swatch",style:`background:${tagColor(n)}`}),"#"+n))),[]);
+}
+function renderBulk(){
+  for(const id of [...UI.multi]) if(!VIEW.tasks[id]) UI.multi.delete(id);
+  document.body.classList.toggle("has-bulk",UI.multiOn);
+  let bar=$("#bulk");
+  if(!UI.multiOn){ if(bar) bar.remove(); return; }
+  if(!bar){ bar=h("div",{class:"bulk",id:"bulk",role:"toolbar","aria-label":"Ações para as tarefas selecionadas"}); document.body.append(bar); }
+  const n=UI.multi.size, td=today();
+  const B=(label,icon,fn,cls,always)=>h("button",{class:cls||null,disabled:!n&&!always,onclick:e=>fn(e)},svg(icon,16),label);
+  const visible=()=>[...new Set([...document.querySelectorAll("#wrap .task[data-id]")].map(r=>r.dataset.id))];
+  // “Tirar do dia”: num dia futuro da home tira o prazo daquele dia; nos demais casos tira do Meu Dia
+  const dayKey=UI.view==="home"&&!UI.q&&UI.homeDay&&UI.homeDay!==td?UI.homeDay:null;
+  bar.replaceChildren(
+    h("span",{class:"bulk-n"},n?nTxt(n,"selecionada","selecionadas"):"Toque nas tarefas"),
+    B("Todas",ICON.list,()=>{ const ids=visible(); UI.multi=ids.every(x=>UI.multi.has(x))?new Set():new Set(ids); render(); },null,true),
+    h("span",{class:"bulk-sep"}),
+    B("Concluir",ICON.check,()=>bulkRun(t=>t.done?null:isRec(t)?recDonePatch(t,t.due):{done:true,doneAt:new Date().toISOString()},c=>nTxt(c,"tarefa concluída","tarefas concluídas"))),
+    B("Meu Dia",ICON.sun,()=>bulkRun(t=>t.done||inMyDay(t)?null:{myDay:td},c=>nTxt(c,"tarefa adicionada","tarefas adicionadas")+" ao Meu Dia")),
+    B("Tirar do dia",ICON.calx,()=>bulkRun(t=>{
+        if(dayKey){ if(!dueOn(t,dayKey)) return null; return isRec(t)?recSkipPatch(t,dayKey):{due:null}; }
+        return inMyDay(t)?{myDay:"no:"+td}:null; },c=>nTxt(c,"tarefa retirada","tarefas retiradas")+" do dia")),
+    B("Prazo",ICON.cal,e=>openCtx(e.clientX,e.clientY,[
+      {label:"Hoje",icon:ICON.cal,run:()=>bulkDue(td,"prazo hoje")},
+      {label:"Amanhã",icon:ICON.cal,run:()=>bulkDue(ymd(addDays(new Date(),1)),"prazo amanhã")},
+      {label:"Em 1 semana",icon:ICON.cal,run:()=>bulkDue(ymd(addDays(new Date(),7)),"prazo em 1 semana")},
+      {label:"Escolher data…",icon:ICON.edit,run:bulkPickDate},
+      {label:"Sem prazo",icon:ICON.calx,run:()=>bulkDue(null,"prazo removido")}])),
+    B("Mais",ICON.flag,e=>openCtx(e.clientX,e.clientY,[
+      ...[1,2,3].map(p=>({label:PRI[p],icon:ICON.flag,run:()=>bulkRun(t=>(t.priority||2)===p?null:{priority:p},c=>nTxt(c,"tarefa","tarefas")+" · P"+p)})),
+      ...[3,2,1].map(v=>({label:"Importância "+IMP[v].toLowerCase(),icon:ICON.star,run:()=>bulkRun(t=>(t.importance||2)===v?null:{importance:v},c=>nTxt(c,"tarefa","tarefas")+" · importância "+IMP[v].toLowerCase())})),
+      {label:"Adicionar a um grupo…",icon:ICON.tag,run:bulkGroup}])),
+    B("Apagar",ICON.trash,()=>bulkRun(()=>"delete",c=>nTxt(c,"tarefa apagada","tarefas apagadas"),true),"b-del"),
+    h("span",{class:"bulk-sep"}),
+    h("button",{"aria-label":"Sair da seleção",title:"Sair da seleção (Esc)",onclick:()=>setMulti(false)},svg(ICON.x,16)));
+}
 
 /* ---------- Detalhe ---------- */
 function select(id){ UI.sel=id; render(); }
@@ -1277,6 +1550,19 @@ function renderDetail(){
   const notes=h("textarea",{id:"dNotes",placeholder:"Anotações, links, passos…"}); notes.value=t.notes||"";
   notes.addEventListener("blur",()=>{ if(notes.value!==(VIEW.tasks[id]?.notes||"")) patchTask(id,{notes:notes.value}); });
   const quickDue=(n,l)=>h("button",{class:"opt",onclick:()=>patchTask(id,{due:ymd(addDays(new Date(),n))})},l);
+  // ----- repetição (recorrência)
+  const rep=t.repeat&&REP_LABEL[t.repeat.freq]?t.repeat:null;
+  const setRep=r=>{ if(!r){ patchTask(id,{repeat:null}); return; } const base=t.due||today(); patchTask(id,{repeat:r,due:firstOcc({...t,repeat:r,due:base},base)||base}); };
+  const repPick=f=>{ if(!f) return setRep(null); const bd=parseYmd(t.due||today()), r={freq:f};
+    if(f==="weekly") r.days=rep&&rep.freq==="weekly"&&rep.days&&rep.days.length?[...rep.days]:[bd.getDay()];
+    if(f==="monthly") r.day=rep&&rep.freq==="monthly"&&rep.day?rep.day:bd.getDate();
+    setRep(r); };
+  const nOcc=(t.doneDates||[]).length;
+  const repField=h("div",{class:"field"},h("span",{class:"lbl"},"Repetir"),
+    h("div",{class:"opts"},[[null,"Não repete"],["daily","Diária"],["weekdays","Dias úteis"],["weekly","Semanal"],["monthly","Mensal"]].map(([f,l])=>h("button",{class:"opt"+((rep?rep.freq:null)===f?" on":""),onclick:()=>repPick(f)},l))),
+    rep&&rep.freq==="weekly"?h("div",{class:"opts","aria-label":"Dias da semana"},[1,2,3,4,5,6,0].map(w=>{ const on=(rep.days||[]).includes(w);
+      return h("button",{class:"opt wd"+(on?" on":""),"aria-pressed":on?"true":"false",title:DIAS[w],"aria-label":DIAS[w],onclick:()=>{ const ds=new Set(rep.days||[]); if(on) ds.delete(w); else ds.add(w); if(!ds.size) return; setRep({...rep,days:[...ds].sort()}); }},DIAS[w][0].toUpperCase()); })):null,
+    rep?h("div",{class:"gest-hint",style:"text-align:left"},(rep.freq==="monthly"?`Todo dia ${rep.day||parseYmd(t.due||today()).getDate()}. `:"")+"O prazo mostra a próxima data. Ao concluir, a tarefa passa para a data seguinte e continua aparecendo nas próximas semanas."+(nOcc?` Concluída ${nOcc} vez${nOcc===1?"":"es"}.`:"")):null);
   // ----- lembrete (alarme)
   const setRemind=d=>patchTask(id,{remindAt:d?d.toISOString():null});
   const remIn=h("input",{type:"datetime-local",id:"dRemind",value:t.remindAt?toLocalInput(t.remindAt):"",onchange:e=>{ const d=e.target.value?new Date(e.target.value):null; if(d&&isNaN(d)) return; setRemind(d); if(d) toast("Lembrete: "+fmtRemind(d.toISOString())); }});
@@ -1300,7 +1586,8 @@ function renderDetail(){
       h("div",{class:"d-title"},h("button",{class:"circle p"+(t.priority||2),style:t.done?"background:var(--ink);border-color:var(--ink);color:var(--bg)":"","aria-label":"Concluir",onclick:()=>toggleDone(id)},t.done?svg(ICON.check,13,'stroke-width="3"'):null),title),
       h("div",{class:"toggle-row"},h("span",{style:"display:inline-flex;gap:8px;align-items:center"},svg(ICON.sun,17),myDayOn?"Está no Meu Dia":"Fora do Meu Dia"),
         h("button",{class:"btn small"+(myDayOn?"":" primary"),onclick:()=>toggleMyDay({...t,id})},myDayOn?"Tirar":"Adicionar")),
-      h("div",{class:"field"},h("label",{for:"dDue"},"Prazo de execução"),dueIn,h("div",{class:"opts"},quickDue(0,"Hoje"),quickDue(1,"Amanhã"),quickDue(7,"Em 1 semana"),t.due?h("button",{class:"opt",onclick:()=>patchTask(id,{due:null})},"Sem prazo"):null)),
+      h("div",{class:"field"},h("label",{for:"dDue"},"Prazo de execução"),dueIn,h("div",{class:"opts"},quickDue(0,"Hoje"),quickDue(1,"Amanhã"),quickDue(7,"Em 1 semana"),t.due?h("button",{class:"opt",onclick:()=>patchTask(id,t.repeat?{due:null,repeat:null}:{due:null})},"Sem prazo"):null)),
+      repField,
       h("div",{class:"field"},h("label",{for:"dRemind"},"Lembrete (alarme)"),remIn,remOpts,
         noPerm?h("button",{class:"pn-more",onclick:()=>openSettings("rem")},"Ativar notificações neste aparelho ›"):null),
       h("div",{class:"field"},h("span",{class:"lbl"},"Importância  (quanto a tarefa pesa nos seus objetivos)"),
@@ -1985,10 +2272,11 @@ function configBody(){
 $("#q").addEventListener("input",e=>{UI.q=e.target.value.trim();render();});
 $("#menuBtn").addEventListener("click",()=>$("#app").classList.add("nav-open"));
 $("#scrim").addEventListener("click",closeNav);
+$("#mselBtn").addEventListener("click",()=>setMulti(!UI.multiOn));
 $("#configBtn").addEventListener("click",()=>{closeNav();openConfig();});
 document.addEventListener("keydown",e=>{
   if(e.key==="/"&&!e.target.matches("input,textarea,select")){e.preventDefault();$("#app").classList.add("nav-open");$("#q").focus();}
-  if(e.key==="Escape"){ if($("#modalRoot").firstChild){$("#modalRoot").replaceChildren();return;} if(UI.sel&&!e.target.matches("input,textarea")){UI.sel=null;render();} closeNav(); }
+  if(e.key==="Escape"){ if($("#modalRoot").firstChild){$("#modalRoot").replaceChildren();return;} if(UI.multiOn){ setMulti(false); return; } if(UI.sel&&!e.target.matches("input,textarea")){UI.sel=null;render();} closeNav(); }
 });
 
 
