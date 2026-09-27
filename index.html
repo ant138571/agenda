@@ -516,14 +516,6 @@ tr:last-child td{border-bottom:0}
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
         Configurações
       </button>
-      <button class="nav-item" id="settingsBtn">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
-        Sincronização e backup
-      </button>
-      <button class="nav-item" id="importBtn">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
-        Importar lista de tarefas
-      </button>
     </div>
   </aside>
 
@@ -1339,16 +1331,22 @@ function renderReport(wrap){
       h("div",{class:"field"},h("label",{for:"repTo"},"Até"),to),
       h("div",{class:"opts"},preset("Esta semana",wk,now),preset("Este mês",new Date(now.getFullYear(),now.getMonth(),1),now),
         preset("Mês passado",new Date(now.getFullYear(),now.getMonth()-1,1),new Date(now.getFullYear(),now.getMonth(),0)),
-        preset("Este ano",new Date(now.getFullYear(),0,1),now))),
+        preset("Este ano",new Date(now.getFullYear(),0,1),now),
+        h("button",{class:"opt",onclick:()=>{ const ds=tasksArr().filter(t=>t.done).map(repDate).filter(Boolean).sort(); R.from=ds[0]&&ds[0]<ymd(now)?ds[0]:ymd(now); R.to=ymd(now); render(); }},"Todo o período"))),
     h("div",{class:"field"},h("span",{class:"lbl"},"Grupos (nenhum selecionado = todos)"),
       h("div",{class:"tagpick"},names.map(n=>h("button",{class:R.tags.includes(n)?"on":"",onclick:()=>{R.tags=R.tags.includes(n)?R.tags.filter(x=>x!==n):[...R.tags,n];render();}},
         h("span",{class:"tag-swatch",style:`background:${tagColor(n)}`}),"#"+n)),
         R.tags.length?h("button",{onclick:()=>{R.tags=[];render();}},"Limpar"):null))
   );
   wrap.append(card);
+  // tarefas concluídas sem data de conclusão (ex.: importadas do Microsoft To Do): usam o prazo; sem prazo, só entram se marcado abaixo
+  const byTags=t=>!R.tags.length||(t.tags||[]).some(g=>R.tags.includes(g));
+  const semData=tasksArr().filter(t=>t.done&&!repDate(t)&&byTags(t)).length;
+  if(semData) card.append(h("label",{class:"check-lbl",for:"repUndated"},h("input",{type:"checkbox",id:"repUndated",checked:!!R.undated,onchange:e=>{R.undated=e.target.checked;render();}}),
+    `Incluir ${semData} tarefa${semData===1?"":"s"} concluída${semData===1?"":"s"} sem data (sem data de conclusão nem prazo, ex.: importadas)`));
   const rows=reportRows();
   const byTag={}; rows.forEach(t=>((t.tags&&t.tags.length)?t.tags:["(sem grupo)"]).forEach(g=>byTag[g]=(byTag[g]||0)+1));
-  const onTime=rows.filter(t=>t.due&&t.doneAt.slice(0,10)<=t.due).length, withDue=rows.filter(t=>t.due).length;
+  const real=rows.filter(t=>t.due&&t.doneAt), onTime=real.filter(t=>repDate(t)<=t.due).length, withDue=real.length;
   wrap.append(h("div",{class:"stats"},
     h("div",{class:"stat"},h("b",{},rows.length),h("span",{},"tarefas concluídas")),
     h("div",{class:"stat"},h("b",{},withDue?Math.round(onTime/withDue*100)+"%":"—"),h("span",{},"dentro do prazo")),
@@ -1361,25 +1359,33 @@ function renderReport(wrap){
     h("button",{class:"btn",onclick:exportReportPDF},"Exportar PDF"),
     h("button",{class:"btn",onclick:copyReport},"Copiar tabela")));
   if(!rows.length){ wrap.append(h("div",{class:"empty"},"Nenhuma tarefa concluída neste período com esses grupos.")); return; }
+  if(rows.some(t=>!t.doneAt)) wrap.append(h("div",{class:"gest-hint",style:"text-align:left"},"“(prazo)”: a tarefa não tem data de conclusão registrada (ex.: importada); o relatório usa a data do prazo."));
   const tbl=h("table",{},h("thead",{},h("tr",{},["Concluída em","Tarefa","Grupos","Importância","Prioridade","Prazo"].map(x=>h("th",{},x)))),
-    h("tbody",{},rows.map(t=>h("tr",{},h("td",{class:"mono"},fmtBR(t.doneAt)),h("td",{},t.title),h("td",{},(t.tags||[]).map(g=>"#"+g).join(" ")),
-      h("td",{},IMP[t.importance||2]),h("td",{class:"mono"},"P"+(t.priority||2)),h("td",{class:"mono",style:t.due&&t.doneAt.slice(0,10)>t.due?"color:var(--danger)":""},t.due?fmtBR(t.due):"—")))));
+    h("tbody",{},rows.map(t=>h("tr",{},h("td",{class:"mono"},repCell(t)),h("td",{},t.title),h("td",{},(t.tags||[]).map(g=>"#"+g).join(" ")),
+      h("td",{},IMP[t.importance||2]),h("td",{class:"mono"},"P"+(t.priority||2)),h("td",{class:"mono",style:t.due&&t.doneAt&&repDate(t)>t.due?"color:var(--danger)":""},t.due?fmtBR(t.due):"—")))));
   wrap.append(h("div",{class:"tbl-wrap"},tbl));
 }
+/* data usada no relatório: dia (no fuso local) em que foi concluída; sem esse registro, o prazo */
+function repDate(t){
+  if(t.doneAt){ const d=new Date(t.doneAt); return isNaN(d)?String(t.doneAt).slice(0,10):ymd(d); }
+  return t.due||null;
+}
+const repCell=t=>{ const d=repDate(t); return d?fmtBR(d)+(t.doneAt?"":" (prazo)"):"sem data"; };
 function reportRows(){
   const R=UI.rep;
-  return tasksArr().filter(t=>t.done&&t.doneAt).filter(t=>{const d=t.doneAt.slice(0,10);return (!R.from||d>=R.from)&&(!R.to||d<=R.to);})
-    .filter(t=>!R.tags.length||(t.tags||[]).some(g=>R.tags.includes(g))).sort((a,b)=>a.doneAt.localeCompare(b.doneAt));
+  return tasksArr().filter(t=>t.done).filter(t=>{ const d=repDate(t); return d?((!R.from||d>=R.from)&&(!R.to||d<=R.to)):!!R.undated; })
+    .filter(t=>!R.tags.length||(t.tags||[]).some(g=>R.tags.includes(g)))
+    .sort((a,b)=>{ const x=repDate(a)||"9999", y=repDate(b)||"9999"; return x<y?-1:x>y?1:(a.doneAt||"").localeCompare(b.doneAt||"")||a.title.localeCompare(b.title,"pt-BR"); });
 }
 function reportCSV(){
   const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
   const lines=[["Concluída em","Tarefa","Grupos","Importância","Prioridade","Prazo","No prazo","Anotações"].map(q).join(";")];
-  for(const t of reportRows()) lines.push([fmtBR(t.doneAt),t.title,(t.tags||[]).map(g=>"#"+g).join(" "),IMP[t.importance||2],"P"+(t.priority||2),t.due?fmtBR(t.due):"",t.due?(t.doneAt.slice(0,10)<=t.due?"sim":"não"):"",t.notes||""].map(q).join(";"));
+  for(const t of reportRows()) lines.push([repCell(t),t.title,(t.tags||[]).map(g=>"#"+g).join(" "),IMP[t.importance||2],"P"+(t.priority||2),t.due?fmtBR(t.due):"",t.due&&t.doneAt?(repDate(t)<=t.due?"sim":"não"):"",t.notes||""].map(q).join(";"));
   return "﻿"+lines.join("\r\n");
 }
 function reportHTML(){
   const R=UI.rep, rows=reportRows();
-  const tr=rows.map(t=>`<tr><td>${esc(fmtBR(t.doneAt))}</td><td>${esc(t.title)}</td><td>${esc((t.tags||[]).map(g=>"#"+g).join(" "))}</td><td>${esc(IMP[t.importance||2])}</td><td>P${esc(t.priority||2)}</td><td>${t.due?esc(fmtBR(t.due)):"—"}</td></tr>`).join("");
+  const tr=rows.map(t=>`<tr><td>${esc(repCell(t))}</td><td>${esc(t.title)}</td><td>${esc((t.tags||[]).map(g=>"#"+g).join(" "))}</td><td>${esc(IMP[t.importance||2])}</td><td>P${esc(t.priority||2)}</td><td>${t.due?esc(fmtBR(t.due)):"—"}</td></tr>`).join("");
   return `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Relatório de tarefas ${esc(fmtBR(R.from))} a ${esc(fmtBR(R.to))}</title>
 <style>body{font-family:system-ui,sans-serif;max-width:900px;margin:32px auto;padding:0 16px;color:#1c1b1a}h1{font-size:22px}table{border-collapse:collapse;width:100%;font-size:14px}th,td{border-bottom:1px solid #ece9e4;padding:6px 10px;text-align:left}th{background:#faf9f7}</style>
 <h1>Relatório de tarefas concluídas</h1><p>Período: ${fmtBR(R.from)} a ${fmtBR(R.to)} · Grupos: ${R.tags.length?esc(R.tags.map(g=>"#"+g).join(", ")):"todos"} · Total: ${rows.length}</p>
@@ -1420,7 +1426,7 @@ function exportReportPDF(){
   document.body.append(fr); fr.contentDocument.open(); fr.contentDocument.write(html); fr.contentDocument.close();
   setTimeout(()=>fr.remove(),60000);
 }
-function reportPlain(){ return ["Concluída em\tTarefa\tGrupos\tImportância\tPrioridade\tPrazo",...reportRows().map(t=>[fmtBR(t.doneAt),t.title,(t.tags||[]).map(g=>"#"+g).join(" "),IMP[t.importance||2],"P"+(t.priority||2),t.due?fmtBR(t.due):""].join("\t"))].join("\n"); }
+function reportPlain(){ return ["Concluída em\tTarefa\tGrupos\tImportância\tPrioridade\tPrazo",...reportRows().map(t=>[repCell(t),t.title,(t.tags||[]).map(g=>"#"+g).join(" "),IMP[t.importance||2],"P"+(t.priority||2),t.due?fmtBR(t.due):""].join("\t"))].join("\n"); }
 function copyText(txt){
   try{ navigator.clipboard.writeText(txt).then(()=>{},()=>fallbackCopy(txt)); }catch(e){ fallbackCopy(txt); }
 }
@@ -1959,7 +1965,12 @@ function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody(
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 function configBody(){
   const box=h("div",{id:"cfgBody",style:"display:flex;flex-direction:column;gap:14px"});
-  box.append(h("div",{class:"settings-sec",style:"border-top:0;padding-top:0"},h("h4",{},"Tamanho do texto no computador"),
+  box.append(h("div",{class:"settings-sec",style:"border-top:0;padding-top:0"},h("h4",{},"Sincronização e dados"),
+    h("p",{},"Conta e sincronização entre computador e celular, lembretes, backup e instalação do app; importar tarefas de outra lista."),
+    h("div",{class:"row-end",style:"justify-content:flex-start"},
+      h("button",{class:"btn",onclick:()=>openSettings()},"Sincronização e backup"),
+      h("button",{class:"btn",onclick:()=>openImport()},"Importar lista de tarefas"))));
+  box.append(h("div",{class:"settings-sec"},h("h4",{},"Tamanho do texto no computador"),
     h("p",{},"Vale para telas de computador; no celular o tamanho não muda. Padrão: 90%."),
     h("div",{},h("span",{class:"seg"},[[0.8,"80%"],[0.9,"90%"],[1,"100%"],[1.1,"110%"]].map(([z,l])=>h("button",{class:PREFS.zoom===z?"on":"",onclick:()=>{ PREFS.zoom=z; lsSet(PREF_KEY,PREFS); applyZoom(); refreshConfig(); }},l))))));
   const fsKey=KEYS.full?` Atalho: ${fmtCombo(KEYS.full)}.`:"";
@@ -1967,10 +1978,6 @@ function configBody(){
     h("p",{},"Esconde as barras do navegador e do sistema. Para sair, use Esc ou o mesmo botão."+fsKey),
     h("div",{},h("button",{class:"btn",onclick:toggleFullscreen},fsEl()?"Sair da tela cheia":"Entrar em tela cheia"))));
   box.append(keysSection());
-  box.append(h("div",{class:"settings-sec"},h("h4",{},"Dados"),
-    h("div",{class:"row-end",style:"justify-content:flex-start"},
-      h("button",{class:"btn",onclick:()=>openSettings()},"Sincronização e backup"),
-      h("button",{class:"btn",onclick:()=>openImport()},"Importar lista de tarefas"))));
   return box;
 }
 
@@ -1978,14 +1985,12 @@ function configBody(){
 $("#q").addEventListener("input",e=>{UI.q=e.target.value.trim();render();});
 $("#menuBtn").addEventListener("click",()=>$("#app").classList.add("nav-open"));
 $("#scrim").addEventListener("click",closeNav);
-$("#importBtn").addEventListener("click",()=>{closeNav();openImport();});
 $("#configBtn").addEventListener("click",()=>{closeNav();openConfig();});
 document.addEventListener("keydown",e=>{
   if(e.key==="/"&&!e.target.matches("input,textarea,select")){e.preventDefault();$("#app").classList.add("nav-open");$("#q").focus();}
   if(e.key==="Escape"){ if($("#modalRoot").firstChild){$("#modalRoot").replaceChildren();return;} if(UI.sel&&!e.target.matches("input,textarea")){UI.sel=null;render();} closeNav(); }
 });
 
-$("#settingsBtn").addEventListener("click",()=>{closeNav();openSettings();});
 
 /* ================= Sincronização e backup (tela) ================= */
 let installEvt=null;

@@ -1,5 +1,5 @@
 /* Service worker da Agenda de Tarefas: permite abrir e usar o app sem internet. */
-const VERSION = "agenda-v5";
+const VERSION = "agenda-v6";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./vendor/supabase.js",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png"];
 
@@ -21,7 +21,8 @@ self.addEventListener("fetch", e => {
   if (!sameOrigin && !isFont) return;
   if (req.mode === "navigate") {
     // Página: tenta a rede (para receber atualizações) e cai para o cache se estiver offline.
-    e.respondWith(fetch(req).then(res => { const copy = res.clone(); caches.open(VERSION).then(c => c.put("./index.html", copy)); return res; })
+    // cache: "no-cache": confere com o servidor em vez de usar a cópia guardada pelo navegador (o GitHub Pages guarda por 10 min)
+    e.respondWith(fetch(req.url, { cache: "no-cache", credentials: "same-origin" }).then(res => { const copy = res.clone(); caches.open(VERSION).then(c => c.put("./index.html", copy)); return res; })
       .catch(() => caches.match("./index.html").then(r => r || caches.match("./"))));
     return;
   }
