@@ -1,7 +1,7 @@
 /* Service worker da Agenda de Tarefas: permite abrir e usar o app sem internet. */
-const VERSION = "agenda-v6";
-const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./vendor/supabase.js",
-  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png"];
+const VERSION = "agenda-v7";
+const SHELL = ["./", "./index.html", "./manifest.webmanifest?v=7", "./vendor/supabase.js",
+  "./icons/icon-192.png?v=7", "./icons/icon-512.png?v=7", "./icons/apple-touch-icon.png?v=7", "./icons/icon-maskable-512.png?v=7"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -26,6 +26,12 @@ self.addEventListener("fetch", e => {
       .catch(() => caches.match("./index.html").then(r => r || caches.match("./"))));
     return;
   }
+  // Ícones e manifesto: sempre da rede primeiro (para o ícone do app atualizar), cache só sem internet.
+  if (sameOrigin && (url.pathname.includes("/icons/") || url.pathname.endsWith(".webmanifest"))) {
+    e.respondWith(fetch(req, { cache: "no-cache" }).then(res => { if (res && res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); } return res; })
+      .catch(() => caches.match(req)));
+    return;
+  }
   // Demais arquivos: responde do cache e atualiza em segundo plano.
   e.respondWith(caches.open(VERSION).then(async cache => {
     const hit = await cache.match(req);
@@ -41,7 +47,7 @@ self.addEventListener("push", e => {
   const id = typeof d.id === "string" ? d.id.slice(0, 80) : "";
   e.waitUntil(self.registration.showNotification(String(d.title || "Lembrete").slice(0, 80), {
     body: String(d.body || "").slice(0, 300), tag: id ? "rem-" + id : "rem-teste", renotify: true, requireInteraction: true,
-    icon: "icons/icon-192.png", badge: "icons/icon-192.png", data: { id }
+    icon: "icons/icon-192.png?v=7", badge: "icons/icon-192.png?v=7", data: { id }
   }));
 });
 /* Toque na notificação: abre o app (ou traz para frente) já na tarefa. */
