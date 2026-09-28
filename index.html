@@ -586,7 +586,7 @@ body.has-bulk .content{padding-bottom:110px}
         <div class="sub" id="viewSub"></div>
       </div>
       <div class="band-actions" id="bandActions"></div>
-      <button class="btn small" id="mselBtn" hidden title="Selecionar várias tarefas (ou Ctrl + clique)"></button>
+      <button class="btn small" id="mselBtn" hidden title="Selecionar várias tarefas (ou Shift + clique)"></button>
     </header>
     <div class="content" id="content"><div class="wrap" id="wrap"></div></div>
   </main>
@@ -726,7 +726,7 @@ async function pullChanges(){
     if(data.length<1000) break; from+=1000;
   }
   S.lastPull=max; saveCache();
-  if(changed){ recompute(); render(); }
+  if(changed){ recompute(); bgRender(); }
 }
 async function sync(){
   if(!S.sb||!S.user) { updateSync(); return; }
@@ -921,13 +921,28 @@ function closeNav(){ $("#app").classList.remove("nav-open"); }
 
 /* ================= Render ================= */
 let GESTURE=false, pendingRender=false;
+let addDeferred=false, addViewKey=null;
+const addTyping=()=>{ const a=document.activeElement; return !!(a&&a.matches&&a.matches("#wrap form.add input[type=text]")&&a.value.trim()); };
+/* redesenho pedido em segundo plano (sincronização, virada do dia): espera enquanto se digita uma nova tarefa */
+function bgRender(){ if(addTyping()){ addDeferred=true; renderNav(); return; } render(); }
+document.addEventListener("focusout",e=>{
+  if(!addDeferred||!e.target.matches||!e.target.matches("#wrap form.add input")) return;
+  setTimeout(()=>{ if(addDeferred&&!addTyping()) render(); },350);   // depois do toque (ex.: no botão +), para não perder o clique
+});
 function render(force){
   if(GESTURE){ pendingRender=true; return; }   // não redesenha no meio de um gesto
   // modo de edição do cronograma: não apaga o que está sendo digitado (o rascunho é redesenhado quando o próprio editor pede)
   if(!force&&UI.cronEdit&&document.activeElement&&document.activeElement.closest&&document.activeElement.closest("#cronEditor")){ renderNav(); return; }
+  // digitando uma nova tarefa (campo Adicionar com texto): o redesenho vindo da sincronização em segundo plano espera
+  // o campo perder o foco (antes, ele apagava o texto; ver bgRender)
+  addDeferred=false;
   pendingRender=false;
   renderNav();
-  const wrap=$("#wrap"); wrap.replaceChildren(); wrap.classList.remove("wide");
+  const wrap=$("#wrap");
+  // guarda o que estava escrito nos campos Adicionar (e o foco) para devolver depois do redesenho, na mesma tela
+  const vKey=UI.q?"search":UI.view, ae=document.activeElement;
+  const keepAdd=[...wrap.querySelectorAll("form.add input")].filter(i=>i.id).map(i=>({id:i.id,v:i.value,f:ae===i,s:i.type==="text"?i.selectionStart:null,e:i.type==="text"?i.selectionEnd:null}));
+  wrap.replaceChildren(); wrap.classList.remove("wide");
   $("#bandActions").replaceChildren(); $("#viewEyebrow").replaceChildren();
   const v=UI.q?"search":UI.view;
   if(v==="home") renderHome(wrap);
@@ -935,6 +950,12 @@ function render(force){
   else if(v==="projects") renderProjects(wrap);
   else if(v.startsWith("proj:")) renderProject(wrap,v.slice(5));
   else renderList(wrap,v);
+  if(vKey===addViewKey) for(const k of keepAdd){
+    const el=document.getElementById(k.id); if(!el||!wrap.contains(el)) continue;
+    if(k.v&&!el.value) el.value=k.v;
+    if(k.f){ try{ el.focus({preventScroll:true}); if(k.s!=null) el.setSelectionRange(k.s,k.e); }catch(e){} }
+  }
+  addViewKey=vKey;
   renderDetail();
   placeTimeline();
   const mb=$("#mselBtn");
@@ -985,7 +1006,7 @@ function renderNav(){
 function setHeader(title,sub){ $("#viewTitle").textContent=title; $("#viewSub").textContent=sub||""; }
 const cap=x=>x.replace(/^./,c=>c.toUpperCase());
 function clockText(){ const d=new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
-setInterval(()=>{ const c=$("#clock"); if(c) c.textContent=clockText(); const now=today(); if(now!==renderedDay){ renderedDay=now; UI.tlLeft=null; render(); } },15000);
+setInterval(()=>{ const c=$("#clock"); if(c) c.textContent=clockText(); const now=today(); if(now!==renderedDay){ renderedDay=now; UI.tlLeft=null; bgRender(); rollOver(); } },15000);
 let renderedDay=today();
 
 /* ---------- Início ---------- */
@@ -996,8 +1017,8 @@ function goToday(){
 }
 function gestureHint(){
   return h("div",{class:"gest-hint"},
-    h("span",{class:"touch-only"},"Deslize ← para apagar · → para tirar do dia · segure ⋮⋮ para reordenar · toque longo: à esquerda grupo, no meio importância, à direita prioridade"),
-    h("span",{class:"mouse-only"},"Arraste ⋮⋮ para reordenar (ou Alt + ↑/↓) · arraste a tarefa para os lados para apagar ou tirar do dia · Ctrl + clique seleciona várias"));
+    h("span",{class:"touch-only"},"Deslize ← para apagar · → para tirar do dia · segure ⋮⋮ para reordenar · toque longo seleciona várias"),
+    h("span",{class:"mouse-only"},"Arraste ⋮⋮ para reordenar (ou Alt + ↑/↓) · arraste a tarefa para os lados para apagar ou tirar do dia · Shift + clique seleciona várias"));
 }
 function renderHome(wrap){
   const now=new Date(), td=today();
@@ -1269,7 +1290,8 @@ function addBar(defaults,ids){
     if(date.value) extra.due=date.value;
     // a nova tarefa fica selecionada; se os Detalhes estavam abertos, passam a mostrar a nova tarefa
     const detOpen=!!(UI.sel&&VIEW.tasks[UI.sel]&&!UI.detailHidden);
-    const nid=createTask(p.title,extra); inp.value=""; date.value=""; toast("Tarefa adicionada");
+    inp.value=""; date.value="";   // limpa antes de criar: o campo vazio deixa a lista ser redesenhada na hora
+    const nid=createTask(p.title,extra); toast("Tarefa adicionada");
     if(!UI.multiOn){ UI.sel=nid; UI.detailHidden=!detOpen; render(); }
     setTimeout(()=>{const i=document.getElementById(inId); if(i) i.focus();},0);
   }});
@@ -1299,7 +1321,7 @@ function taskRow(t,opt={}){
   const act=(cls,label,icon,fn,on)=>h("button",{class:"act "+cls+(on?" on":""),title:label,"aria-label":label,onclick:e=>{e.stopPropagation();fn();}},svg(icon,17,on&&cls==="act-sun"?'fill="currentColor"':""));
   const row=h("div",{class:"task p"+p+(t.done?" done":"")+(UI.sel===t.id?" sel":"")+(UI.multi.has(t.id)?" msel":""),"data-id":t.id,tabindex:"0",
       "aria-selected":UI.multiOn?(UI.multi.has(t.id)?"true":"false"):null,
-      onclick:e=>{ if(UI.multiOn||e.ctrlKey||e.metaKey||e.shiftKey){ toggleMulti(t.id,e.shiftKey); return; } select(t.id); },onkeydown:e=>rowKey(e,t.id)},
+      onclick:e=>{ if(UI.multiOn||e.ctrlKey||e.metaKey||e.shiftKey){ toggleMulti(t.id,e.shiftKey&&(e.ctrlKey||e.metaKey)); return; } select(t.id); },onkeydown:e=>rowKey(e,t.id)},
     h("div",{class:"swipe-bg l","aria-hidden":"true"},svg(ICON.calx,18),h("span",{},ra.label)),
     h("div",{class:"swipe-bg r","aria-hidden":"true"},h("span",{},"Apagar"),svg(ICON.trash,18)),
     h("div",{class:"t-card"},
@@ -1370,13 +1392,13 @@ document.addEventListener("pointerdown",e=>{
   if(e.target.closest(".grip")) return startDrag(e,row);
   if(e.target.closest("input,textarea,select")) return;
   G={type:"pending",row,card,x:e.clientX,y:e.clientY,pid:e.pointerId,dx:0,tgt:e.target};
-  // toque longo (celular): grupo, importância e prioridade sem abrir a tarefa
+  // toque longo (celular): entra na seleção múltipla com esta tarefa selecionada
+  // (grupo, importância e prioridade agora ficam em Detalhes da tarefa)
   if(e.pointerType==="touch"&&!UI.multiOn&&!e.target.closest(".check,.act,.tagchip,.to-day")){
     const g=G;
     g.lp=setTimeout(()=>{ if(G!==g||g.type!=="pending") return; G=null; LP_FIRED=true;
       try{ if(navigator.vibrate) navigator.vibrate(12); }catch(err){}
-      const r=g.card.getBoundingClientRect(), fx=(g.x-r.left)/(r.width||1);
-      openWheel(g.row.dataset.id,fx<1/3?"group":fx<2/3?"imp":"pri",g.x,g.y,g.tgt); },LP_MS);
+      toggleMulti(g.row.dataset.id); },LP_MS);
   }
 });
 // no celular, o toque longo não abre o menu do sistema nem o do clique direito
@@ -1630,6 +1652,7 @@ function toggleDetail(){
   const id=keyTask(); if(!id){ toast("Selecione uma tarefa primeiro."); return; }
   UI.sel=id; UI.detailHidden=false; render();
 }
+let STEP_GEN=0;
 function renderDetail(){
   const pane=$("#detail"), app=$("#app");
   const t=UI.sel&&!UI.detailHidden&&VIEW.tasks[UI.sel];
@@ -1642,40 +1665,74 @@ function renderDetail(){
   const fit=()=>{title.style.height="auto";title.style.height=title.scrollHeight+"px";};
   title.addEventListener("input",fit); setTimeout(fit,0);
   title.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();title.blur();}});
-  title.addEventListener("blur",()=>{const v=title.value.replace(/\s+/g," ").trim(); if(v&&v!==VIEW.tasks[id]?.title) patchTask(id,{title:v}); else title.value=VIEW.tasks[id]?.title||"";});
+  title.addEventListener("blur",()=>{const v=title.value.replace(/\s+/g," ").trim();
+    // #grupo escrito no nome: vira grupo da tarefa ao sair do campo (sem precisar de Enter)
+    const tg=[], rest=v.replace(/(^|\s)#([\p{L}\p{N}_.\-]+)/gu,(m,sp,x)=>{tg.push(normTag(x));return sp;}).replace(/\s+/g," ").trim(), cur=VIEW.tasks[id];
+    if(cur&&rest&&tg.filter(Boolean).length){ const add=[...new Set(tg.filter(Boolean))]; ensureTags(add); patchTask(id,{title:rest,tags:[...new Set([...(cur.tags||[]),...add])]}); return; }
+    if(v&&v!==VIEW.tasks[id]?.title) patchTask(id,{title:v}); else title.value=VIEW.tasks[id]?.title||"";});
   const opt=(cur,val,label,onPick)=>h("button",{class:"opt"+(cur===val?" on":""),onclick:()=>onPick(val)},label);
   // tags
-  const refocus=UI.forceDetail; UI.forceDetail=false;
+  const refocus=UI.stepRefocus; UI.forceDetail=false; UI.stepRefocus=false;
   // ----- etapas (como no Microsoft To Do)
+  // Cada gravação redesenha o painel; o que ainda estava sendo escrito (etapa editada ou nova) vai junto, e
+  // tocar no círculo de uma etapa com o teclado aberto não perde mais o toque (antes, a saída do campo redesenhava
+  // o painel antes do toque chegar ao botão).
+  const gen=++STEP_GEN, live=()=>gen===STEP_GEN;
   const steps=(t.steps||[]).map(x=>({...x}));
-  const saveSteps=(list,keepFocus)=>{ UI.forceDetail=!!keepFocus; patchTask(id,{steps:list}); };
+  const saveSteps=(list,keepFocus)=>{ UI.forceDetail=true; UI.stepRefocus=!!keepFocus; patchTask(id,{steps:list}); };
+  const newStepId=()=>"s"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
   const stepBox=h("div",{class:"steps"});
+  const noBlur=e=>e.preventDefault();   // o botão não tira o foco do campo (o clique chega ao botão certo)
+  // etapas com o texto que ainda está nos campos (inclusive uma etapa nova ainda sem Enter)
+  const readSteps=()=>{ const L=steps.map(x=>({...x}));
+    stepBox.querySelectorAll("textarea.step-in").forEach((ta,k)=>{ const v=ta.value.trim(); if(v&&L[k]) L[k].title=v; });
+    const nv=addStep.value.trim(); if(nv){ addStep.value=""; L.push({id:newStepId(),title:nv,done:false}); }
+    return L; };
   steps.forEach((st,i)=>{
     const inp=h("textarea",{rows:"1",class:"step-in","aria-label":"Etapa "+(i+1)}); inp.value=st.title;
     const fitS=()=>{inp.style.height="auto";inp.style.height=inp.scrollHeight+"px";}; inp.addEventListener("input",fitS); setTimeout(fitS,0);
     inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault();inp.blur();} if(e.key==="Escape"){inp.value=st.title;inp.blur();} });
-    inp.addEventListener("blur",()=>{ const v=inp.value.trim(); if(v===st.title) return; const L=steps.map(x=>({...x})); if(v) L[i].title=v; else L.splice(i,1); saveSteps(L); });
-    const move=d=>{ const j=i+d; if(j<0||j>=steps.length) return; const L=steps.map(x=>({...x})); [L[i],L[j]]=[L[j],L[i]]; saveSteps(L); };
+    inp.addEventListener("blur",()=>setTimeout(()=>{ if(!live()) return; const v=inp.value.trim(); if(v===st.title) return; const L=steps.map(x=>({...x})); if(v) L[i].title=v; else L.splice(i,1); saveSteps(L); },0));
+    const move=d=>{ const j=i+d; if(j<0||j>=steps.length) return; const L=readSteps(); [L[i],L[j]]=[L[j],L[i]]; saveSteps(L); };
     stepBox.append(h("div",{class:"step"+(st.done?" done":"")},
-      h("button",{class:"check","aria-label":st.done?"Marcar etapa como pendente":"Concluir etapa",onclick:()=>{ const L=steps.map(x=>({...x})); L[i].done=!L[i].done; saveSteps(L); }},h("span",{},st.done?svg(ICON.check,11,'stroke-width="3.4"'):null)),
+      h("button",{class:"check","aria-label":st.done?"Marcar etapa como pendente":"Concluir etapa",onmousedown:noBlur,onclick:()=>{ const L=readSteps(); L[i].done=!L[i].done; saveSteps(L); }},h("span",{},st.done?svg(ICON.check,11,'stroke-width="3.4"'):null)),
       inp,
-      i>0?h("button",{class:"act",title:"Subir","aria-label":"Subir etapa",onclick:()=>move(-1)},svg('<path d="M12 19V5M6 11l6-6 6 6"/>',15)):null,
-      h("button",{class:"act act-del",title:"Excluir etapa","aria-label":"Excluir etapa",onclick:()=>{ const L=steps.map(x=>({...x})); L.splice(i,1); saveSteps(L); }},svg(ICON.x,15))));
+      i>0?h("button",{class:"act",title:"Subir","aria-label":"Subir etapa",onmousedown:noBlur,onclick:()=>move(-1)},svg('<path d="M12 19V5M6 11l6-6 6 6"/>',15)):null,
+      h("button",{class:"act act-del",title:"Excluir etapa","aria-label":"Excluir etapa",onmousedown:noBlur,onclick:()=>{ const L=readSteps(); L.splice(i,1); saveSteps(L); }},svg(ICON.x,15))));
   });
   const addStep=h("input",{type:"text",id:"dStepAdd",placeholder:"Adicionar etapa","aria-label":"Adicionar etapa"});
   addStep.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); const v=addStep.value.trim(); if(!v) return;
-    saveSteps([...steps,{id:"s"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),title:v,done:false}],true); } });
+    addStep.value=""; saveSteps([...steps,{id:newStepId(),title:v,done:false}],true); } });
+  // saiu do campo sem Enter: a etapa escrita é gravada assim mesmo
+  addStep.addEventListener("blur",()=>setTimeout(()=>{ if(!live()) return; const v=addStep.value.trim(); if(!v) return; addStep.value=""; saveSteps([...steps,{id:newStepId(),title:v,done:false}]); },0));
   stepBox.append(h("label",{class:"step-add",for:"dStepAdd"},svg(ICON.plus,17),addStep));
   if(refocus) setTimeout(()=>{ const a=$("#dStepAdd"); if(a) a.focus(); },0);
   const nDone=steps.filter(x=>x.done).length;
   const tagBox=h("div",{class:"tagedit"});
-  (t.tags||[]).forEach(g=>tagBox.append(h("span",{class:"chip"},h("i",{style:`background:${tagColor(g)}`}),"#"+g,
-    h("button",{"aria-label":"Remover #"+g,onclick:()=>patchTask(id,{tags:(t.tags||[]).filter(x=>x!==g)})},"×"))));
+  // chip de grupo; × remove (e redesenha o painel)
+  const chip=g=>h("span",{class:"chip"},h("i",{style:`background:${tagColor(g)}`}),"#"+g,
+    h("button",{"aria-label":"Remover #"+g,onmousedown:noBlur,onclick:()=>{ const cur=VIEW.tasks[id]; if(!cur) return; UI.forceDetail=true; patchTask(id,{tags:(cur.tags||[]).filter(x=>x!==g)}); }},"×"));
+  (t.tags||[]).forEach(g=>tagBox.append(chip(g)));
   const dl=h("datalist",{id:"tagList"},allTags().names.map(n=>h("option",{value:n})));
   const tagIn=h("input",{type:"text",id:"dTagIn",list:"tagList",placeholder:"adicionar #grupo","aria-label":"Adicionar grupo"});
-  const addTag=()=>{const n=normTag(tagIn.value); tagIn.value=""; if(!n||(t.tags||[]).includes(n)) return; ensureTags([n]); patchTask(id,{tags:[...(t.tags||[]),n]}); setTimeout(()=>$("#dTagIn")&&$("#dTagIn").focus(),0);};
+  // grava um ou mais grupos (“#grupo1 #grupo2”). typing: ainda digitando — o painel não é redesenhado (o teclado
+  // continua aberto) e os chips entram na hora; o painel é atualizado quando o campo perde o foco
+  let tagsDirty=false;
+  const addTags=(names,typing)=>{ const cur=VIEW.tasks[id]; if(!cur) return;
+    const add=[...new Set(names.map(normTag).filter(n=>n&&!(cur.tags||[]).includes(n)))]; if(!add.length) return;
+    if(!typing) UI.forceDetail=true;
+    ensureTags(add); patchTask(id,{tags:[...(cur.tags||[]),...add]});
+    if(typing){ add.forEach(g=>tagIn.before(chip(g))); tagsDirty=true; } };
+  const addTag=()=>{ const v=tagIn.value; tagIn.value=""; addTags(v.split(/[\s,]+/),true); };
   tagIn.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===","){e.preventDefault();addTag();}});
   tagIn.addEventListener("change",()=>{ if(allTags().names.includes(normTag(tagIn.value))) addTag(); });
+  // ao digitar espaço (ou vírgula) depois de um grupo, ele já fica registrado, sem precisar de Enter
+  tagIn.addEventListener("input",()=>{ const v=tagIn.value; if(!/[\s,]/.test(v)) return; const parts=v.split(/[\s,]+/); tagIn.value=parts.pop(); addTags(parts,true); });
+  // saiu do campo: registra o que ficou escrito e atualiza o painel
+  tagIn.addEventListener("blur",()=>setTimeout(()=>{ if(!live()) return; const v=tagIn.value;
+    if(v.trim()){ tagIn.value=""; addTags(v.split(/[\s,]+/),false); return; }
+    const a=document.activeElement;
+    if(tagsDirty&&!(pane.contains(a)&&a.matches("textarea,input[type=text]"))){ tagsDirty=false; UI.forceDetail=true; render(); } },0));
   tagBox.append(tagIn,dl);
   const dueIn=h("input",{type:"date",id:"dDue",value:t.due||"",onchange:e=>patchTask(id,{due:e.target.value||null})});
   const notes=h("textarea",{id:"dNotes",placeholder:"Anotações, links, passos…"}); notes.value=t.notes||"";
@@ -1716,6 +1773,8 @@ function renderDetail(){
     h("div",{class:"d-head"},h("span",{},"Detalhes da tarefa"),h("button",{class:"icon-btn","aria-label":"Fechar",onclick:()=>{UI.sel=null;render();}},svg(ICON.x,18))),
     h("div",{class:"d-body"},
       h("div",{class:"d-title"},h("button",{class:"circle p"+(t.priority||2),style:t.done?"background:var(--ink);border-color:var(--ink);color:var(--bg)":"","aria-label":"Concluir",onclick:()=>toggleDone(id)},t.done?svg(ICON.check,13,'stroke-width="3"'):null),title),
+      // etapas logo abaixo do nome da tarefa
+      h("div",{class:"field"},h("span",{class:"lbl"},"Etapas ",steps.length?h("span",{class:"steps-count"},`· ${nDone} de ${steps.length}`):null),stepBox),
       h("div",{class:"toggle-row"},h("span",{style:"display:inline-flex;gap:8px;align-items:center"},svg(ICON.sun,17),myDayOn?"Está no Meu Dia":"Fora do Meu Dia"),
         h("button",{class:"btn small"+(myDayOn?"":" primary"),onclick:()=>toggleMyDay({...t,id})},myDayOn?"Tirar":"Adicionar")),
       projTags.length?h("div",{class:"field"},h("div",{class:"toggle-row"},h("span",{style:"display:inline-flex;gap:8px;align-items:center"},svg(ICON.folder,17),(inCrono(t)?"No cronograma de ":"Fora do cronograma de ")+projTags.map(g=>"#"+g).join(", ")),
@@ -1729,7 +1788,6 @@ function renderDetail(){
         h("div",{class:"opts"},[3,2,1].map(v=>opt(t.importance||2,v,IMP[v],val=>patchTask(id,{importance:val}))))),
       h("div",{class:"field"},h("span",{class:"lbl"},"Prioridade  (em que ordem fazer)"),
         h("div",{class:"opts"},[1,2,3].map(v=>h("button",{class:"opt"+((t.priority||2)===v?" on":""),onclick:()=>patchTask(id,{priority:v})},h("span",{class:"pill p"+v},"P"+v),PRI[v].split(" · ")[1])))),
-      h("div",{class:"field"},h("span",{class:"lbl"},"Etapas ",steps.length?h("span",{class:"steps-count"},`· ${nDone} de ${steps.length}`):null),stepBox),
       h("div",{class:"field"},h("span",{class:"lbl"},"Grupos"),tagBox),
       h("div",{class:"field"},h("label",{for:"dNotes"},"Anotações"),notes)
     ),
@@ -2345,6 +2403,26 @@ function remindersSection(){
 const PREF_KEY="agenda-prefs-v1", KEYS_KEY="agenda-keys-v1";
 let PREFS=Object.assign({zoom:0.9},lsGet(PREF_KEY,{}));   // 90% no computador por padrão
 if(![0.8,0.9,1,1.1].includes(PREFS.zoom)) PREFS.zoom=0.9;
+/* opção (Configurações): tarefas inacabadas de dias anteriores passam para o próximo dia útil (sábado e domingo
+   ficam de fora: no fim de semana elas vão para segunda). Vale para o prazo vencido e para o Meu Dia de dias
+   anteriores; recorrentes não mudam (a repetição já cuida delas). Roda ao abrir o app, na virada do dia e ao ligar. */
+function rollOver(){
+  if(!PREFS.rollover) return;
+  const td=today(); let d=parseYmd(td); while(d.getDay()===0||d.getDay()===6) d=addDays(d,1);
+  const target=ymd(d), now=new Date().toISOString(), prev={}, ops=[];
+  for(const [id,t] of Object.entries(VIEW.tasks)){
+    if(!t||t.done||isRec(t)) continue;
+    const p={};
+    if(t.due&&t.due<td) p.due=target;
+    if(typeof t.myDay==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(t.myDay)&&t.myDay<td) p.myDay=target;
+    if(!Object.keys(p).length) continue;
+    prev[id]=t; ops.push({op:"set",path:"tasks/"+id,data:{...t,...p,updatedAt:now}});
+  }
+  if(!ops.length) return;
+  enqueueMany(ops);
+  toast(nTxt(ops.length,"tarefa inacabada passou","tarefas inacabadas passaram")+" para "+(target===td?"hoje":fmtShort(target)),
+    ()=>enqueueMany(Object.entries(prev).map(([id,x])=>({op:"set",path:"tasks/"+id,data:{...x,updatedAt:new Date().toISOString()}}))));
+}
 function applyZoom(){ document.documentElement.style.setProperty("--ui-zoom",String(PREFS.zoom)); crAjustarTudo(); }
 applyZoom();
 /* tela cheia */
@@ -2471,6 +2549,9 @@ function configBody(){
     h("div",{class:"row-end",style:"justify-content:flex-start"},
       h("button",{class:"btn",onclick:()=>openSettings()},"Sincronização e backup"),
       h("button",{class:"btn",onclick:()=>openImport()},"Importar lista de tarefas"))));
+  box.append(h("div",{class:"settings-sec"},h("h4",{},"Tarefas inacabadas"),
+    h("p",{},"Passar as tarefas não concluídas do dia para o próximo dia útil (sábado e domingo ficam de fora: vão para segunda). Vale para prazos vencidos e para o Meu Dia; tarefas recorrentes não mudam."),
+    h("div",{},h("span",{class:"seg"},[[false,"Desligado"],[true,"Ligado"]].map(([v,l])=>h("button",{class:!!PREFS.rollover===v?"on":"",onclick:()=>{ PREFS.rollover=v; lsSet(PREF_KEY,PREFS); refreshConfig(); if(v) rollOver(); }},l))))));
   box.append(h("div",{class:"settings-sec"},h("h4",{},"Tamanho do texto no computador"),
     h("p",{},"Vale para telas de computador; no celular o tamanho não muda. Padrão: 90%."),
     h("div",{},h("span",{class:"seg"},[[0.8,"80%"],[0.9,"90%"],[1,"100%"],[1.1,"110%"]].map(([z,l])=>h("button",{class:PREFS.zoom===z?"on":"",onclick:()=>{ PREFS.zoom=z; lsSet(PREF_KEY,PREFS); applyZoom(); refreshConfig(); }},l))))));
@@ -2616,7 +2697,7 @@ if("serviceWorker" in navigator && location.protocol.startsWith("http")){
 recompute();
 // aberto por uma notificação de lembrete (?t=id): já mostra a tarefa
 { const qt=new URLSearchParams(location.search).get("t"); if(qt){ if(VIEW.tasks[qt]) UI.sel=qt; try{ history.replaceState(null,"",location.pathname); }catch(e){} } }
-render(); updateSync(); initClient(); checkReminders();
+render(); updateSync(); initClient(); checkReminders(); rollOver();
 })();
 </script>
 </body>
