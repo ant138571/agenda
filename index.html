@@ -771,8 +771,21 @@ function initClient(){
   }catch(e){ S.sb=null; S.lastError="Endereço ou chave do Supabase inválidos."; updateSync(); return; }
   S.sb.auth.onAuthStateChange((ev,session)=>{
     S.user=session?session.user:null;
+    if(S.user) ownerCheck(S.user.id);
     setTimeout(()=>{ updateSync(); renderSettingsIfOpen(); if(S.user){ sync(); ensurePush(); } else if(rollPending){ rollPending=false; rollOver(); } },0);
   });
+}
+/* dono da cópia local: ao entrar com OUTRA conta, a cópia e as alterações pendentes da conta anterior não vão para a
+   nova conta, e tudo da nova conta é baixado (antes: dados misturados e tarefas antigas da nova conta não apareciam) */
+const OWNER_KEY="agenda-owner-v1";
+function ownerCheck(uid){
+  const prev=lsGet(OWNER_KEY,null);
+  if(prev&&prev!==uid){
+    const n=S.queue.length;
+    S.server={tasks:{},tags:{},projects:{}}; S.queue=[]; S.lastPull=0; saveCache(); recompute();
+    setTimeout(()=>{ render(); toast("Outra conta: os dados deste aparelho foram trocados pelos da nova conta"+(n?` (${n} alteração(ões) não enviada(s) descartada(s))`:"")+"."); },0);
+  }
+  if(prev!==uid) lsSet(OWNER_KEY,uid);
 }
 window.addEventListener("online",()=>scheduleSync(200));
 window.addEventListener("offline",()=>{ S.mode="offline"; updateSync(); });
@@ -1150,6 +1163,7 @@ function sortTasks(list,by){
     // ordem definida arrastando; tarefas ainda não ordenadas vêm depois, por prioridade
     return [...list].sort((a,b)=>{ const x=a.ord??Infinity, y=b.ord??Infinity; if(x!==y) return x<y?-1:1; const p=key.priority(a), q=key.priority(b); return p<q?-1:p>q?1:0; });
   }
+  if(by==="title") return [...list].sort((a,b)=>a.title.localeCompare(b.title,"pt-BR",{sensitivity:"base"}));   // acentos na ordem certa
   const k=key[by]||(t=>t.title);
   return [...list].sort((a,b)=>{const x=k(a),y=k(b);return x<y?-1:x>y?1:0;});
 }
@@ -1298,7 +1312,11 @@ function addBar(defaults,ids){
     // a nova tarefa fica selecionada; se os Detalhes estavam abertos, passam a mostrar a nova tarefa
     const detOpen=!!(UI.sel&&VIEW.tasks[UI.sel]&&!UI.detailHidden);
     inp.value=""; date.value="";   // limpa antes de criar: o campo vazio deixa a lista ser redesenhada na hora
-    const nid=createTask(p.title,extra); toast("Tarefa adicionada");
+    const nid=createTask(p.title,extra), nt=VIEW.tasks[nid];
+    // filtros de importância/prioridade (só nas listas) esconderiam a nova tarefa: são limpos para ela aparecer selecionada
+    const inList=!UI.q&&UI.view!=="home"&&!UI.view.startsWith("proj:")&&UI.view!=="report"&&UI.view!=="projects";
+    if(inList&&nt&&((UI.imp&&(nt.importance||2)!==UI.imp)||(UI.pri&&(nt.priority||2)!==UI.pri))){ UI.imp=0; UI.pri=0; saveUI(); toast("Tarefa adicionada · filtros limpos para mostrá-la"); }
+    else toast("Tarefa adicionada");
     if(!UI.multiOn){ UI.sel=nid; UI.detailHidden=!detOpen; render(); }
     setTimeout(()=>{const i=document.getElementById(inId); if(i) i.focus();},0);
   }});
@@ -1959,11 +1977,13 @@ function openTagModal(g){
       const m={...VIEW.tags}; delete m[g]; saveTags(m); go("home"); toast("Grupo excluído");}},
     {label:"Salvar",cls:"primary",run:()=>{
       const nn=normTag(inp.value); if(!nn){toast("Nome inválido");return false;}
-      const m={...VIEW.tags}; const color=colors.dataset.c||tagColor(g);
+      const merge=nn!==g&&allTags().names.includes(nn);   // o nome já é de outro grupo: os dois grupos são juntados
+      if(merge&&isProj&&(VIEW.projects||{})[nn]){ toast(`#${nn} já existe e também é projeto. Remova um dos projetos antes de juntar os grupos.`); return false; }
+      const m={...VIEW.tags}; const color=colors.dataset.c||(merge?tagColor(nn):tagColor(g));   // juntando: fica a cor do grupo de destino (salvo se outra foi escolhida)
       delete m[g]; m[nn]={color}; saveTags(m);
       if(nn!==g){ for(const t of tasksArr()) if((t.tags||[]).includes(g)) patchTask(t.id,{tags:[...new Set(t.tags.map(x=>x===g?nn:x))]});
         if(isProj&&!(VIEW.projects||{})[nn]){ enqueueMany([{op:"set",path:"projects/"+nn,data:VIEW.projects[g]},{op:"delete",path:"projects/"+g}]); } }
-      go("tag:"+nn); toast("Grupo atualizado");}}
+      go("tag:"+nn); toast(merge?`Grupos juntados em #${nn}`:"Grupo atualizado");}}
   ]);
 }
 function openImport(){
@@ -2679,7 +2699,7 @@ function settingsBody(){
       S.queue.length?h("p",{},`${S.queue.length} alteração(ões) aguardando envio.`):null,
       h("div",{class:"row-end",style:"justify-content:flex-start"},
         h("button",{class:"btn primary",onclick:()=>{sync();say("Sincronizando…");}},"Sincronizar agora"),
-        h("button",{class:"btn",onclick:async()=>{try{await S.sb.auth.signOut();}catch(e){} S.user=null;updateSync();renderSettingsIfOpen();}},"Sair da conta")));
+        h("button",{class:"btn",onclick:async()=>{ try{ if(S.queue.length&&navigator.onLine){ await sync(); } }catch(e){} try{await S.sb.auth.signOut();}catch(e){} S.user=null;updateSync();renderSettingsIfOpen();}},"Sair da conta")));
     if(S.mode==="error"&&S.lastError) say("Erro: "+S.lastError+" — confira se o script SQL do guia foi executado.",true);
   }
   sec.append(msg); box.append(sec);

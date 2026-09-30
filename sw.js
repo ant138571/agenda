@@ -1,5 +1,5 @@
 /* Service worker da Agenda de Tarefas: permite abrir e usar o app sem internet. */
-const VERSION = "agenda-v11";
+const VERSION = "agenda-v12";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest?v=7", "./vendor/supabase.js",
   "./icons/icon-192.png?v=7", "./icons/icon-512.png?v=7", "./icons/apple-touch-icon.png?v=7", "./icons/icon-maskable-512.png?v=7"];
 
@@ -22,7 +22,9 @@ self.addEventListener("fetch", e => {
   if (req.mode === "navigate") {
     // Página: tenta a rede (para receber atualizações) e cai para o cache se estiver offline.
     // cache: "no-cache": confere com o servidor em vez de usar a cópia guardada pelo navegador (o GitHub Pages guarda por 10 min)
-    e.respondWith(fetch(req.url, { cache: "no-cache", credentials: "same-origin" }).then(res => { const copy = res.clone(); caches.open(VERSION).then(c => c.put("./index.html", copy)); return res; })
+    // só a página do app (./ ou index.html) com resposta válida vira a cópia offline; guias e páginas de erro não a substituem
+    const isApp = /\/(index\.html)?$/.test(url.pathname);
+    e.respondWith(fetch(req.url, { cache: "no-cache", credentials: "same-origin" }).then(res => { if (isApp && res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put("./index.html", copy)); } return res; })
       .catch(() => caches.match("./index.html").then(r => r || caches.match("./"))));
     return;
   }
