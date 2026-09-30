@@ -810,6 +810,7 @@ function cleanTask(t){
   if(Array.isArray(t.steps)) c.steps=t.steps.filter(x=>x&&typeof x.title==="string").slice(0,200).map((x,i)=>({id:str(x.id)||"s"+(i+1),title:x.title.slice(0,500),done:x.done===true}));
   if(typeof t.ord==="number"&&isFinite(t.ord)) c.ord=t.ord;
   if(str(t.remindAt)&&!isNaN(Date.parse(t.remindAt))) c.remindAt=t.remindAt;
+  if(str(t.remindAck)&&!isNaN(Date.parse(t.remindAck))) c.remindAck=t.remindAck;   // lembrete já visto (não toca de novo ao restaurar)
   // recorrência
   if(t.repeat&&typeof t.repeat==="object"&&["daily","weekdays","weekly","monthly"].includes(t.repeat.freq)){
     const r={freq:t.repeat.freq};
@@ -1217,7 +1218,7 @@ function renderList(wrap,v){
   else if(v==="search"){ title="Pesquisa"; sub=`Resultados para “${UI.q}”`; list=searchTasks(list,UI.q); showDoneDefault=true; }
   else if(v==="today"){ title="Meu Dia"; sub=fmtLong(new Date());
     const recDone=list.filter(t=>isRec(t)&&(t.doneDates||[]).includes(td)&&!inMyDay(t)).map(t=>occView(t,td));
-    list=[...list.filter(t=>inMyDay(t)||(t.done&&t.myDay===td)),...recDone]; defaults={myDay:td}; }
+    list=[...list.filter(t=>inMyDay(t)||(t.done&&(t.myDay===td||(t.myDay!=="no:"+td&&t.due&&t.due<=td&&t.doneAt&&ymd(new Date(t.doneAt))===td)))),...recDone]; defaults={myDay:td}; }
   else if(v==="important"){ title="Importantes"; sub="Importância alta"; list=list.filter(t=>t.importance===3); defaults={importance:3}; }
   else if(v==="priority"){ title="Por prioridade"; sub="Agrupadas de P1 (urgente) a P3"; groupBy="priority"; }
   else if(v==="planned"){ title="Planejado"; sub="Tarefas com prazo"; list=list.filter(t=>t.due); groupBy="due"; }
@@ -1748,7 +1749,7 @@ function renderDetail(){
     const a=document.activeElement;
     if(tagsDirty&&!(pane.contains(a)&&a.matches("textarea,input[type=text]"))){ tagsDirty=false; UI.forceDetail=true; render(); } },0));
   tagBox.append(tagIn,dl);
-  const dueIn=h("input",{type:"date",id:"dDue",value:t.due||"",onchange:e=>patchTask(id,{due:e.target.value||null})});
+  const dueIn=h("input",{type:"date",id:"dDue",value:t.due||"",onchange:e=>{ const v=e.target.value||null, cur=VIEW.tasks[id]; patchTask(id,!v&&cur&&cur.repeat?{due:null,repeat:null}:{due:v}); }});
   const notes=h("textarea",{id:"dNotes",placeholder:"Anotações, links, passos…"}); notes.value=t.notes||"";
   notes.addEventListener("blur",()=>{ if(notes.value!==(VIEW.tasks[id]?.notes||"")) patchTask(id,{notes:notes.value}); });
   const quickDue=(n,l)=>h("button",{class:"opt",onclick:()=>patchTask(id,{due:ymd(addDays(new Date(),n))})},l);
@@ -1824,7 +1825,7 @@ function renderReport(wrap){
       h("div",{class:"opts"},preset("Esta semana",wk,now),preset("Este mês",new Date(now.getFullYear(),now.getMonth(),1),now),
         preset("Mês passado",new Date(now.getFullYear(),now.getMonth()-1,1),new Date(now.getFullYear(),now.getMonth(),0)),
         preset("Este ano",new Date(now.getFullYear(),0,1),now),
-        h("button",{class:"opt",onclick:()=>{ const ds=tasksArr().filter(t=>t.done).map(repDate).filter(Boolean).sort(); R.from=ds[0]&&ds[0]<ymd(now)?ds[0]:ymd(now); R.to=ymd(now); render(); }},"Todo o período"))),
+        h("button",{class:"opt",onclick:()=>{ const ds=repDone().map(repDate).filter(Boolean).sort(); R.from=ds[0]&&ds[0]<ymd(now)?ds[0]:ymd(now); R.to=ymd(now); render(); }},"Todo o período"))),
     h("div",{class:"field"},h("span",{class:"lbl"},"Grupos (nenhum selecionado = todos)"),
       h("div",{class:"tagpick"},names.map(n=>h("button",{class:R.tags.includes(n)?"on":"",onclick:()=>{R.tags=R.tags.includes(n)?R.tags.filter(x=>x!==n):[...R.tags,n];render();}},
         h("span",{class:"tag-swatch",style:`background:${tagColor(n)}`}),"#"+n)),
@@ -1851,21 +1852,31 @@ function renderReport(wrap){
     h("button",{class:"btn",onclick:exportReportPDF},"Exportar PDF"),
     h("button",{class:"btn",onclick:copyReport},"Copiar tabela")));
   if(!rows.length){ wrap.append(h("div",{class:"empty"},"Nenhuma tarefa concluída neste período com esses grupos.")); return; }
-  if(rows.some(t=>!t.doneAt)) wrap.append(h("div",{class:"gest-hint",style:"text-align:left"},"“(prazo)”: a tarefa não tem data de conclusão registrada (ex.: importada); o relatório usa a data do prazo."));
+  if(rows.some(t=>!t.doneAt&&!t._occ)) wrap.append(h("div",{class:"gest-hint",style:"text-align:left"},"“(prazo)”: a tarefa não tem data de conclusão registrada (ex.: importada); o relatório usa a data do prazo."));
   const tbl=h("table",{},h("thead",{},h("tr",{},["Concluída em","Tarefa","Grupos","Importância","Prioridade","Prazo"].map(x=>h("th",{},x)))),
     h("tbody",{},rows.map(t=>h("tr",{},h("td",{class:"mono"},repCell(t)),h("td",{},t.title),h("td",{},(t.tags||[]).map(g=>"#"+g).join(" ")),
       h("td",{},IMP[t.importance||2]),h("td",{class:"mono"},"P"+(t.priority||2)),h("td",{class:"mono",style:t.due&&t.doneAt&&repDate(t)>t.due?"color:var(--danger)":""},t.due?fmtBR(t.due):"—")))));
   wrap.append(h("div",{class:"tbl-wrap"},tbl));
 }
-/* data usada no relatório: dia (no fuso local) em que foi concluída; sem esse registro, o prazo */
+/* concluídas do relatório: tarefas concluídas + cada data concluída das recorrentes (doneDates), uma linha por data */
+function repDone(){
+  const out=[];
+  for(const t of tasksArr()){
+    if(t.done) out.push(t);
+    for(const k of (Array.isArray(t.doneDates)?t.doneDates:[])) out.push({...t,done:true,doneAt:null,due:k,_occ:k});
+  }
+  return out;
+}
+/* data usada no relatório: dia (no fuso local) em que foi concluída; sem esse registro, o prazo; recorrente: a data concluída */
 function repDate(t){
+  if(t._occ) return t._occ;
   if(t.doneAt){ const d=new Date(t.doneAt); return isNaN(d)?String(t.doneAt).slice(0,10):ymd(d); }
   return t.due||null;
 }
-const repCell=t=>{ const d=repDate(t); return d?fmtBR(d)+(t.doneAt?"":" (prazo)"):"sem data"; };
+const repCell=t=>{ const d=repDate(t); return d?fmtBR(d)+(t.doneAt||t._occ?"":" (prazo)"):"sem data"; };
 function reportRows(){
   const R=UI.rep;
-  return tasksArr().filter(t=>t.done).filter(t=>{ const d=repDate(t); return d?((!R.from||d>=R.from)&&(!R.to||d<=R.to)):R.undated!==false; })
+  return repDone().filter(t=>{ const d=repDate(t); return d?((!R.from||d>=R.from)&&(!R.to||d<=R.to)):R.undated!==false; })
     .filter(t=>!R.tags.length||(t.tags||[]).some(g=>R.tags.includes(g)))
     .sort((a,b)=>{ const x=repDate(a)||"9999", y=repDate(b)||"9999"; return x<y?-1:x>y?1:(a.doneAt||"").localeCompare(b.doneAt||"")||a.title.localeCompare(b.title,"pt-BR"); });
 }
@@ -1963,8 +1974,9 @@ function openImport(){
     ta,h("label",{class:"check-lbl",for:"importDate"},"Prazo para todas (opcional):",date)),[
     {label:"Importar",cls:"primary",run:()=>{
       const lines=ta.value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean); const todo=[];
-      for(const l of lines){
+      for(let l of lines){
         if(/^[-–•]\s*/.test(l)&&todo.length){ const st=l.replace(/^[-–•]\s*/,""); const L=todo[todo.length-1].steps; if(st) L.push({id:"s"+(L.length+1),title:st,done:false}); continue; }
+        l=l.replace(/^[-–•]\s*/,"");   // sem tarefa acima: vira tarefa, sem o marcador
         const p=parseQuick(l); if(!p.title) continue;
         todo.push({title:p.title,extra:{tags:p.tags,importance:p.importance||2,priority:p.priority||2,due:date.value||null},steps:[]}); }
       for(const x of [...todo].reverse()) createTask(x.title,{...x.extra,steps:x.steps});  // de trás para frente: entram no topo mantendo a ordem colada
@@ -2482,9 +2494,12 @@ const KEY_ACTIONS=[
   {id:"dueToday",grp:"task",label:"Prazo: hoje",def:"Shift+H",run:taskKey(()=>({due:today()}),()=>"Prazo: hoje")},
   {id:"dueTom",grp:"task",label:"Prazo: amanhã",def:"Shift+A",run:taskKey(()=>({due:ymd(addDays(new Date(),1))}),()=>"Prazo: amanhã")},
   {id:"dueWeek",grp:"task",label:"Prazo: em 1 semana",def:"Shift+S",run:taskKey(()=>({due:ymd(addDays(new Date(),7))}),()=>"Prazo: em 1 semana")},
-  {id:"dueNone",grp:"task",label:"Sem prazo",def:"Shift+X",run:taskKey(()=>({due:null}),()=>"Prazo removido")},
+  {id:"dueNone",grp:"task",label:"Sem prazo",def:"Shift+X",run:taskKey(t=>t.repeat?{due:null,repeat:null}:{due:null},()=>"Prazo removido")},
   {id:"detail",grp:"task",label:"Abrir / fechar Detalhes da tarefa",def:"E",run:toggleDetail},
-  {id:"myday",grp:"task",label:"Adicionar / tirar do Meu Dia",def:"M",run:()=>{ const id=keyTask(); if(!id){ toast("Abra ou selecione uma tarefa primeiro."); return; } toggleMyDay({...VIEW.tasks[id],id}); }}
+  {id:"myday",grp:"task",label:"Adicionar / tirar do Meu Dia",def:"M",run:()=>{ const id=keyTask(); if(!id){ toast("Abra ou selecione uma tarefa primeiro."); return; }
+    const wasFocused=document.activeElement&&document.activeElement.closest&&document.activeElement.closest(".task[data-id]");
+    toggleMyDay({...VIEW.tasks[id],id});
+    if(wasFocused) setTimeout(()=>{ const r=document.querySelector(`.task[data-id="${id}"]`); if(r) r.focus(); },0); }}
 ];
 const defaultKeys=()=>Object.fromEntries(KEY_ACTIONS.map(a=>[a.id,a.def]));
 const KEYS_SAVED=lsGet(KEYS_KEY,{});
