@@ -735,6 +735,7 @@ async function sync(){
   try{
     await pushQueue(); await pullChanges();
     S.mode="online"; S.lastError="";
+    if(rollPending){ rollPending=false; rollOver(); }   // tarefas inacabadas: só depois de receber os dados do servidor
   }catch(e){
     const msg=(e&&(e.message||e.error_description))||String(e);
     if(!navigator.onLine||/fetch|network|Failed|Load failed/i.test(msg)){ S.mode="offline"; S.lastError=""; }
@@ -744,6 +745,11 @@ async function sync(){
     if(S.again){ S.again=false; scheduleSync(300); }
   }
 }
+/* "Tarefas inacabadas" grava a tarefa inteira; se rodasse sobre a cópia local ainda desatualizada, desfazia
+   alterações feitas em outro aparelho (tarefa tirada do dia voltava, concluída reabria, apagada reaparecia).
+   Com sincronização, ela espera o próximo download do servidor; sem sincronização, roda na hora. */
+let rollPending=false;
+function requestRollOver(){ if(S.sb&&S.user){ rollPending=true; scheduleSync(200); } else rollOver(); }
 let syncTimer=null;
 function scheduleSync(ms){ clearTimeout(syncTimer); syncTimer=setTimeout(sync,ms); }
 function updateSync(){
@@ -765,7 +771,7 @@ function initClient(){
   }catch(e){ S.sb=null; S.lastError="Endereço ou chave do Supabase inválidos."; updateSync(); return; }
   S.sb.auth.onAuthStateChange((ev,session)=>{
     S.user=session?session.user:null;
-    setTimeout(()=>{ updateSync(); renderSettingsIfOpen(); if(S.user){ sync(); ensurePush(); } },0);
+    setTimeout(()=>{ updateSync(); renderSettingsIfOpen(); if(S.user){ sync(); ensurePush(); } else if(rollPending){ rollPending=false; rollOver(); } },0);
   });
 }
 window.addEventListener("online",()=>scheduleSync(200));
@@ -1006,7 +1012,7 @@ function renderNav(){
 function setHeader(title,sub){ $("#viewTitle").textContent=title; $("#viewSub").textContent=sub||""; }
 const cap=x=>x.replace(/^./,c=>c.toUpperCase());
 function clockText(){ const d=new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
-setInterval(()=>{ const c=$("#clock"); if(c) c.textContent=clockText(); const now=today(); if(now!==renderedDay){ renderedDay=now; UI.tlLeft=null; bgRender(); rollOver(); } },15000);
+setInterval(()=>{ const c=$("#clock"); if(c) c.textContent=clockText(); const now=today(); if(now!==renderedDay){ renderedDay=now; UI.tlLeft=null; bgRender(); requestRollOver(); } },15000);
 let renderedDay=today();
 
 /* ---------- Início ---------- */
@@ -1653,13 +1659,21 @@ function toggleDetail(){
   UI.sel=id; UI.detailHidden=false; render();
 }
 let STEP_GEN=0;
+/* linha "Meu Dia" dos Detalhes: sempre lê a tarefa atual (não a do momento em que o painel foi montado) */
+function myDayRow(id){
+  const cur=()=>{ const x=VIEW.tasks[id]; return x?{...x,id}:null; }, t0=cur(), on=!!(t0&&inMyDay(t0));
+  return h("div",{class:"toggle-row d-myday"},h("span",{style:"display:inline-flex;gap:8px;align-items:center"},svg(ICON.sun,17),on?"Está no Meu Dia":"Fora do Meu Dia"),
+    h("button",{class:"btn small"+(on?"":" primary"),onclick:()=>{ const t=cur(); if(t) toggleMyDay(t); }},on?"Tirar":"Adicionar"));
+}
 function renderDetail(){
   const pane=$("#detail"), app=$("#app");
   const t=UI.sel&&!UI.detailHidden&&VIEW.tasks[UI.sel];
   if(!t){ pane.hidden=true; app.classList.remove("has-detail"); return; }
   const id=UI.sel;
-  // não reconstruir enquanto o usuário edita um campo do painel
-  if(!UI.forceDetail && !pane.hidden && pane.dataset.id===id && pane.contains(document.activeElement) && document.activeElement.matches("textarea,input[type=text]")) return;
+  // não reconstruir enquanto o usuário edita um campo do painel (a linha do Meu Dia é atualizada mesmo assim,
+  // para não mostrar "Fora do Meu Dia" numa tarefa que está no Meu Dia, ou o contrário)
+  if(!UI.forceDetail && !pane.hidden && pane.dataset.id===id && pane.contains(document.activeElement) && document.activeElement.matches("textarea,input[type=text]")){
+    const old=pane.querySelector(".d-myday"); if(old) old.replaceWith(myDayRow(id)); return; }
   pane.hidden=false; app.classList.add("has-detail"); pane.dataset.id=id; pane.replaceChildren();
   const title=h("textarea",{id:"dTitle",rows:"1","aria-label":"Nome da tarefa"}); title.value=t.title;
   const fit=()=>{title.style.height="auto";title.style.height=title.scrollHeight+"px";};
@@ -1761,7 +1775,6 @@ function renderDetail(){
     t.due&&t.due>=today()?quickRem("No prazo 9:00",()=>{const d=parseYmd(t.due); d.setHours(9,0,0,0); return d;}):null,
     t.remindAt?h("button",{class:"opt",onclick:()=>setRemind(null)},"Sem lembrete"):null);
   const noPerm=("Notification" in window)&&Notification.permission!=="granted";
-  const myDayOn=inMyDay({...t,id});
   const projTags=(t.tags||[]).filter(g=>(VIEW.projects||{})[g]);
   const delZone=h("div",{});
   const askDel=()=>{ delZone.replaceChildren(h("span",{class:"confirm"},"Excluir esta tarefa?",
@@ -1775,8 +1788,7 @@ function renderDetail(){
       h("div",{class:"d-title"},h("button",{class:"circle p"+(t.priority||2),style:t.done?"background:var(--ink);border-color:var(--ink);color:var(--bg)":"","aria-label":"Concluir",onclick:()=>toggleDone(id)},t.done?svg(ICON.check,13,'stroke-width="3"'):null),title),
       // etapas logo abaixo do nome da tarefa
       h("div",{class:"field"},h("span",{class:"lbl"},"Etapas ",steps.length?h("span",{class:"steps-count"},`· ${nDone} de ${steps.length}`):null),stepBox),
-      h("div",{class:"toggle-row"},h("span",{style:"display:inline-flex;gap:8px;align-items:center"},svg(ICON.sun,17),myDayOn?"Está no Meu Dia":"Fora do Meu Dia"),
-        h("button",{class:"btn small"+(myDayOn?"":" primary"),onclick:()=>toggleMyDay({...t,id})},myDayOn?"Tirar":"Adicionar")),
+      myDayRow(id),
       projTags.length?h("div",{class:"field"},h("div",{class:"toggle-row"},h("span",{style:"display:inline-flex;gap:8px;align-items:center"},svg(ICON.folder,17),(inCrono(t)?"No cronograma de ":"Fora do cronograma de ")+projTags.map(g=>"#"+g).join(", ")),
           h("button",{class:"btn small"+(inCrono(t)?"":" primary"),onclick:()=>setCrono([id],!inCrono(t))},inCrono(t)?"Tirar":"Incluir")),
         inCrono(t)&&!t.due?h("div",{class:"gest-hint",style:"text-align:left"},"Defina um prazo para a tarefa aparecer no cronograma."):null):null,
@@ -2551,7 +2563,7 @@ function configBody(){
       h("button",{class:"btn",onclick:()=>openImport()},"Importar lista de tarefas"))));
   box.append(h("div",{class:"settings-sec"},h("h4",{},"Tarefas inacabadas"),
     h("p",{},"Passar as tarefas não concluídas do dia para o próximo dia útil (sábado e domingo ficam de fora: vão para segunda). Vale para prazos vencidos e para o Meu Dia; tarefas recorrentes não mudam."),
-    h("div",{},h("span",{class:"seg"},[[false,"Desligado"],[true,"Ligado"]].map(([v,l])=>h("button",{class:!!PREFS.rollover===v?"on":"",onclick:()=>{ PREFS.rollover=v; lsSet(PREF_KEY,PREFS); refreshConfig(); if(v) rollOver(); }},l))))));
+    h("div",{},h("span",{class:"seg"},[[false,"Desligado"],[true,"Ligado"]].map(([v,l])=>h("button",{class:!!PREFS.rollover===v?"on":"",onclick:()=>{ PREFS.rollover=v; lsSet(PREF_KEY,PREFS); refreshConfig(); if(v) requestRollOver(); }},l))))));
   box.append(h("div",{class:"settings-sec"},h("h4",{},"Tamanho do texto no computador"),
     h("p",{},"Vale para telas de computador; no celular o tamanho não muda. Padrão: 90%."),
     h("div",{},h("span",{class:"seg"},[[0.8,"80%"],[0.9,"90%"],[1,"100%"],[1.1,"110%"]].map(([z,l])=>h("button",{class:PREFS.zoom===z?"on":"",onclick:()=>{ PREFS.zoom=z; lsSet(PREF_KEY,PREFS); applyZoom(); refreshConfig(); }},l))))));
@@ -2697,7 +2709,9 @@ if("serviceWorker" in navigator && location.protocol.startsWith("http")){
 recompute();
 // aberto por uma notificação de lembrete (?t=id): já mostra a tarefa
 { const qt=new URLSearchParams(location.search).get("t"); if(qt){ if(VIEW.tasks[qt]) UI.sel=qt; try{ history.replaceState(null,"",location.pathname); }catch(e){} } }
-render(); updateSync(); initClient(); checkReminders(); rollOver();
+render(); updateSync(); initClient(); checkReminders();
+// ao abrir: com sincronização, espera o login ser lido e o primeiro download (ver onAuthStateChange e sync)
+if(S.sb) rollPending=true; else rollOver();
 })();
 </script>
 </body>
