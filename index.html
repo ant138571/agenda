@@ -711,7 +711,7 @@ const CACHE_KEY="agenda-cache-v1", QUEUE_KEY="agenda-queue-v1", UI_KEY="agenda-u
 const cache=lsGet(CACHE_KEY,{tasks:{},tags:{}});
 let CFG=lsGet(CFG_KEY,{url:"",key:""});
 const S={
-  server:{tasks:cache.tasks||{},tags:cache.tags||{},projects:cache.projects||{}},  // último estado confirmado (cópia local)
+  server:{tasks:cache.tasks||{},tags:cache.tags||{},projects:cache.projects||{},perfil:cache.perfil||{}},  // último estado confirmado (cópia local)
   queue:lsGet(QUEUE_KEY,[]),                            // alterações ainda não enviadas
   lastPull:lsGet(PULL_KEY,0),
   sb:null, user:null, mode:"local", busy:false, again:false, lastError:""
@@ -724,13 +724,19 @@ function applyToServer(op){
   if(op.path.startsWith("tasks/")){const id=op.path.slice(6); if(op.op==="delete") delete S.server.tasks[id]; else S.server.tasks[id]=op.data;}
   else if(op.path==="meta/tags"){ S.server.tags=(op.op==="delete"||!op.data)?{}:(op.data.map||{}); }
   else if(op.path.startsWith("projects/")){ const id=op.path.slice(9); S.server.projects=S.server.projects||{}; if(op.op==="delete"||!op.data) delete S.server.projects[id]; else S.server.projects[id]=op.data; }
+  else if(op.path==="meta/perfil"){ S.server.perfil=(op.op==="delete"||!op.data)?{}:cleanPerfil(op.data); }
+}
+/* meus dados (Configurações): nome e e-mail do dono do app; viram o membro "eu" de todos os projetos */
+function cleanPerfil(d){
+  d=d&&typeof d==="object"?d:{};
+  return {nome:typeof d.nome==="string"?d.nome.trim().slice(0,120):"",email:typeof d.email==="string"?d.email.trim().slice(0,200):""};
 }
 function applyQueue(base){
-  const saved=S.server; S.server={tasks:{...base.tasks},tags:{...base.tags},projects:{...(base.projects||{})}};
+  const saved=S.server; S.server={tasks:{...base.tasks},tags:{...base.tags},projects:{...(base.projects||{})},perfil:{...(base.perfil||{})}};
   for(const op of S.queue) applyToServer(op);
   const out=S.server; S.server=saved; return out;
 }
-let VIEW={tasks:{},tags:{},projects:{}};
+let VIEW={tasks:{},tags:{},projects:{},perfil:{}};
 function recompute(){ VIEW=applyQueue(S.server); }
 function saveCache(){ lsSet(CACHE_KEY,S.server); lsSet(QUEUE_KEY,S.queue); lsSet(PULL_KEY,S.lastPull); }
 function enqueueMany(ops){
@@ -818,7 +824,7 @@ function ownerCheck(uid){
   const prev=lsGet(OWNER_KEY,null);
   if(prev&&prev!==uid){
     const n=S.queue.length;
-    S.server={tasks:{},tags:{},projects:{}}; S.queue=[]; S.lastPull=0; saveCache(); recompute();
+    S.server={tasks:{},tags:{},projects:{},perfil:{}}; S.queue=[]; S.lastPull=0; saveCache(); recompute();
     setTimeout(()=>{ render(); toast("Outra conta: os dados deste aparelho foram trocados pelos da nova conta"+(n?` (${n} alteração(ões) não enviada(s) descartada(s))`:"")+"."); },0);
   }
   if(prev!==uid) lsSet(OWNER_KEY,uid);
@@ -2372,7 +2378,14 @@ function saveMembros(tag,membros,atrib,msg){
 }
 /* garante o membro "eu" (primeiro da equipe) no projeto; nome e e-mail vêm do "eu" de outro projeto */
 const EU_FEITO=new Set();
+function saveMeusDados(nome,email,exceto){
+  enqueueMany([{op:"set",path:"meta/perfil",data:{nome,email,updatedAt:new Date().toISOString()}},
+    ...projectsArr().filter(o=>o.tag!==exceto).map(o=>{ const m=o.membros.find(x=>x.id===EU); if(!m||(m.nome===nome&&m.email===email)) return null;
+      const c=cleanProject({...o,membros:o.membros.map(x=>x.id===EU?{...x,nome,email}:x)});
+      return {op:"set",path:"projects/"+o.tag,data:{...c,createdAt:c.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()}}; }).filter(Boolean)]);
+}
 function euBase(){
+  const pf=VIEW.perfil||{}; if(pf.nome||pf.email) return {nome:pf.nome||EU_NOME,email:pf.email||""};
   for(const q of projectsArr()){ const m=q.membros.find(x=>x.id===EU); if(m) return {nome:m.nome,email:m.email}; }
   return {nome:EU_NOME,email:(S.user&&S.user.email)||""};
 }
@@ -2419,13 +2432,12 @@ function openMembroModal(tag,mid){
     if(q.membros.length>=100&&!mid){ toast("Limite de 100 membros por projeto."); return false; }
     const membros=mid?q.membros.map(m=>m.id===mid?{...m,nome:n,email:e,funcao:fn}:m):[...q.membros,{id:"m"+uid().slice(1),nome:n,email:e,funcao:fn}];
     saveMembros(tag,membros,q.atrib,mid?"Membro atualizado":"Membro adicionado");
-    if(mid===EU) for(const o of projectsArr()){ const m=o.tag!==tag&&o.membros.find(x=>x.id===EU);   // você: mesmo nome e e-mail em todos os projetos
-      if(m&&(m.nome!==n||m.email!==e)) putProject(o.tag,{...o,membros:o.membros.map(x=>x.id===EU?{...x,nome:n,email:e}:x)}); }
+    if(mid===EU) saveMeusDados(n,e,tag);   // você: mesmo nome e e-mail em Configurações e em todos os projetos
   };
   const enter=ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); if(salvar()!==false) $("#modalRoot").replaceChildren(); } };
   nome.addEventListener("keydown",enter); email.addEventListener("keydown",enter); funcao.addEventListener("keydown",enter);
   openModal(mid===EU?"Editar seus dados":mid?"Editar membro":"Adicionar membro",h("div",{style:"display:flex;flex-direction:column;gap:10px"},
-    mid===EU?h("p",{class:"mail-note"},"Você é responsável possível em todos os projetos. Nome e e-mail valem para todos; a função é deste projeto."):null,
+    mid===EU?h("p",{class:"mail-note"},"Você é responsável possível em todos os projetos. Nome e e-mail valem para todos (são os de Configurações › Meus dados); a função é deste projeto."):null,
     h("div",{class:"field"},h("label",{for:"mbNome"},"Nome"),nome),
     h("div",{class:"field"},h("label",{for:"mbFuncao"},"Função no projeto"),funcao),
     h("div",{class:"field"},h("label",{for:"mbEmail"},"E-mail (para receber o cronograma)"),email)),
@@ -3004,9 +3016,49 @@ function keysSection(){
 }
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
+/* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
+const APP_VER="v20";
+async function checkUpdate(btn){
+  if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
+  const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
+  try{
+    const r=await fetch("./index.html?versao="+Date.now(),{cache:"no-store"}); if(!r.ok) throw new Error("HTTP "+r.status);   // ?versao: o sw.js deixa ir direto à rede
+    const m=/const APP_VER="(v\d+)"/.exec(await r.text()), nova=m?m[1]:null;
+    if(!nova||nova===APP_VER){ toast(`Você já está na versão mais recente (${APP_VER}).`); return; }
+    toast(`Atualizando para a versão ${nova}…`);
+    try{ const reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration(); if(reg) await reg.update(); }catch(e){}
+    if(S.queue.length&&S.sb&&S.user){ try{ await sync(); }catch(e){} }   // envia o pendente antes de recarregar
+    setTimeout(()=>location.reload(),600);
+  }catch(e){ toast("Não foi possível procurar atualização agora."); }
+  finally{ btn.disabled=false; btn.textContent=old; }
+}
+/* meus dados: nome e e-mail (membro "eu" dos projetos) */
+function meusDadosSec(){
+  const pf=VIEW.perfil||{}, base=euBase();
+  const nome=h("input",{type:"text",id:"pfNome",maxlength:"120",placeholder:EU_NOME}), email=h("input",{type:"text",id:"pfEmail",inputmode:"email",autocomplete:"email",maxlength:"200",placeholder:"voce@exemplo.com"});
+  nome.value=pf.nome||base.nome||""; email.value=pf.email||base.email||"";
+  const salvar=()=>{
+    const n=nome.value.trim(), e=email.value.trim();
+    if(!n){ toast("Informe o seu nome."); nome.focus(); return; }
+    if(e&&!EMAIL_RE.test(e)){ toast("E-mail inválido."); email.focus(); return; }
+    saveMeusDados(n,e,null); toast("Seus dados foram salvos e aplicados aos projetos.");
+  };
+  const enter=ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); salvar(); } };
+  nome.addEventListener("keydown",enter); email.addEventListener("keydown",enter);
+  return h("div",{class:"settings-sec"},h("h4",{},"Meus dados"),
+    h("p",{},"Seu nome e e-mail como responsável nos projetos. Ao salvar, valem em todos os projetos (e nos novos) e em todos os aparelhos sincronizados."),
+    h("div",{class:"field"},h("label",{for:"pfNome"},"Nome"),nome),
+    h("div",{class:"field"},h("label",{for:"pfEmail"},"E-mail"),email),
+    h("div",{},h("button",{class:"btn primary",onclick:salvar},"Salvar meus dados")));
+}
 function configBody(){
   const box=h("div",{id:"cfgBody",style:"display:flex;flex-direction:column;gap:14px"});
-  box.append(h("div",{class:"settings-sec",style:"border-top:0;padding-top:0"},h("h4",{},"Sincronização e dados"),
+  const upBtn=h("button",{class:"btn",onclick:()=>checkUpdate(upBtn)},"Procurar atualização");
+  box.append(h("div",{class:"settings-sec",style:"border-top:0;padding-top:0"},h("h4",{},"Versão do app"),
+    h("p",{},"Você está usando a versão ",h("b",{id:"appVer"},APP_VER),". O app se atualiza sozinho ao ser reaberto com internet; o botão procura e instala agora, sem precisar fechar."),
+    h("div",{},upBtn)));
+  box.append(meusDadosSec());
+  box.append(h("div",{class:"settings-sec"},h("h4",{},"Sincronização e dados"),
     h("p",{},"Conta e sincronização entre computador e celular, lembretes, backup e instalação do app; importar tarefas de outra lista."),
     h("div",{class:"row-end",style:"justify-content:flex-start"},
       h("button",{class:"btn",onclick:()=>openSettings()},"Sincronização e backup"),
@@ -3127,13 +3179,14 @@ function settingsBody(){
       if(d.tags&&typeof d.tags==="object"){ const m={}; for(const [k,v] of Object.entries(d.tags)){ const nk=normTag(k); if(nk) m[nk]={color:safeColor(v&&v.color)}; } ops.push({op:"set",path:"meta/tags",data:{map:{...m,...VIEW.tags}}}); }
       for(const [id,t] of Object.entries(ts)){ const c=cleanTask(t); if(c&&/^[\w-]{1,80}$/.test(id)){ c.updatedAt=now; ops.push({op:"set",path:"tasks/"+id,data:c}); n++; } }
       if(d.projects&&typeof d.projects==="object") for(const [k,v] of Object.entries(d.projects)){ const nk=normTag(k); if(nk) ops.push({op:"set",path:"projects/"+nk,data:{...cleanProject(v),updatedAt:now}}); }
+      if(d.perfil&&typeof d.perfil==="object"){ const pf=cleanPerfil(d.perfil); if(pf.nome||pf.email) ops.push({op:"set",path:"meta/perfil",data:{...pf,updatedAt:now}}); }
       enqueueMany(ops);
       toast(`${n} tarefa(s) restaurada(s)`); }catch(err){ toast("Arquivo de backup inválido."); } };
     rd.readAsText(f);}});
   box.append(h("div",{class:"settings-sec"},h("h4",{},"Backup"),
     h("p",{},"Guarde uma cópia de todas as tarefas num arquivo. Serve também para passar os dados para outro aparelho sem sincronização."),
     h("div",{class:"row-end",style:"justify-content:flex-start"},
-      h("button",{class:"btn",onclick:()=>{downloadFile(`agenda-backup_${today()}.json`,JSON.stringify({version:1,exportedAt:new Date().toISOString(),tasks:VIEW.tasks,tags:VIEW.tags,projects:VIEW.projects||{}},null,1),"application/json");}},"Baixar backup (.json)"),
+      h("button",{class:"btn",onclick:()=>{downloadFile(`agenda-backup_${today()}.json`,JSON.stringify({version:1,exportedAt:new Date().toISOString(),tasks:VIEW.tasks,tags:VIEW.tags,projects:VIEW.projects||{},perfil:VIEW.perfil||{}},null,1),"application/json");}},"Baixar backup (.json)"),
       h("button",{class:"btn",onclick:()=>file.click()},"Restaurar backup"),file)));
   // --- Instalar
   const inst=h("div",{class:"settings-sec"},h("h4",{},"Instalar como aplicativo"));

@@ -1,5 +1,5 @@
 /* Service worker da Agenda de Tarefas: permite abrir e usar o app sem internet. */
-const VERSION = "agenda-v19";
+const VERSION = "agenda-v20";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest?v=7", "./vendor/supabase.js",
   "./icons/icon-192.png?v=7", "./icons/icon-512.png?v=7", "./icons/apple-touch-icon.png?v=7", "./icons/icon-maskable-512.png?v=7"];
 
@@ -19,6 +19,8 @@ self.addEventListener("fetch", e => {
   const sameOrigin = url.origin === self.location.origin;
   const isFont = url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com";
   if (!sameOrigin && !isFont) return;
+  // Configurações › Procurar atualização: a consulta de versão vai sempre à rede e não fica guardada.
+  if (sameOrigin && url.searchParams.has("versao")) return;
   if (req.mode === "navigate") {
     // Página: tenta a rede (para receber atualizações) e cai para o cache se estiver offline.
     // cache: "no-cache": confere com o servidor em vez de usar a cópia guardada pelo navegador (o GitHub Pages guarda por 10 min)
