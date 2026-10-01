@@ -389,6 +389,7 @@ tr:last-child td{border-bottom:0}
 .pick small{color:var(--muted);margin-left:auto;flex:none;padding-left:8px}
 .pick.off{opacity:.55;cursor:default}
 .mail-note{margin:0;font-size:12.5px;color:var(--muted)}
+details.mail-note p{margin-top:6px}
 .ce-links{grid-column:1/-1;display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line);padding-top:10px}
 .ce-links>.lbl{font-size:12px;color:var(--muted);font-weight:600}
 .ce-link{display:grid;grid-template-columns:minmax(0,1.3fr) 1fr 1fr 1fr;gap:8px;align-items:end}
@@ -2534,6 +2535,11 @@ function openMailCrono(tag){
      assunto e mensagem (mailto) e anexar o PDF salvo. "Compartilhar PDF" fica como alternativa. */
   if(canShare&&touch){
     const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+    /* alguns apps de e-mail do Android não leem os destinatários do link mailto: os e-mails ficam copiados para colar em “Para” */
+    const copiarPara=x=>{
+      const txt=x.to.join(", ");
+      try{ navigator.clipboard.writeText(txt).then(()=>toast("E-mails copiados: se “Para” vier vazio, toque nele e cole."),()=>{}); }catch(e){}
+    };
     const marcarSalvo=()=>{
       salvo=true; status.textContent=`PDF salvo (${fname}). Agora toque em “2 · Abrir e-mail” e anexe o arquivo pelo clipe.`;
       const bs=[...document.querySelectorAll("#modalRoot .row-end button")];
@@ -2551,18 +2557,45 @@ function openMailCrono(tag){
         navigator.share({files:[new File([blob],fname,{type:"application/pdf"})],title:fname}).then(marcarSalvo,e=>{ if(!(e&&e.name==="AbortError")) toast("Não foi possível salvar o PDF aqui: use “Exportar PDF”."); });
         return false;   // a janela continua aberta para o passo 2
       }},
-      {label:"2 · Abrir e-mail",run:()=>{ const x=preparar(); if(!x) return false; abrirMailto(x); if(!salvo&&blob) toast("Lembre-se de salvar o PDF (passo 1) para anexá-lo."); }},
-      {label:gmail.label,run:gmail.run},
+      {label:"2 · Abrir e-mail",run:()=>{ const x=preparar(); if(!x) return false; copiarPara(x); abrirMailto(x); if(!salvo&&blob) toast("Lembre-se de salvar o PDF (passo 1) para anexá-lo."); }},
+      {label:gmail.label,run:()=>{ const x=preparar(); if(!x) return false; copiarPara(x); return gmail.run(); }},
       compartilhar);
+  }
+  /* envio direto pelo servidor (função "cronograma-email" do Supabase + Brevo): leva o PDF anexado e os
+     destinatários de uma vez, sem passar pelo app de e-mail. Só com login; as outras opções continuam como alternativa. */
+  const servidor=!!(S.sb&&S.user);
+  const copiaChk=h("input",{type:"checkbox",id:"mailCopia"}); copiaChk.checked=true;
+  let enviando=false;
+  const blobB64=b=>new Promise((ok,no)=>{ const r=new FileReader(); r.onload=()=>ok(String(r.result).split(",")[1]||""); r.onerror=()=>no(r.error); r.readAsDataURL(b); });
+  if(servidor){
+    acoes.forEach(a=>delete a.cls);
+    acoes.unshift({label:"Enviar agora",cls:"primary",run:()=>{
+      const x=preparar(); if(!x) return false;
+      if(!blob){ toast("Sem o PDF não dá para enviar daqui: use as outras opções."); return false; }
+      if(enviando) return false;
+      if(!navigator.onLine){ toast("Sem internet: o envio direto precisa de conexão."); return false; }
+      enviando=true; status.textContent=`Enviando para ${x.to.length} destinatário${x.to.length===1?"":"s"}…`;
+      blobB64(blob).then(pdf=>fnCall({method:"POST",body:JSON.stringify({to:x.to,subject:x.sub,text:x.body,filename:fname,pdf,copia:copiaChk.checked})},fnMailURL()))
+        .then(j=>{ if(status.isConnected) $("#modalRoot").replaceChildren(); toast(`Cronograma enviado para ${j.enviados} destinatário${j.enviados===1?"":"s"}`+(j.copia?" (com cópia para você).":".")); })
+        .catch(e=>{
+          const m=String(e&&e.message||e);
+          const txt=/^HTTP 404|not found/i.test(m)?"a função “cronograma-email” não está publicada no Supabase (veja o guia ENVIO-EMAIL).":/Failed to fetch|NetworkError|Load failed/i.test(m)?"sem conexão com o servidor.":m;
+          status.textContent="Não foi enviado: "+txt; toast("Não foi enviado: "+txt);
+        })
+        .finally(()=>{ enviando=false; });
+      return false;   // a janela só fecha quando o envio der certo
+    }});
   }
   openModal("Enviar cronograma por e-mail",h("div",{style:"display:flex;flex-direction:column;gap:10px"},
     h("div",{class:"field"},h("span",{class:"lbl"},"Destinatários"),h("div",{class:"opts"},h("button",{class:"opt",onclick:()=>todos(true)},"Todos"),h("button",{class:"opt",onclick:()=>todos(false)},"Nenhum")),lista),
     h("div",{class:"field"},h("label",{for:"mailSub"},"Assunto"),assunto),
     h("div",{class:"field"},h("label",{for:"mailBody"},"Mensagem"),msg),
     status,
-    h("p",{class:"mail-note"},canShare&&touch
-      ?"Os destinatários só vão junto quando o e-mail é aberto por “2 · Abrir e-mail” (ou “Abrir no Gmail”), que não aceita anexo: por isso salve antes o PDF (passo 1) e anexe-o pelo clipe. “Compartilhar PDF” já leva o anexo, mas o compartilhamento do celular não tem campo de destinatário: escolha-os no app (os e-mails ficam copiados)."
-      :"O Gmail e o app de e-mail abrem com destinatários, assunto e mensagem preenchidos, mas não aceitam anexo pelo link: o PDF é baixado ao mesmo tempo para você anexá-lo."+(canShare?" “Compartilhar PDF” leva o arquivo anexado, mas sem os destinatários (escolha-os no app; os e-mails ficam copiados).":"")+(touch&&!canShare?" No celular, se o download não acontecer, use “Exportar PDF”.":""))),
+    servidor?h("label",{class:"pick",style:"padding:2px 0"},copiaChk,h("span",{},"Enviar cópia para mim"+(S.user.email?" ("+S.user.email+")":""))):null,
+    servidor?h("p",{class:"mail-note"},"“Enviar agora” envia daqui mesmo, pelo servidor, com o PDF anexado e os destinatários marcados."):(CFG.url?h("p",{class:"mail-note"},"Para enviar direto daqui, já com anexo e destinatários, entre na sua conta (Configurações › Sincronização e backup)."):null),
+    (n=>servidor?h("details",{class:"mail-note"},h("summary",{style:"cursor:pointer"},"Como funcionam as outras opções"),n):n)(h("p",{class:"mail-note"},canShare&&touch
+      ?"Os destinatários só vão junto quando o e-mail é aberto por “2 · Abrir e-mail” (ou “Abrir no Gmail”), que não aceita anexo: por isso salve antes o PDF (passo 1) e anexe-o pelo clipe. Os e-mails também ficam copiados: se o app de e-mail abrir com “Para” vazio, cole-os ali. “Compartilhar PDF” já leva o anexo, mas o compartilhamento do celular não tem campo de destinatário: escolha-os no app (os e-mails ficam copiados)."
+      :"O Gmail e o app de e-mail abrem com destinatários, assunto e mensagem preenchidos, mas não aceitam anexo pelo link: o PDF é baixado ao mesmo tempo para você anexá-lo."+(canShare?" “Compartilhar PDF” leva o arquivo anexado, mas sem os destinatários (escolha-os no app; os e-mails ficam copiados).":"")+(touch&&!canShare?" No celular, se o download não acontecer, use “Exportar PDF”.":"")))),
     acoes);
 }
 
@@ -2694,11 +2727,12 @@ if("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("messa
 /* push: inscrição do aparelho no servidor de lembretes (função "lembretes" do Supabase) */
 const pushSupported=()=>location.protocol.startsWith("http")&&"serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;
 const fnURL=()=>CFG.url.trim().replace(/\/+$/,"")+"/functions/v1/lembretes";
+const fnMailURL=()=>CFG.url.trim().replace(/\/+$/,"")+"/functions/v1/cronograma-email";   // envio do cronograma por e-mail (Brevo)
 const b64uBytes=s=>{ s=String(s).replace(/-/g,"+").replace(/_/g,"/"); while(s.length%4) s+="="; return Uint8Array.from(atob(s),c=>c.charCodeAt(0)); };
-async function fnCall(opts={}){
+async function fnCall(opts={},url=fnURL()){
   const headers={apikey:CFG.key,"Content-Type":"application/json"};
   if(S.sb){ const {data}=await S.sb.auth.getSession(); if(data&&data.session) headers.Authorization="Bearer "+data.session.access_token; }
-  const r=await fetch(fnURL(),{...opts,headers}); let j={}; try{ j=await r.json(); }catch(e){}
+  const r=await fetch(url,{...opts,headers}); let j={}; try{ j=await r.json(); }catch(e){}
   if(!r.ok) throw new Error(j.error||("HTTP "+r.status)); return j;
 }
 async function subscribePush(interactive){
