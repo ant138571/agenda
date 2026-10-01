@@ -830,6 +830,16 @@ setInterval(()=>{ if(document.visibilityState==="visible"&&S.user&&navigator.onL
 
 /* ================= Modelo ================= */
 const tasksArr=()=>Object.entries(VIEW.tasks).map(([id,t])=>({id,...t}));
+/* responsável "eu" (o dono do app) nos projetos; fora da tela do projeto só aparecem as tarefas sem responsável
+   ou com "eu" entre os responsáveis (atrib dos projetos da tarefa) */
+const EU="eu", EU_NOME="Antoine d'Artemare";
+function isMine(t){
+  let outro=false;
+  for(const g of (t.tags||[])){ const p=(VIEW.projects||{})[g]; const l=p&&p.atrib&&p.atrib[t.id];
+    if(Array.isArray(l)&&l.length){ if(l.includes(EU)) return true; outro=true; } }
+  return !outro;
+}
+const myTasks=()=>tasksArr().filter(isMine);
 function allTags(){
   const m={...VIEW.tags};
   for(const t of tasksArr()) for(const g of (t.tags||[])) if(!m[g]) m[g]={color:null};
@@ -1026,7 +1036,7 @@ function placeTimeline(){
 }
 
 function renderNav(){
-  const nav=$("#nav"); const all=tasksArr(); const open=all.filter(t=>!t.done);
+  const nav=$("#nav"); const all=myTasks(); const open=all.filter(t=>!t.done);
   const items=[
     ["home","Início",ICON.home,null],
     ["today","Meu Dia",ICON.sun,open.filter(inMyDay).length],
@@ -1079,7 +1089,7 @@ function gestureHint(){
 function renderHome(wrap){
   const now=new Date(), td=today();
   const sel=UI.homeDay||td;
-  const all=tasksArr(), open=all.filter(t=>!t.done);
+  const all=myTasks(), open=all.filter(t=>!t.done);
   wrap.classList.add("wide");
   $("#viewEyebrow").append(now.toLocaleDateString("pt-BR",{weekday:"long"})," · ",h("span",{id:"clock"},clockText()));
   $("#viewTitle").textContent=now.getDate()+" de "+now.toLocaleDateString("pt-BR",{month:"long"});
@@ -1162,8 +1172,8 @@ const TL_PAST=90, TL_FUT=180;
 function timeline(sel){
   const td=today(), base=parseYmd(td);
   const byDay={};
-  for(const t of tasksArr()) if(!t.done&&t.due) (byDay[t.due]=byDay[t.due]||[]).push(t);
-  const recs=tasksArr().filter(isRec);
+  for(const t of myTasks()) if(!t.done&&t.due) (byDay[t.due]=byDay[t.due]||[]).push(t);
+  const recs=myTasks().filter(isRec);
   const track=h("div",{class:"tl-track"});
   for(let i=-TL_PAST;i<=TL_FUT;i++){
     const d=addDays(base,i), key=ymd(d), items=sortTasks([...(byDay[key]||[]),...recs.filter(t=>key!==t.due&&recOn(t,key))],"manual"), n=items.length;
@@ -1258,7 +1268,7 @@ function searchTasks(list,q){
   return out.sort((a,b)=>b[0]-a[0]).map(x=>x[1]);
 }
 function renderList(wrap,v){
-  let list=tasksArr(), title="", sub="", defaults={}, groupBy=null, showDoneDefault=UI.showDone;
+  let list=myTasks(), title="", sub="", defaults={}, groupBy=null, showDoneDefault=UI.showDone;
   const td=today();
   if(v==="search"&&isTagQuery(UI.q)){   // #grupo na pesquisa: só as tarefas do grupo; Enter abre o grupo
     const tags=matchTags(UI.q); title="Pesquisa"; showDoneDefault=true;
@@ -1279,7 +1289,7 @@ function renderList(wrap,v){
   // grupo: lista à esquerda e, à direita, Urgentes e Importantes só deste grupo (como na home)
   let out=wrap;
   if(v.startsWith("tag:")){
-    const g=v.slice(4), gOpen=tasksArr().filter(t=>!t.done&&(t.tags||[]).includes(g)), notToday=t=>!inMyDay(t);
+    const g=v.slice(4), gOpen=myTasks().filter(t=>!t.done&&(t.tags||[]).includes(g)), notToday=t=>!inMyDay(t);
     wrap.classList.add("wide");
     const main=h("section",{class:"grp-main"});
     const side=h("aside",{class:"col-week grp-side"},
@@ -1893,7 +1903,7 @@ function renderReport(wrap){
   wrap.append(card);
   // tarefas concluídas sem data de conclusão (ex.: importadas do Microsoft To Do): usam o prazo; sem prazo, só entram se marcado abaixo
   const byTags=t=>!R.tags.length||(t.tags||[]).some(g=>R.tags.includes(g));
-  const semData=tasksArr().filter(t=>t.done&&!repDate(t)&&byTags(t)).length;
+  const semData=myTasks().filter(t=>t.done&&!repDate(t)&&byTags(t)).length;
   if(semData) card.append(h("label",{class:"check-lbl",for:"repUndated"},h("input",{type:"checkbox",id:"repUndated",checked:R.undated!==false,onchange:e=>{R.undated=e.target.checked;render();}}),
     `Incluir ${semData} tarefa${semData===1?"":"s"} concluída${semData===1?"":"s"} sem data (sem data de conclusão nem prazo, ex.: importadas)`));
   const rows=reportRows();
@@ -1920,7 +1930,7 @@ function renderReport(wrap){
 /* concluídas do relatório: tarefas concluídas + cada data concluída das recorrentes (doneDates), uma linha por data */
 function repDone(){
   const out=[];
-  for(const t of tasksArr()){
+  for(const t of myTasks()){
     if(t.done) out.push(t);
     for(const k of (Array.isArray(t.doneDates)?t.doneDates:[])) out.push({...t,done:true,doneAt:null,due:k,_occ:k});
   }
@@ -2331,6 +2341,7 @@ function renderProject(wrap,tag){
       "Nenhuma tarefa no cronograma. Adicione aqui (com prazo) ou abra uma tarefa e escolha “Incluir” em Cronograma do projeto.",
       h("div",{class:"gest-hint",style:"text-align:left"},"Título e prazo destas tarefas atualizam o cronograma automaticamente."+(noDue?` ${noDue} sem prazo: só aparece${noDue===1?"":"m"} no cronograma depois de ter prazo.`:"")))));
   // ----- membros do projeto (e tarefas atribuídas a eles)
+  if(!p.membros.some(m=>m.id===EU)) setTimeout(()=>ensureEu(tag),0);
   wrap.append(membrosSection(tag,p,all));
   // ----- cronograma (ou modo de edição)
   const sec=h("section",{class:"proj-crono","aria-label":"Cronograma"},h("div",{class:"col-head"},h("h3",{},"Cronograma")));
@@ -2359,6 +2370,18 @@ function saveMembros(tag,membros,atrib,msg){
   putProject(tag,{...cleanProject(prev),membros,atrib});
   toast(msg,()=>enqueue({op:"set",path:"projects/"+tag,data:prev}));
 }
+/* garante o membro "eu" (primeiro da equipe) no projeto; nome e e-mail vêm do "eu" de outro projeto */
+const EU_FEITO=new Set();
+function euBase(){
+  for(const q of projectsArr()){ const m=q.membros.find(x=>x.id===EU); if(m) return {nome:m.nome,email:m.email}; }
+  return {nome:EU_NOME,email:(S.user&&S.user.email)||""};
+}
+function ensureEu(tag){
+  if(EU_FEITO.has(tag)) return; const p=getProject(tag); if(!p) return;
+  if(p.membros.some(m=>m.id===EU)){ EU_FEITO.add(tag); return; }
+  EU_FEITO.add(tag);
+  putProject(tag,{...p,membros:[{id:EU,...euBase(),funcao:""},...p.membros].slice(0,100)});
+}
 function membrosSection(tag,p,all){
   const sec=h("section",{class:"proj-memb","aria-label":"Membros"},h("div",{class:"col-head"},h("h3",{},"Membros"),
     h("span",{class:"col-count"},`${p.membros.length} membro${p.membros.length===1?"":"s"}`),
@@ -2370,10 +2393,10 @@ function membrosSection(tag,p,all){
     const n=Object.entries(p.atrib||{}).filter(([id,l])=>abertas.has(id)&&l.includes(m.id)).length;
     return h("div",{class:"memb"},
       h("span",{class:"memb-av","aria-hidden":"true"},(membroNome(m).trim()[0]||"?").toUpperCase()),
-      h("div",{class:"memb-main"},h("div",{class:"memb-name",title:membroNome(m)},membroNome(m),m.funcao?h("span",{class:"memb-func"}," · "+m.funcao):null),
+      h("div",{class:"memb-main"},h("div",{class:"memb-name",title:membroNome(m)},membroNome(m),m.id===EU?h("span",{class:"memb-func"}," (você)"):null,m.funcao?h("span",{class:"memb-func"}," · "+m.funcao):null),
         h("div",{class:"memb-sub"},[m.email&&m.nome?m.email:(m.email?"":"sem e-mail"),`responsável por ${n} tarefa${n===1?"":"s"} aberta${n===1?"":"s"}`].filter(Boolean).join(" · "))),
       h("button",{class:"btn",title:"Editar membro","aria-label":"Editar membro",onclick:()=>openMembroModal(tag,m.id)},svg(ICON.edit,15)),
-      h("button",{class:"btn",title:"Remover membro","aria-label":"Remover membro",onclick:()=>{
+      m.id===EU?null:h("button",{class:"btn",title:"Remover membro","aria-label":"Remover membro",onclick:()=>{
         const q=getProject(tag); if(!q) return; const atrib={};
         for(const [id,l] of Object.entries(q.atrib)){ const r=l.filter(x=>x!==m.id); if(r.length) atrib[id]=r; }
         saveMembros(tag,q.membros.filter(x=>x.id!==m.id),atrib,"Membro removido");
@@ -2396,10 +2419,13 @@ function openMembroModal(tag,mid){
     if(q.membros.length>=100&&!mid){ toast("Limite de 100 membros por projeto."); return false; }
     const membros=mid?q.membros.map(m=>m.id===mid?{...m,nome:n,email:e,funcao:fn}:m):[...q.membros,{id:"m"+uid().slice(1),nome:n,email:e,funcao:fn}];
     saveMembros(tag,membros,q.atrib,mid?"Membro atualizado":"Membro adicionado");
+    if(mid===EU) for(const o of projectsArr()){ const m=o.tag!==tag&&o.membros.find(x=>x.id===EU);   // você: mesmo nome e e-mail em todos os projetos
+      if(m&&(m.nome!==n||m.email!==e)) putProject(o.tag,{...o,membros:o.membros.map(x=>x.id===EU?{...x,nome:n,email:e}:x)}); }
   };
   const enter=ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); if(salvar()!==false) $("#modalRoot").replaceChildren(); } };
   nome.addEventListener("keydown",enter); email.addEventListener("keydown",enter); funcao.addEventListener("keydown",enter);
-  openModal(mid?"Editar membro":"Adicionar membro",h("div",{style:"display:flex;flex-direction:column;gap:10px"},
+  openModal(mid===EU?"Editar seus dados":mid?"Editar membro":"Adicionar membro",h("div",{style:"display:flex;flex-direction:column;gap:10px"},
+    mid===EU?h("p",{class:"mail-note"},"Você é responsável possível em todos os projetos. Nome e e-mail valem para todos; a função é deste projeto."):null,
     h("div",{class:"field"},h("label",{for:"mbNome"},"Nome"),nome),
     h("div",{class:"field"},h("label",{for:"mbFuncao"},"Função no projeto"),funcao),
     h("div",{class:"field"},h("label",{for:"mbEmail"},"E-mail (para receber o cronograma)"),email)),
@@ -2499,7 +2525,7 @@ function openMailCrono(tag){
   // destinatários
   const boxes=[];
   const lista=h("div",{class:"pick-list"},p.membros.map(m=>{
-    const cb=h("input",{type:"checkbox",disabled:!m.email}); cb.checked=!!m.email; if(m.email) boxes.push([m,cb]);
+    const cb=h("input",{type:"checkbox",disabled:!m.email}); cb.checked=!!m.email&&m.id!==EU; if(m.email) boxes.push([m,cb]);
     cb.addEventListener("change",()=>{ if(!edited) msg.value=texto(); });
     return h("label",{class:"pick"+(m.email?"":" off")},cb,h("span",{title:m.email},m.nome?m.nome+(m.email?" · "+m.email:""):m.email),m.email?null:h("small",{},"sem e-mail"));
   }));
