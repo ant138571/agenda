@@ -2510,14 +2510,16 @@ function openMailCrono(tag){
     if(!blob&&!falhou){ toast("Aguarde: o PDF ainda está sendo preparado."); return null; }
     return {to,sub:assunto.value.trim(),body:msg.value};
   };
-  const baixar=()=>{ if(blob&&downloadFile(fname,blob,"application/pdf")) toast("PDF baixado: anexe-o ao e-mail."); };
+  let salvo=false;   // PDF já salvo nesta janela (celular: passo 1)
+  const baixar=()=>{ if(salvo) return; if(blob&&downloadFile(fname,blob,"application/pdf")) toast("PDF baixado: anexe-o ao e-mail."); };
+  const abrirMailto=x=>{ const a=h("a",{href:`mailto:${x.to.join(",")}?subject=${enc(x.sub)}&body=${enc(x.body)}`}); document.body.append(a); a.click(); a.remove(); };
   const enc=s=>encodeURIComponent(s.replace(/\r?\n/g,"\r\n"));
   const acoes=[
     {label:"Abrir no Gmail",cls:"primary",run:()=>{ const x=preparar(); if(!x) return false;
       const url=`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(x.to.join(","))}&su=${enc(x.sub)}&body=${enc(x.body)}`;
       baixar(); window.open(url,"_blank","noopener"); }},
     {label:"App de e-mail",run:()=>{ const x=preparar(); if(!x) return false;
-      baixar(); const a=h("a",{href:`mailto:${x.to.join(",")}?subject=${enc(x.sub)}&body=${enc(x.body)}`}); document.body.append(a); a.click(); a.remove(); }}];
+      baixar(); abrirMailto(x); }}];
   if(canShare) acoes.push({label:"Compartilhar PDF",run:()=>{ const x=preparar(); if(!x) return false;
     if(!blob){ toast("Sem o PDF não há o que compartilhar: use “Abrir no Gmail” ou “App de e-mail”."); return false; }
     try{ navigator.clipboard.writeText(x.to.join(", ")).catch(()=>{}); }catch(e){}
@@ -2527,13 +2529,40 @@ function openMailCrono(tag){
       navigator.share({files:[f],title:x.sub}).then(ok,e2=>{ if(!(e2&&e2.name==="AbortError")) toast("O compartilhamento não funcionou: use “Abrir no Gmail” ou “App de e-mail”."); });
     });
   }});
-  if(canShare&&touch){ acoes.forEach(a=>delete a.cls); acoes[acoes.length-1].cls="primary"; acoes.unshift(acoes.pop()); }
+  /* celular: o compartilhamento do sistema não leva destinatários (não existe campo "Para" nele).
+     Fluxo principal em dois toques: 1) salvar o PDF no aparelho; 2) abrir o e-mail já com destinatários,
+     assunto e mensagem (mailto) e anexar o PDF salvo. "Compartilhar PDF" fica como alternativa. */
+  if(canShare&&touch){
+    const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+    const marcarSalvo=()=>{
+      salvo=true; status.textContent=`PDF salvo (${fname}). Agora toque em “2 · Abrir e-mail” e anexe o arquivo pelo clipe.`;
+      const bs=[...document.querySelectorAll("#modalRoot .row-end button")];
+      bs.forEach(b=>{ if(b.textContent==="1 · Salvar PDF"){ b.textContent="PDF salvo ✓"; b.classList.remove("primary"); } if(b.textContent==="2 · Abrir e-mail") b.classList.add("primary"); });
+    };
+    const compartilhar=acoes.pop(); compartilhar.label="Compartilhar PDF (sem destinatários)";
+    acoes.forEach(a=>delete a.cls);
+    const gmail=acoes[0];
+    acoes.length=0;
+    acoes.push(
+      {label:"1 · Salvar PDF",cls:"primary",run:()=>{
+        if(!blob){ toast(falhou?"Não foi possível gerar o PDF: use “Exportar PDF”.":"Aguarde: o PDF ainda está sendo preparado."); return false; }
+        // iPhone: “Salvar em Arquivos” pelo compartilhamento; Android: download direto (vai para Downloads)
+        if(!ios&&downloadFile(fname,blob,"application/pdf")){ marcarSalvo(); return false; }
+        navigator.share({files:[new File([blob],fname,{type:"application/pdf"})],title:fname}).then(marcarSalvo,e=>{ if(!(e&&e.name==="AbortError")) toast("Não foi possível salvar o PDF aqui: use “Exportar PDF”."); });
+        return false;   // a janela continua aberta para o passo 2
+      }},
+      {label:"2 · Abrir e-mail",run:()=>{ const x=preparar(); if(!x) return false; abrirMailto(x); if(!salvo&&blob) toast("Lembre-se de salvar o PDF (passo 1) para anexá-lo."); }},
+      {label:gmail.label,run:gmail.run},
+      compartilhar);
+  }
   openModal("Enviar cronograma por e-mail",h("div",{style:"display:flex;flex-direction:column;gap:10px"},
     h("div",{class:"field"},h("span",{class:"lbl"},"Destinatários"),h("div",{class:"opts"},h("button",{class:"opt",onclick:()=>todos(true)},"Todos"),h("button",{class:"opt",onclick:()=>todos(false)},"Nenhum")),lista),
     h("div",{class:"field"},h("label",{for:"mailSub"},"Assunto"),assunto),
     h("div",{class:"field"},h("label",{for:"mailBody"},"Mensagem"),msg),
     status,
-    h("p",{class:"mail-note"},"O Gmail e o app de e-mail abrem com destinatários, assunto e mensagem preenchidos, mas não aceitam anexo pelo link: o PDF é baixado ao mesmo tempo para você anexá-lo."+(canShare?" “Compartilhar PDF” envia o arquivo já anexado ao app escolhido (Gmail, por exemplo).":"")+(touch&&!canShare?" No celular, se o download não acontecer, use “Exportar PDF”.":""))),
+    h("p",{class:"mail-note"},canShare&&touch
+      ?"Os destinatários só vão junto quando o e-mail é aberto por “2 · Abrir e-mail” (ou “Abrir no Gmail”), que não aceita anexo: por isso salve antes o PDF (passo 1) e anexe-o pelo clipe. “Compartilhar PDF” já leva o anexo, mas o compartilhamento do celular não tem campo de destinatário: escolha-os no app (os e-mails ficam copiados)."
+      :"O Gmail e o app de e-mail abrem com destinatários, assunto e mensagem preenchidos, mas não aceitam anexo pelo link: o PDF é baixado ao mesmo tempo para você anexá-lo."+(canShare?" “Compartilhar PDF” leva o arquivo anexado, mas sem os destinatários (escolha-os no app; os e-mails ficam copiados).":"")+(touch&&!canShare?" No celular, se o download não acontecer, use “Exportar PDF”.":""))),
     acoes);
 }
 
