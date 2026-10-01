@@ -2320,6 +2320,7 @@ const membroNome=m=>m.nome||m.email;
 const membrosDe=p=>id=>{ const l=(p.atrib||{})[id]||[]; return (p.membros||[]).filter(m=>l.includes(m.id)); };
 function saveMembros(tag,membros,atrib,msg){
   const prev=VIEW.projects[tag]; if(!prev) return;
+  atrib=Object.fromEntries(Object.entries(atrib||{}).filter(([id])=>VIEW.tasks[id]));   // tarefas apagadas saem das atribuições
   putProject(tag,{...cleanProject(prev),membros,atrib});
   toast(msg,()=>enqueue({op:"set",path:"projects/"+tag,data:prev}));
 }
@@ -2366,7 +2367,7 @@ function openMembroModal(tag,mid){
     h("div",{class:"field"},h("label",{for:"mbNome"},"Nome"),nome),
     h("div",{class:"field"},h("label",{for:"mbEmail"},"E-mail (para receber o cronograma)"),email)),
     [{label:mid?"Salvar":"Adicionar",cls:"primary",run:salvar}]);
-  setTimeout(()=>nome.focus(),30);
+  setTimeout(()=>{ const md=nome.closest(".modal"); if(md&&!md.contains(document.activeElement)) nome.focus(); },30);   // não tira o foco de um campo já escolhido
 }
 /* tarefas do projeto atribuídas a um membro (uma tarefa pode ter vários membros) */
 function openAtribModal(tag,mid){
@@ -2405,6 +2406,12 @@ function loadScript(src){
     document.head.append(s);
   }));
 }
+/* biblioteca do PDF: procura em vendor/ e, se não houver, na raiz do site (onde o arquivo pode ter sido enviado) */
+async function loadLib(name,glob){
+  if(window[glob]) return;
+  for(const src of ["vendor/"+name,name]){ try{ await loadScript(src); if(window[glob]) return; }catch(e){} }
+  throw new Error("Biblioteca "+name+" não encontrada");
+}
 /* estilos da folha A4 para o arquivo: os do cronograma + as regras de impressão valendo sempre */
 function cronoPdfCss(){
   const css=$("#cronoCss").textContent, i=css.indexOf("@media print{"); if(i<0) return css;
@@ -2424,7 +2431,7 @@ function crFixColors(root){
 /* arquivo PDF (A4) do cronograma, no mesmo desenho do “Exportar PDF”; quebra de página entre as datas */
 async function makeCronoPDF(tag){
   const p=getProject(tag); if(!p||!cronoEvents(p).length) throw new Error("Cronograma sem datas");
-  await Promise.all([loadScript("vendor/html2canvas.js"),loadScript("vendor/jspdf.js")]);
+  await Promise.all([loadLib("html2canvas.js","html2canvas"),loadLib("jspdf.js","jspdf")]);
   const W=794, H=Math.round(W*297/210), TOP=Math.round(W*10/210);
   const fr=document.createElement("iframe"); fr.setAttribute("aria-hidden","true"); fr.tabIndex=-1;
   fr.style.cssText=`position:fixed;left:-10000px;top:0;width:${W}px;height:${H}px;border:0;pointer-events:none`;
@@ -2437,8 +2444,7 @@ async function makeCronoPDF(tag){
     if(d.fonts&&d.fonts.ready) await Promise.race([d.fonts.ready,new Promise(r=>setTimeout(r,2500))]);
     const root=d.querySelector(".crono");
     crFixColors(root); crAjustar(d);
-    const canvas=await window.html2canvas(root,{scale:2,backgroundColor:"#f4f5f7",logging:false,useCORS:true,windowWidth:W,windowHeight:H});
-    const rt=root.getBoundingClientRect(), total=rt.height, k=canvas.width/rt.width;
+    const rt=root.getBoundingClientRect(), total=rt.height;
     const cuts=[...root.querySelectorAll(".evento")].map(e=>e.getBoundingClientRect().top-rt.top);
     const pages=[]; let y=0;
     while(y<total-1){
@@ -2448,14 +2454,17 @@ async function makeCronoPDF(tag){
     }
     const pdf=new window.jspdf.jsPDF({unit:"pt",format:"a4",compress:true});
     const PW=pdf.internal.pageSize.getWidth(), PH=pdf.internal.pageSize.getHeight(), pt=PW/W;
-    pages.forEach(([a,b,off],i)=>{
+    // cada página é desenhada à parte (uma imagem só do cronograma inteiro passaria do limite do iPhone)
+    for(let i=0;i<pages.length;i++){
+      const [a,b,off]=pages[i], hh=Math.max(1,Math.ceil(b-a));
+      const shot=await window.html2canvas(root,{scale:2,backgroundColor:"#f4f5f7",logging:false,useCORS:true,windowWidth:W,windowHeight:H,x:0,y:a,width:W,height:hh});
+      const c=document.createElement("canvas"); c.width=shot.width; c.height=shot.height;
+      const g=c.getContext("2d"); g.fillStyle="#f4f5f7"; g.fillRect(0,0,c.width,c.height); g.drawImage(shot,0,0);
       if(i) pdf.addPage();
       pdf.setFillColor(244,245,247); pdf.rect(0,0,PW,PH,"F");
-      const c=document.createElement("canvas"); c.width=canvas.width; c.height=Math.max(1,Math.min(Math.round((b-a)*k),canvas.height-Math.round(a*k)));
-      const g=c.getContext("2d"); g.fillStyle="#f4f5f7"; g.fillRect(0,0,c.width,c.height);
-      g.drawImage(canvas,0,Math.round(a*k),c.width,c.height,0,0,c.width,c.height);
-      pdf.addImage(c.toDataURL("image/jpeg",.92),"JPEG",0,off*pt,PW,c.height/k*pt);
-    });
+      pdf.addImage(c.toDataURL("image/jpeg",.92),"JPEG",0,off*pt,PW,hh*pt);
+      c.width=c.height=shot.width=shot.height=0;   // libera a memória (celular)
+    }
     pdf.setProperties({title:"Cronograma: "+(p.titulo||projTitle(tag))});
     return pdf.output("blob");
   } finally { fr.remove(); }
@@ -2512,9 +2521,13 @@ function openMailCrono(tag){
   if(canShare) acoes.push({label:"Compartilhar PDF",run:()=>{ const x=preparar(); if(!x) return false;
     if(!blob){ toast("Sem o PDF não há o que compartilhar: use “Abrir no Gmail” ou “App de e-mail”."); return false; }
     try{ navigator.clipboard.writeText(x.to.join(", ")).catch(()=>{}); }catch(e){}
-    navigator.share({files:[new File([blob],fname,{type:"application/pdf"})],title:x.sub,text:x.body})
-      .then(()=>toast("Se o app não preencheu os destinatários, cole os e-mails (já copiados) no campo Para."),()=>{});
+    const f=new File([blob],fname,{type:"application/pdf"}), ok=()=>toast("E-mails copiados: cole em “Para”, se preciso.");
+    navigator.share({files:[f],title:x.sub,text:x.body}).then(ok,e=>{
+      if(e&&e.name==="AbortError") return;
+      navigator.share({files:[f],title:x.sub}).then(ok,e2=>{ if(!(e2&&e2.name==="AbortError")) toast("O compartilhamento não funcionou: use “Abrir no Gmail” ou “App de e-mail”."); });
+    });
   }});
+  if(canShare&&touch){ acoes.forEach(a=>delete a.cls); acoes[acoes.length-1].cls="primary"; acoes.unshift(acoes.pop()); }
   openModal("Enviar cronograma por e-mail",h("div",{style:"display:flex;flex-direction:column;gap:10px"},
     h("div",{class:"field"},h("span",{class:"lbl"},"Destinatários"),h("div",{class:"opts"},h("button",{class:"opt",onclick:()=>todos(true)},"Todos"),h("button",{class:"opt",onclick:()=>todos(false)},"Nenhum")),lista),
     h("div",{class:"field"},h("label",{for:"mailSub"},"Assunto"),assunto),
