@@ -236,6 +236,10 @@ button{cursor:pointer}
 .pn-empty{font-size:13px;color:var(--faint);padding:2px 0 4px}
 .to-day{border:0;background:var(--accent-soft);color:var(--accent-text);border-radius:999px;font-size:12px;font-weight:700;padding:4px 9px 4px 7px;display:inline-flex;align-items:center;gap:4px;flex:none;margin-right:2px}
 .to-day:hover{filter:brightness(.96)}
+.cr-btn{border:1px solid var(--line);background:var(--panel);color:var(--accent-text);border-radius:999px;width:30px;height:30px;display:inline-grid;place-items:center;flex:none;margin-right:2px;padding:0}
+.cr-btn:hover{background:var(--accent-soft);border-color:var(--accent)}
+.cr-btn.tirar{color:var(--muted)}
+.cr-btn.tirar:hover{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line));background:var(--panel)}
 .m-rem{display:inline-flex;align-items:center;gap:3px;color:var(--accent-text);font-weight:700}
 .m-rem.past{color:var(--muted)}
 /* alarme de lembrete */
@@ -659,6 +663,7 @@ const ICON={
   check:'<path d="M4 12.5l5 5L20 6.5"/>',
   report:'<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
+  minus:'<path d="M5 12h14"/>',
   x:'<path d="M6 6l12 12M18 6L6 18"/>',
   trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
   tag:'<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.3"/>',
@@ -1407,6 +1412,8 @@ function taskRow(t,opt={}){
         h("span",{},t.done?svg(ICON.check,13,'stroke-width="3.2"'):null)),
       h("div",{class:"t-main"},h("div",{class:"t-title",title:t.title},t.title),meta.length?h("div",{class:"t-meta"},meta):null),
       t.importance===3&&!t.done?h("span",{class:"star-ic",title:"Importância alta"},svg(ICON.star,15,'fill="currentColor"')):null,
+      opt.cronoBtn&&!t.done?h("button",{class:"cr-btn"+(opt.cronoBtn==="tirar"?" tirar":""),title:opt.cronoBtn==="tirar"?"Tirar do cronograma":"Incluir no cronograma","aria-label":opt.cronoBtn==="tirar"?"Tirar do cronograma":"Incluir no cronograma",
+        onclick:e=>{e.stopPropagation();cronoToggle(t.id,opt.cronoBtn!=="tirar");}},svg(opt.cronoBtn==="tirar"?ICON.minus:ICON.plus,16)):null,
       opt.toDay&&!t.done&&!mine?h("button",{class:"to-day",title:"Trazer para o Meu Dia","aria-label":"Trazer para o Meu Dia",onclick:e=>{e.stopPropagation();bringToday(t.id);}},svg(ICON.sun,14),"Hoje"):null,
       h("div",{class:"t-actions"},
         !t.done?act("act-sun",mine?"Tirar do Meu Dia":"Adicionar ao Meu Dia",ICON.sun,()=>toggleMyDay(t),mine):null,
@@ -2126,12 +2133,18 @@ function cleanExtras(x){
 }
 /* tarefas que entram no cronograma: marcadas com crono:true (coluna da direita do projeto) */
 const inCrono=t=>t.crono===true;
-const cronoTasks=tag=>sortTasks(tasksArr().filter(t=>inCrono(t)&&t.due&&(t.tags||[]).includes(tag)),"manual");
+const cronoTasks=tag=>sortTasks(tasksArr().filter(t=>inCrono(t)&&t.due&&!t.done&&(t.tags||[]).includes(tag)),"manual");   // concluídas não aparecem no cronograma
 const extraInfo=(x,resp)=>{ x=x||{}; const r=resp&&resp.length?resp.join(", "):x.resp; return [x.horario,x.local,r?"Resp.: "+r:""].filter(Boolean).join(" · "); };
 function setCrono(ids,on){
   const now=new Date().toISOString(), ops=[];
   for(const id of ids){ const t=VIEW.tasks[id]; if(!t||inCrono(t)===on) continue; const d={...t,updatedAt:now}; if(on) d.crono=true; else delete d.crono; ops.push({op:"set",path:"tasks/"+id,data:d}); }
   enqueueMany(ops); return ops.length;
+}
+/* + / − na tela do projeto: leva a tarefa para o cronograma ou a tira dele (com Desfazer) */
+function cronoToggle(id,on){
+  const t=VIEW.tasks[id]; if(!t||setCrono([id],on)===0) return;
+  const msg=on?(t.due?"Incluída no cronograma":"Incluída no cronograma (aparece quando tiver prazo)"):"Tirada do cronograma";
+  toast(msg,()=>setCrono([id],!on));
 }
 /* datas exibidas no cronograma: o que foi editado no cronograma + as tarefas do cronograma (título e prazo sempre atuais) */
 function cronoEvents(p){
@@ -2330,22 +2343,23 @@ function renderProject(wrap,tag){
   // ----- tarefas: gerais (esquerda) e as que entram no cronograma (direita)
   const all=tasksArr().filter(t=>(t.tags||[]).includes(tag));
   const mb=membrosDe(p);
-  const col=(title,list,defaults,ids,emptyTxt,extra)=>{
+  const col=(title,list,defaults,ids,emptyTxt,extra,cronoBtn)=>{
     const open=sortTasks(list.filter(t=>!t.done),"manual"), done=list.filter(t=>t.done).sort((a,b)=>(b.doneAt||"").localeCompare(a.doneAt||""));
     const sec=h("section",{class:"proj-tasks","aria-label":title},h("div",{class:"col-head"},h("h3",{},title),h("span",{class:"col-count"},`${open.length} aberta${open.length===1?"":"s"}`)));
     sec.append(addBar(defaults,ids));
     if(extra) sec.append(extra);
-    if(open.length){ sec.append(h("div",{class:"list"},open.map(t=>taskRow(t,{drag:true,membros:mb(t.id)}))),gestureHint()); }
+    if(open.length){ sec.append(h("div",{class:"list"},open.map(t=>taskRow(t,{drag:true,membros:mb(t.id),cronoBtn}))),gestureHint()); }
     else sec.append(h("div",{class:"empty"},emptyTxt));
     if(done.length) sec.append(h("div",{class:"group-title"},"Concluídas",h("span",{class:"n"},done.length)),h("div",{class:"list"},done.slice(0,20).map(t=>taskRow(t,{membros:mb(t.id)}))));
     return sec;
   };
   const gen=all.filter(t=>!inCrono(t)), cr=all.filter(inCrono), noDue=cr.filter(t=>!t.done&&!t.due).length;
   wrap.append(h("div",{class:"proj-cols2"},
-    col("Tarefas gerais",gen,{tags:[tag]},null,"Nenhuma tarefa geral aberta neste projeto."),
+    col("Tarefas gerais",gen,{tags:[tag]},null,"Nenhuma tarefa geral aberta neste projeto.",
+      gen.some(t=>!t.done)?h("div",{class:"gest-hint",style:"text-align:left"},"Toque em + para levar a tarefa ao cronograma."):null,"incluir"),
     col("Tarefas do cronograma",cr,{tags:[tag],crono:true},{input:"addInputCr",date:"addDateCr",ph:"Adicionar ao cronograma…"},
       "Nenhuma tarefa no cronograma. Adicione aqui (com prazo) ou abra uma tarefa e escolha “Incluir” em Cronograma do projeto.",
-      h("div",{class:"gest-hint",style:"text-align:left"},"Título e prazo destas tarefas atualizam o cronograma automaticamente."+(noDue?` ${noDue} sem prazo: só aparece${noDue===1?"":"m"} no cronograma depois de ter prazo.`:"")))));
+      h("div",{class:"gest-hint",style:"text-align:left"},"Título e prazo destas tarefas atualizam o cronograma automaticamente; concluídas saem dele. Toque em − para tirar uma tarefa do cronograma."+(noDue?` ${noDue} sem prazo: só aparece${noDue===1?"":"m"} no cronograma depois de ter prazo.`:"")),"tirar")));
   // ----- membros do projeto (e tarefas atribuídas a eles)
   if(!p.membros.some(m=>m.id===EU)) setTimeout(()=>ensureEu(tag),0);
   wrap.append(membrosSection(tag,p,all));
@@ -3017,7 +3031,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v20";
+const APP_VER="v21";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
