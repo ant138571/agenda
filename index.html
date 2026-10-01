@@ -361,6 +361,8 @@ tr:last-child td{border-bottom:0}
 .ce-top .row-end{margin-left:auto}
 .ce input[type=text],.ce input[type=date],.ce textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)}
 .ce textarea{min-height:84px;resize:vertical;line-height:1.4}
+.ce-logo{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ce-logo img{max-height:56px;max-width:160px;object-fit:contain;background:#f4f5f7;border:1px solid var(--line);border-radius:8px;padding:4px}
 .ce-ev{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--c,var(--line-strong));border-radius:12px;padding:12px;display:grid;grid-template-columns:150px 1fr 1fr auto;gap:8px 10px;align-items:end}
 .ce-ev .field{min-width:0}
 .ce-ev .wide{grid-column:1/-1}
@@ -377,6 +379,7 @@ tr:last-child td{border-bottom:0}
 .memb-av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;flex:none;font-weight:800;font-size:13px;background:var(--soft);color:var(--ink)}
 .memb-main{flex:1;min-width:0}
 .memb-name{font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.memb-func{font-weight:500;color:var(--muted)}
 .memb-sub{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .memb .btn{padding:6px 9px}
 .proj-memb .col-head .btn{white-space:nowrap}
@@ -526,6 +529,15 @@ body.has-bulk .content{padding-bottom:110px}
 .crono .corpo li::before{content:"";position:absolute;left:0;top:.82em;width:.75rem;height:2px;background:var(--c)}
 .crono .passou .data,.crono .passou .corpo{opacity:.6}
 .crono .cr-vazio{margin:1.5rem 0 1rem;color:var(--suave);font-style:italic}
+.crono header.cr-com-logo{position:relative;padding-right:min(34%,13rem);min-height:4.5rem}
+.crono .cr-logo{position:absolute;top:0;right:0;max-width:min(32%,12rem);max-height:5.5rem;object-fit:contain}
+.crono .cr-depto{margin:0 0 .5rem;font-family:var(--display);font-weight:600;font-size:.95rem;letter-spacing:.06em;text-transform:uppercase;color:var(--suave)}
+.crono .cr-equipe{margin-top:.5rem;padding-top:1.4rem;border-top:1px solid var(--linha);break-inside:avoid}
+.crono .cr-eq-titulo{margin:0 0 .8rem;font-family:var(--display);font-weight:700;font-size:1.35rem}
+.crono .cr-equipe ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.6rem 1.5rem}
+.crono .cr-equipe li{line-height:1.35}
+.crono .cr-equipe b{display:block;font-family:var(--display);font-weight:700}
+.crono .cr-eq-func,.crono .cr-eq-mail{display:block;color:var(--suave);font-size:.9em}
 @container (max-width:40rem){
   .crono .rotulo small{display:none}
   .crono .evento{grid-template-columns:1.75rem minmax(0,1fr)}
@@ -566,6 +578,8 @@ body.has-bulk .content{padding-bottom:110px}
   .crono.cr-print .corpo li{margin-bottom:.5rem}
   .crono.cr-print .passou .data,.crono.cr-print .passou .corpo{opacity:1}
   .crono.cr-print .proximo{display:none}
+  .crono.cr-print .cr-equipe{padding-top:1rem}
+  .crono.cr-print .cr-eq-titulo{font-size:1.2rem;margin-bottom:.5rem}
 }
 </style>
 </head>
@@ -1834,6 +1848,10 @@ function renderDetail(){
       projTags.length?h("div",{class:"field"},h("div",{class:"toggle-row"},h("span",{style:"display:inline-flex;gap:8px;align-items:center"},svg(ICON.folder,17),(inCrono(t)?"No cronograma de ":"Fora do cronograma de ")+projTags.map(g=>"#"+g).join(", ")),
           h("button",{class:"btn small"+(inCrono(t)?"":" primary"),onclick:()=>setCrono([id],!inCrono(t))},inCrono(t)?"Tirar":"Incluir")),
         inCrono(t)&&!t.due?h("div",{class:"gest-hint",style:"text-align:left"},"Defina um prazo para a tarefa aparecer no cronograma."):null):null,
+      ...projTags.map(g=>{ const pj=getProject(g); if(!pj) return null; const sel=(pj.atrib||{})[id]||[];
+        return h("div",{class:"field d-resp"},h("span",{class:"lbl"},"Responsáveis"+(projTags.length>1?" · #"+g:"")),
+          pj.membros.length?h("div",{class:"opts"},pj.membros.map(m=>h("button",{class:"opt"+(sel.includes(m.id)?" on":""),"aria-pressed":sel.includes(m.id)?"true":"false",title:m.funcao||"",onclick:()=>toggleResp(g,id,m.id)},svg(ICON.user,13),membroNome(m))))
+            :h("div",{class:"gest-hint",style:"text-align:left"},"Cadastre a equipe em “Membros”, na tela do projeto, para escolher os responsáveis.",h("button",{class:"pn-more",onclick:()=>go("proj:"+g)},"Abrir projeto #"+g+" ›"))); }),
       h("div",{class:"field"},h("label",{for:"dDue"},"Prazo de execução"),dueIn,h("div",{class:"opts"},quickDue(0,"Hoje"),quickDue(1,"Amanhã"),quickDue(7,"Em 1 semana"),t.due?h("button",{class:"opt",onclick:()=>patchTask(id,t.repeat?{due:null,repeat:null}:{due:null})},"Sem prazo"):null)),
       repField,
       h("div",{class:"field"},h("label",{for:"dRemind"},"Lembrete (alarme)"),remIn,remOpts,
@@ -2053,15 +2071,20 @@ function cleanProject(p){
   p=p&&typeof p==="object"?p:{};
   return {titulo:typeof p.titulo==="string"?p.titulo.slice(0,200):"",subtitulo:typeof p.subtitulo==="string"?p.subtitulo.slice(0,200):"",
     eventos:(Array.isArray(p.eventos)?p.eventos:[]).map(cleanEvent).filter(Boolean).slice(0,300),createdAt:typeof p.createdAt==="string"?p.createdAt:null,
-    extras:cleanExtras(p.extras),mig:p.mig===2?2:0,membros:cleanMembros(p.membros),atrib:cleanAtrib(p.atrib,p.membros)};
+    extras:cleanExtras(p.extras),mig:p.mig===2?2:0,membros:cleanMembros(p.membros),atrib:cleanAtrib(p.atrib,p.membros),
+    departamento:typeof p.departamento==="string"?p.departamento.trim().slice(0,150):"",logo:cleanLogo(p.logo)};
+}
+/* logotipo do cronograma: imagem já reduzida no aparelho, guardada como data URL (PNG/JPEG/WebP, até ~160 kB) */
+function cleanLogo(v){
+  return typeof v==="string"&&v.length<=220000&&/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/.test(v)?v:"";
 }
 /* membros do projeto [{id, nome, email}] e tarefas atribuídas a eles {<idTarefa>: [idMembro]} */
 function cleanMembros(x){
   const out=[], ids=new Set(); if(!Array.isArray(x)) return out;
   for(const m of x){
     if(out.length>=100) break; if(!m||typeof m!=="object"||typeof m.id!=="string"||!/^[\w-]{1,80}$/.test(m.id)||ids.has(m.id)) continue;
-    const nome=typeof m.nome==="string"?m.nome.trim().slice(0,120):"", email=typeof m.email==="string"?m.email.trim().slice(0,200):"";
-    if(!nome&&!email) continue; ids.add(m.id); out.push({id:m.id,nome,email});
+    const nome=typeof m.nome==="string"?m.nome.trim().slice(0,120):"", email=typeof m.email==="string"?m.email.trim().slice(0,200):"", funcao=typeof m.funcao==="string"?m.funcao.trim().slice(0,120):"";
+    if(!nome&&!email) continue; ids.add(m.id); out.push({id:m.id,nome,email,funcao});
   }
   return out;
 }
@@ -2088,7 +2111,7 @@ function cleanExtras(x){
 /* tarefas que entram no cronograma: marcadas com crono:true (coluna da direita do projeto) */
 const inCrono=t=>t.crono===true;
 const cronoTasks=tag=>sortTasks(tasksArr().filter(t=>inCrono(t)&&t.due&&(t.tags||[]).includes(tag)),"manual");
-const extraInfo=x=>x?[x.horario,x.local,x.resp?"Resp.: "+x.resp:""].filter(Boolean).join(" · "):"";
+const extraInfo=(x,resp)=>{ x=x||{}; const r=resp&&resp.length?resp.join(", "):x.resp; return [x.horario,x.local,r?"Resp.: "+r:""].filter(Boolean).join(" · "); };
 function setCrono(ids,on){
   const now=new Date().toISOString(), ops=[];
   for(const id of ids){ const t=VIEW.tasks[id]; if(!t||inCrono(t)===on) continue; const d={...t,updatedAt:now}; if(on) d.crono=true; else delete d.crono; ops.push({op:"set",path:"tasks/"+id,data:d}); }
@@ -2102,7 +2125,7 @@ function cronoEvents(p){
     let e=ev.find(x=>x.y===y&&x.m===m&&x.d===d);
     if(!e){ e={y,m,d,horario:"",contexto:"",atividades:[],rotulo:"",sem:false}; ev.push(e); }
     const i=e.atividades.indexOf(t.title); if(i>=0) e.atividades.splice(i,1);   // não repete a mesma atividade
-    (e._links=e._links||[]).push({t:t.title,info:extraInfo((p.extras||{})[t.id])});
+    (e._links=e._links||[]).push({t:t.title,info:extraInfo((p.extras||{})[t.id],membrosDe(p)(t.id).map(membroNome))});
   }
   // dados complementares de uma data cujas tarefas saíram dela não aparecem sozinhos
   return ev.filter(e=>!(e.vinc&&!e._links&&!e.atividades.length)).map(e=>{ const {_links,...r}=e; if(_links) r.atividades=[...r.atividades,..._links]; return r; }).sort((a,b)=>crUtc(a)-crUtc(b));
@@ -2196,12 +2219,23 @@ function crLista(ev){
 function cronoView(p,kind){
   const ev=cronoEvents(p);
   const titulo=p.titulo||projTitle(p.tag||"")||"Cronograma do projeto";
-  const box=h("div",{class:"crono cr-"+kind},h("header",{},h(kind==="mini"?"h3":kind==="print"?"h1":"h2",{class:"cr-titulo"},titulo),h("p",{class:"periodo"},ev.length?(p.subtitulo||crPeriodo(ev)):"Cronograma sem datas.")));
-  if(!ev.length){ if(kind!=="mini") box.append(h("p",{class:"cr-vazio"},"Ainda não há datas. Adicione tarefas com prazo na coluna “Tarefas do cronograma” ou use “Editar cronograma”.")); return box; }
+  const full=kind!=="mini";   // cartão da tela e folha do PDF: com departamento, logotipo e equipe
+  const head=h("header",{class:full&&p.logo?"cr-com-logo":null},
+    full&&p.departamento?h("p",{class:"cr-depto"},p.departamento):null,
+    h(kind==="mini"?"h3":kind==="print"?"h1":"h2",{class:"cr-titulo"},titulo),h("p",{class:"periodo"},ev.length?(p.subtitulo||crPeriodo(ev)):"Cronograma sem datas."),
+    full&&p.logo?h("img",{class:"cr-logo",src:p.logo,alt:"Logotipo"}):null);
+  const box=h("div",{class:"crono cr-"+kind},head);
+  if(!ev.length){ if(full) box.append(h("p",{class:"cr-vazio"},"Ainda não há datas. Adicione tarefas com prazo na coluna “Tarefas do cronograma” ou use “Editar cronograma”."),crEquipe(p)||""); return box; }
   crCores(ev);
   box.append(crFaixa(ev));
-  if(kind!=="mini") box.append(crLista(ev));
+  if(full){ box.append(crLista(ev)); const eq=crEquipe(p); if(eq) box.append(eq); }
   return box;
+}
+/* lista da equipe no final do cronograma: nome, função e e-mail de cada membro */
+function crEquipe(p){
+  const ms=(p.membros||[]); if(!ms.length) return null;
+  return h("section",{class:"cr-equipe"},h("h3",{class:"cr-eq-titulo"},"Equipe"),
+    h("ul",{},ms.map(m=>h("li",{},h("b",{},m.nome||m.email),m.funcao?h("span",{class:"cr-eq-func"},m.funcao):null,m.email&&m.nome?h("span",{class:"cr-eq-mail"},m.email):null))));
 }
 /* evita rótulos sobrepostos na faixa: primeiro some a legenda, depois a própria data (autocontida: também roda na página de impressão) */
 function crAjustar(root){
@@ -2329,15 +2363,15 @@ function membrosSection(tag,p,all){
   const sec=h("section",{class:"proj-memb","aria-label":"Membros"},h("div",{class:"col-head"},h("h3",{},"Membros"),
     h("span",{class:"col-count"},`${p.membros.length} membro${p.membros.length===1?"":"s"}`),
     h("button",{class:"btn",onclick:()=>openMembroModal(tag,null)},svg(ICON.plus,15),"Adicionar membro")));
-  if(!p.membros.length){ sec.append(h("div",{class:"empty"},"Nenhum membro. Cadastre os membros do projeto para atribuir tarefas a eles e enviar o cronograma por e-mail.")); return sec; }
+  if(!p.membros.length){ sec.append(h("div",{class:"empty"},"Nenhum membro. Cadastre a equipe do projeto para escolher os responsáveis de cada tarefa e enviar o cronograma por e-mail.")); return sec; }
+  sec.append(h("div",{class:"gest-hint",style:"text-align:left"},"Para definir os responsáveis, clique na tarefa e escolha em “Responsáveis”."));
   const abertas=new Set(all.filter(t=>!t.done).map(t=>t.id));
   sec.append(h("div",{class:"memb-list"},p.membros.map(m=>{
     const n=Object.entries(p.atrib||{}).filter(([id,l])=>abertas.has(id)&&l.includes(m.id)).length;
     return h("div",{class:"memb"},
       h("span",{class:"memb-av","aria-hidden":"true"},(membroNome(m).trim()[0]||"?").toUpperCase()),
-      h("div",{class:"memb-main"},h("div",{class:"memb-name",title:membroNome(m)},membroNome(m)),
-        h("div",{class:"memb-sub"},[m.email&&m.nome?m.email:(m.email?"":"sem e-mail"),`${n} tarefa${n===1?"":"s"} aberta${n===1?"":"s"}`].filter(Boolean).join(" · "))),
-      h("button",{class:"btn",title:"Atribuir tarefas a "+membroNome(m),"aria-label":"Atribuir tarefas a "+membroNome(m),onclick:()=>openAtribModal(tag,m.id)},svg(ICON.list,15),h("span",{class:"memb-lbl"},"Tarefas")),
+      h("div",{class:"memb-main"},h("div",{class:"memb-name",title:membroNome(m)},membroNome(m),m.funcao?h("span",{class:"memb-func"}," · "+m.funcao):null),
+        h("div",{class:"memb-sub"},[m.email&&m.nome?m.email:(m.email?"":"sem e-mail"),`responsável por ${n} tarefa${n===1?"":"s"} aberta${n===1?"":"s"}`].filter(Boolean).join(" · "))),
       h("button",{class:"btn",title:"Editar membro","aria-label":"Editar membro",onclick:()=>openMembroModal(tag,m.id)},svg(ICON.edit,15)),
       h("button",{class:"btn",title:"Remover membro","aria-label":"Remover membro",onclick:()=>{
         const q=getProject(tag); if(!q) return; const atrib={};
@@ -2351,49 +2385,34 @@ function openMembroModal(tag,mid){
   const p=getProject(tag); if(!p) return;
   const cur=mid?p.membros.find(m=>m.id===mid):null; if(mid&&!cur) return;
   const nome=h("input",{type:"text",id:"mbNome",maxlength:"120",placeholder:"Ex.: Ana Souza"}), email=h("input",{type:"text",id:"mbEmail",inputmode:"email",autocomplete:"email",maxlength:"200",placeholder:"ana@exemplo.com"});
-  nome.value=cur?cur.nome:""; email.value=cur?cur.email:"";
+  const funcao=h("input",{type:"text",id:"mbFuncao",maxlength:"120",placeholder:"Ex.: Coordenadora, Engenheiro responsável"});
+  nome.value=cur?cur.nome:""; email.value=cur?cur.email:""; funcao.value=cur?(cur.funcao||""):"";
   const salvar=()=>{
     const q=getProject(tag); if(!q) return;
-    const n=nome.value.trim(), e=email.value.trim();
+    const n=nome.value.trim(), e=email.value.trim(), fn=funcao.value.trim();
     if(!n){ toast("Informe o nome do membro."); nome.focus(); return false; }
     if(e&&!EMAIL_RE.test(e)){ toast("E-mail inválido."); email.focus(); return false; }
     if(e&&q.membros.some(m=>m.id!==mid&&m.email.toLowerCase()===e.toLowerCase())){ toast("Já há um membro com esse e-mail."); email.focus(); return false; }
     if(q.membros.length>=100&&!mid){ toast("Limite de 100 membros por projeto."); return false; }
-    const membros=mid?q.membros.map(m=>m.id===mid?{...m,nome:n,email:e}:m):[...q.membros,{id:"m"+uid().slice(1),nome:n,email:e}];
+    const membros=mid?q.membros.map(m=>m.id===mid?{...m,nome:n,email:e,funcao:fn}:m):[...q.membros,{id:"m"+uid().slice(1),nome:n,email:e,funcao:fn}];
     saveMembros(tag,membros,q.atrib,mid?"Membro atualizado":"Membro adicionado");
   };
   const enter=ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); if(salvar()!==false) $("#modalRoot").replaceChildren(); } };
-  nome.addEventListener("keydown",enter); email.addEventListener("keydown",enter);
+  nome.addEventListener("keydown",enter); email.addEventListener("keydown",enter); funcao.addEventListener("keydown",enter);
   openModal(mid?"Editar membro":"Adicionar membro",h("div",{style:"display:flex;flex-direction:column;gap:10px"},
     h("div",{class:"field"},h("label",{for:"mbNome"},"Nome"),nome),
+    h("div",{class:"field"},h("label",{for:"mbFuncao"},"Função no projeto"),funcao),
     h("div",{class:"field"},h("label",{for:"mbEmail"},"E-mail (para receber o cronograma)"),email)),
     [{label:mid?"Salvar":"Adicionar",cls:"primary",run:salvar}]);
   setTimeout(()=>{ const md=nome.closest(".modal"); if(md&&!md.contains(document.activeElement)) nome.focus(); },30);   // não tira o foco de um campo já escolhido
 }
-/* tarefas do projeto atribuídas a um membro (uma tarefa pode ter vários membros) */
-function openAtribModal(tag,mid){
-  const p=getProject(tag); if(!p) return; const m=p.membros.find(x=>x.id===mid); if(!m) return;
-  const all=tasksArr().filter(t=>(t.tags||[]).includes(tag));
-  const tem=id=>((p.atrib||{})[id]||[]).includes(mid);
-  const list=[...sortTasks(all.filter(t=>!t.done),"manual"),...all.filter(t=>t.done&&tem(t.id))];
-  const boxes=[];
-  const body=list.length?h("div",{class:"pick-list"},list.map(t=>{
-    const cb=h("input",{type:"checkbox"}); cb.checked=tem(t.id); boxes.push([t.id,cb]);
-    const info=[inCrono(t)?"cronograma":"",t.due?fmtBR(t.due).slice(0,5):"",t.done?"concluída":""].filter(Boolean).join(" · ");
-    return h("label",{class:"pick"},cb,h("span",{title:t.title},t.title),info?h("small",{},info):null);
-  })):h("div",{class:"empty"},"Este projeto ainda não tem tarefas abertas.");
-  openModal("Tarefas de "+membroNome(m),h("div",{style:"display:flex;flex-direction:column;gap:10px"},
-    h("p",{class:"mail-note"},"Marque as tarefas atribuídas a este membro. Uma tarefa pode ter mais de um membro."),body),
-    list.length?[{label:"Salvar",cls:"primary",run:()=>{
-      const q=getProject(tag); if(!q||!q.membros.some(x=>x.id===mid)) return;
-      const atrib={...q.atrib};
-      for(const [id,cb] of boxes){
-        const l=(atrib[id]||[]).filter(x=>x!==mid);
-        if(cb.checked) l.push(mid);
-        if(l.length) atrib[id]=q.membros.map(x=>x.id).filter(x=>l.includes(x)); else delete atrib[id];
-      }
-      saveMembros(tag,q.membros,atrib,"Tarefas atribuídas a "+membroNome(m));
-    }}]:[]);
+/* responsáveis de uma tarefa do projeto: liga/desliga um membro (escolhido em Detalhes da tarefa) */
+function toggleResp(tag,taskId,mid){
+  const q=getProject(tag); if(!q) return; const m=q.membros.find(x=>x.id===mid); if(!m||!VIEW.tasks[taskId]) return;
+  const atrib={...q.atrib}, l=(atrib[taskId]||[]).filter(x=>x!==mid), on=!((q.atrib[taskId]||[]).includes(mid));
+  if(on) l.push(mid);
+  if(l.length) atrib[taskId]=q.membros.map(x=>x.id).filter(x=>l.includes(x)); else delete atrib[taskId];
+  saveMembros(tag,q.membros,atrib,on?membroNome(m)+" é responsável":membroNome(m)+" deixou de ser responsável");
 }
 
 /* ---- Enviar o cronograma por e-mail: gera o arquivo PDF e abre o e-mail (Gmail ou app de e-mail) já com
@@ -2446,7 +2465,7 @@ async function makeCronoPDF(tag){
     const root=d.querySelector(".crono");
     crFixColors(root); crAjustar(d);
     const rt=root.getBoundingClientRect(), total=rt.height;
-    const cuts=[...root.querySelectorAll(".evento")].map(e=>e.getBoundingClientRect().top-rt.top);
+    const cuts=[...root.querySelectorAll(".evento,.cr-equipe")].map(e=>e.getBoundingClientRect().top-rt.top);
     const pages=[]; let y=0;
     while(y<total-1){
       const off=pages.length?TOP:0, lim=y+H-off; let end=total;
@@ -2603,7 +2622,7 @@ function openMailCrono(tag){
 function startCronoEdit(tag){
   const p=getProject(tag); if(!p) return;
   UI.cronEdit=tag;
-  UI.cronDraft={titulo:p.titulo,subtitulo:p.subtitulo,createdAt:p.createdAt,mig:p.mig,extras:JSON.parse(JSON.stringify(p.extras||{})),eventos:p.eventos.map(e=>({...e,atividades:[...e.atividades],k:uid()}))};
+  UI.cronDraft={titulo:p.titulo,subtitulo:p.subtitulo,departamento:p.departamento,logo:p.logo,createdAt:p.createdAt,mig:p.mig,extras:JSON.parse(JSON.stringify(p.extras||{})),eventos:p.eventos.map(e=>({...e,atividades:[...e.atividades],k:uid()}))};
   fillLinked(UI.cronDraft,tag);
   UI.cronDraft.eventos.sort((a,b)=>crUtc(a)-crUtc(b));
   render();
@@ -2616,6 +2635,40 @@ function fillLinked(D,tag){
   return byIso;
 }
 function stopCronoEdit(){ UI.cronEdit=null; UI.cronDraft=null; render(true); }
+/* logotipo no editor: escolher imagem (reduzida no aparelho para caber no projeto) ou remover */
+function logoField(D,again){
+  const inp=h("input",{type:"file",accept:"image/png,image/jpeg,image/webp,image/gif,image/svg+xml",id:"ceLogo",style:"display:none"});
+  inp.addEventListener("change",()=>{ const f=inp.files&&inp.files[0]; inp.value=""; if(!f) return;
+    if(!/^image\//.test(f.type)){ toast("Escolha uma imagem (PNG, JPG…)."); return; }
+    if(f.size>15*1024*1024){ toast("Imagem grande demais (máximo 15 MB)."); return; }
+    reduzLogo(f).then(url=>{ D.logo=url; again(); toast("Logotipo pronto: salve o cronograma para gravar."); },()=>toast("Não foi possível ler essa imagem.")); });
+  return h("div",{class:"field"},h("span",{class:"lbl"},"Logotipo (canto superior direito)"),
+    h("div",{class:"ce-logo"},D.logo?h("img",{src:D.logo,alt:"Logotipo atual"}):h("span",{class:"gest-hint"},"Sem logotipo."),
+      h("button",{class:"btn",onclick:()=>inp.click()},D.logo?"Trocar imagem":"Escolher imagem"),
+      D.logo?h("button",{class:"btn",onclick:()=>{ D.logo=""; again(); }},"Remover"):null,inp));
+}
+/* reduz a imagem (até 480 × 240) e grava em PNG; se ficar grande, JPEG em fundo branco */
+function reduzLogo(file){
+  return new Promise((ok,no)=>{
+    const url=URL.createObjectURL(file), img=new Image();
+    img.onload=()=>{ try{
+      URL.revokeObjectURL(url);
+      const w0=img.naturalWidth||img.width||480, h0=img.naturalHeight||img.height||240;
+      let sc=Math.min(1,480/w0,240/h0), out="";
+      for(let i=0;i<4;i++){
+        const c=document.createElement("canvas"); c.width=Math.max(1,Math.round(w0*sc)); c.height=Math.max(1,Math.round(h0*sc));
+        c.getContext("2d").drawImage(img,0,0,c.width,c.height); out=c.toDataURL("image/png");
+        if(out.length<=160000) break;
+        const g=c.getContext("2d"); g.globalCompositeOperation="destination-over"; g.fillStyle="#fff"; g.fillRect(0,0,c.width,c.height);
+        out=c.toDataURL("image/jpeg",.85); if(out.length<=160000) break;
+        sc*=.7;
+      }
+      if(!cleanLogo(out)) throw new Error("grande"); ok(out);
+    }catch(e){ no(e); } };
+    img.onerror=()=>{ URL.revokeObjectURL(url); no(new Error("img")); };
+    img.src=url;
+  });
+}
 function cronoEditor(tag){
   const D=UI.cronDraft, again=()=>render(true), byIso=fillLinked(D,tag);
   const txtIn=(id,val,ph,set)=>{ const i=h("input",{type:"text",id,placeholder:ph||""}); i.value=val||""; i.addEventListener("input",()=>set(i.value)); return i; };
@@ -2624,7 +2677,7 @@ function cronoEditor(tag){
     // linhas criadas só para as tarefas do cronograma: guardadas apenas se receberam algum dado
     const keep=D.eventos.filter(e=>!e.virt||e.horario.trim()||e.contexto.trim()||e.rotulo.trim()||e.atividades.length||e.sem);
     const cur=getProject(tag)||{};   // membros e atribuições são editados fora do rascunho: grava os atuais
-    putProject(tag,{titulo:D.titulo.trim(),subtitulo:D.subtitulo.trim(),createdAt:D.createdAt,mig:D.mig,extras:D.extras,membros:cur.membros,atrib:cur.atrib,eventos:keep.map(({k,virt,...e})=>({...e,horario:e.horario.trim(),contexto:e.contexto.trim(),rotulo:e.rotulo.trim()})).sort((a,b)=>crUtc(a)-crUtc(b))});
+    putProject(tag,{titulo:D.titulo.trim(),subtitulo:D.subtitulo.trim(),departamento:(D.departamento||"").trim(),logo:D.logo||"",createdAt:D.createdAt,mig:D.mig,extras:D.extras,membros:cur.membros,atrib:cur.atrib,eventos:keep.map(({k,virt,...e})=>({...e,horario:e.horario.trim(),contexto:e.contexto.trim(),rotulo:e.rotulo.trim()})).sort((a,b)=>crUtc(a)-crUtc(b))});
     UI.cronEdit=null; UI.cronDraft=null; render(true); toast("Cronograma salvo");
   };
   const ordered=D.eventos.filter(e=>cleanEvent(e)).map(e=>({...e})).sort((a,b)=>crUtc(a)-crUtc(b)); crCores(ordered);
@@ -2633,7 +2686,9 @@ function cronoEditor(tag){
     h("div",{class:"ce-top"},h("span",{class:"ce-badge"},"Modo de edição"),
       h("div",{class:"row-end"},h("button",{class:"btn",onclick:stopCronoEdit},"Cancelar"),h("button",{class:"btn primary",onclick:save},"Salvar cronograma"))),
     h("div",{class:"field"},h("label",{for:"ceTitulo"},"Título"),txtIn("ceTitulo",D.titulo,projTitle(tag),v=>D.titulo=v)),
-    h("div",{class:"field"},h("label",{for:"ceSub"},"Subtítulo (vazio = período calculado pelas datas)"),txtIn("ceSub",D.subtitulo,"Cronograma de … a …",v=>D.subtitulo=v)));
+    h("div",{class:"field"},h("label",{for:"ceSub"},"Subtítulo (vazio = período calculado pelas datas)"),txtIn("ceSub",D.subtitulo,"Cronograma de … a …",v=>D.subtitulo=v)),
+    h("div",{class:"field"},h("label",{for:"ceDepto"},"Departamento (aparece acima do título)"),txtIn("ceDepto",D.departamento,"Ex.: Departamento de Engenharia",v=>D.departamento=v)),
+    logoField(D,again));
   D.eventos.forEach((e,i)=>{
     const lk=cleanEvent(e)?(byIso[crIso(e)]||[]):[];
     const dt=h("input",{type:"date",id:"ceD"+i,value:cleanEvent(e)?crIso(e):"",disabled:lk.length?true:null,title:lk.length?"A data vem do prazo das tarefas do cronograma (mude na tarefa)":null});
