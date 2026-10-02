@@ -384,6 +384,17 @@ tr:last-child td{border-bottom:0}
 .memb-main{flex:1;min-width:0}
 .memb-name{font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .memb-func{font-weight:500;color:var(--muted)}
+.memb-funcs{display:flex;flex-wrap:wrap;gap:4px;margin:3px 0 2px}
+.memb-funcs .chip{font-size:11.5px;padding:1px 8px}
+.func-add{display:flex;gap:8px;align-items:center}
+.func-add input,.func-row input{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel);font:inherit}
+.func-list{display:flex;flex-direction:column;gap:6px}
+.func-row{display:flex;gap:8px;align-items:center}
+.func-row .gest-hint{white-space:nowrap}
+.func-fixa{font-size:11.5px;font-weight:700;color:var(--muted);border:1px dashed var(--line);border-radius:999px;padding:3px 10px}
+.proj-memb .col-head{flex-wrap:wrap}
+.proj-memb .col-head .btn{margin-left:0}
+.proj-memb .col-head .col-count{margin-right:auto}
 .memb-sub{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .memb .btn{padding:6px 9px}
 .proj-memb .col-head .btn{white-space:nowrap}
@@ -542,6 +553,8 @@ body.has-bulk .content{padding-bottom:110px}
 .crono .cr-equipe li{line-height:1.35}
 .crono .cr-equipe b{display:block;font-family:var(--display);font-weight:700}
 .crono .cr-eq-func,.crono .cr-eq-mail{display:block;color:var(--suave);font-size:.9em}
+.crono .cr-eq-grupo{margin-bottom:1rem;break-inside:avoid}
+.crono .cr-eq-grupo h4{margin:0 0 .45rem;font-family:var(--display);font-weight:600;font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;color:var(--suave)}
 @container (max-width:40rem){
   .crono .rotulo small{display:none}
   .crono .evento{grid-template-columns:1.75rem minmax(0,1fr)}
@@ -1873,7 +1886,7 @@ function renderDetail(){
         inCrono(t)&&!t.due?h("div",{class:"gest-hint",style:"text-align:left"},"Defina um prazo para a tarefa aparecer no cronograma."):null):null,
       ...projTags.map(g=>{ const pj=getProject(g); if(!pj) return null; const sel=(pj.atrib||{})[id]||[];
         return h("div",{class:"field d-resp"},h("span",{class:"lbl"},"Responsáveis"+(projTags.length>1?" · #"+g:"")),
-          pj.membros.length?h("div",{class:"opts"},pj.membros.map(m=>h("button",{class:"opt"+(sel.includes(m.id)?" on":""),"aria-pressed":sel.includes(m.id)?"true":"false",title:m.funcao||"",onclick:()=>toggleResp(g,id,m.id)},svg(ICON.user,13),membroNome(m))))
+          pj.membros.length?h("div",{class:"opts"},pj.membros.map(m=>h("button",{class:"opt"+(sel.includes(m.id)?" on":""),"aria-pressed":sel.includes(m.id)?"true":"false",title:funcNomes(pj,m).join(", "),onclick:()=>toggleResp(g,id,m.id)},svg(ICON.user,13),membroNome(m))))
             :h("div",{class:"gest-hint",style:"text-align:left"},"Cadastre a equipe em “Membros”, na tela do projeto, para escolher os responsáveis.",h("button",{class:"pn-more",onclick:()=>go("proj:"+g)},"Abrir projeto #"+g+" ›"))); }),
       h("div",{class:"field"},h("label",{for:"dDue"},"Prazo de execução"),dueIn,h("div",{class:"opts"},quickDue(0,"Hoje"),quickDue(1,"Amanhã"),quickDue(7,"Em 1 semana"),t.due?h("button",{class:"opt",onclick:()=>patchTask(id,t.repeat?{due:null,repeat:null}:{due:null})},"Sem prazo"):null)),
       repField,
@@ -2094,7 +2107,7 @@ function cleanProject(p){
   p=p&&typeof p==="object"?p:{};
   return {titulo:typeof p.titulo==="string"?p.titulo.slice(0,200):"",subtitulo:typeof p.subtitulo==="string"?p.subtitulo.slice(0,200):"",
     eventos:(Array.isArray(p.eventos)?p.eventos:[]).map(cleanEvent).filter(Boolean).slice(0,300),createdAt:typeof p.createdAt==="string"?p.createdAt:null,
-    extras:cleanExtras(p.extras),mig:p.mig===2?2:0,membros:cleanMembros(p.membros),atrib:cleanAtrib(p.atrib,p.membros),
+    extras:cleanExtras(p.extras),mig:p.mig===2?2:0,funcoes:cleanFuncoes(p.funcoes),membros:cleanMembros(p.membros,cleanFuncoes(p.funcoes)),atrib:cleanAtrib(p.atrib,p.membros),
     departamento:typeof p.departamento==="string"?p.departamento.trim().slice(0,150):"",logo:cleanLogo(p.logo)};
 }
 /* logotipo do cronograma: imagem já reduzida no aparelho, guardada como data URL (PNG/JPEG/WebP, até ~160 kB) */
@@ -2102,18 +2115,30 @@ function cleanLogo(v){
   return typeof v==="string"&&v.length<=220000&&/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/.test(v)?v:"";
 }
 /* membros do projeto [{id, nome, email}] e tarefas atribuídas a eles {<idTarefa>: [idMembro]} */
-function cleanMembros(x){
+/* funções (sub-equipes) do projeto: catálogo [{id, nome}]; cada membro tem funcoes:[id] */
+const COORD="coord", COORD_NOME="Coordenação";
+function cleanFuncoes(x){
+  const out=[{id:COORD,nome:COORD_NOME}], ids=new Set([COORD]), nomes=new Set([COORD_NOME.toLowerCase()]); if(!Array.isArray(x)) return out;
+  for(const f of x){
+    if(out.length>=50) break; if(!f||typeof f!=="object"||typeof f.id!=="string"||!/^[\w-]{1,80}$/.test(f.id)||ids.has(f.id)) continue;
+    const nome=typeof f.nome==="string"?f.nome.trim().slice(0,60):""; if(!nome||nomes.has(nome.toLowerCase())) continue;
+    ids.add(f.id); nomes.add(nome.toLowerCase()); out.push({id:f.id,nome});
+  }
+  return out;
+}
+function cleanMembros(x,funcoes){
   const out=[], ids=new Set(); if(!Array.isArray(x)) return out;
   for(const m of x){
     if(out.length>=100) break; if(!m||typeof m!=="object"||typeof m.id!=="string"||!/^[\w-]{1,80}$/.test(m.id)||ids.has(m.id)) continue;
     const nome=typeof m.nome==="string"?m.nome.trim().slice(0,120):"", email=typeof m.email==="string"?m.email.trim().slice(0,200):"", funcao=typeof m.funcao==="string"?m.funcao.trim().slice(0,120):"";
-    if(!nome&&!email) continue; ids.add(m.id); out.push({id:m.id,nome,email,funcao});
+    const fok=new Set((funcoes||[]).map(f=>f.id)), fs=Array.isArray(m.funcoes)?[...new Set(m.funcoes.filter(f=>typeof f==="string"&&fok.has(f)))]:[];
+    if(!nome&&!email) continue; ids.add(m.id); out.push({id:m.id,nome,email,funcao,funcoes:fs});   // funcao: texto antigo (até a v21), convertido em funcoes ao abrir o projeto
   }
   return out;
 }
 function cleanAtrib(x,membros){
   const out={}; if(!x||typeof x!=="object") return out; let n=0;
-  const ok=new Set(cleanMembros(membros).map(m=>m.id));
+  const ok=new Set(cleanMembros(membros,[]).map(m=>m.id));
   for(const [id,v] of Object.entries(x)){
     if(n>=500) break; if(!/^[\w-]{1,80}$/.test(id)||!Array.isArray(v)) continue;
     const l=[...new Set(v.filter(m=>typeof m==="string"&&ok.has(m)))].slice(0,100);
@@ -2263,8 +2288,14 @@ function cronoView(p,kind){
 /* lista da equipe no final do cronograma: nome, função e e-mail de cada membro */
 function crEquipe(p){
   const ms=(p.membros||[]); if(!ms.length) return null;
-  return h("section",{class:"cr-equipe"},h("h3",{class:"cr-eq-titulo"},"Equipe"),
-    h("ul",{},ms.map(m=>h("li",{},h("b",{},m.nome||m.email),m.funcao?h("span",{class:"cr-eq-func"},m.funcao):null,m.email&&m.nome?h("span",{class:"cr-eq-mail"},m.email):null))));
+  const item=m=>h("li",{},h("b",{},m.nome||m.email),!(m.funcoes||[]).length&&m.funcao?h("span",{class:"cr-eq-func"},m.funcao):null,m.email&&m.nome?h("span",{class:"cr-eq-mail"},m.email):null);
+  const grupos=(p.funcoes||[]).map(f=>({nome:f.nome,ms:ms.filter(m=>(m.funcoes||[]).includes(f.id))})).filter(g=>g.ms.length);
+  const sem=ms.filter(m=>!(m.funcoes||[]).length);
+  const box=h("section",{class:"cr-equipe"},h("h3",{class:"cr-eq-titulo"},"Equipe"));
+  if(!grupos.length){ box.append(h("ul",{},sem.map(item))); return box; }
+  for(const g of grupos) box.append(h("div",{class:"cr-eq-grupo"},h("h4",{},g.nome),h("ul",{},g.ms.map(item))));
+  if(sem.length) box.append(h("div",{class:"cr-eq-grupo"},h("h4",{},"Demais membros"),h("ul",{},sem.map(item))));
+  return box;
 }
 /* evita rótulos sobrepostos na faixa: primeiro some a legenda, depois a própria data (autocontida: também roda na página de impressão) */
 function crAjustar(root){
@@ -2362,6 +2393,7 @@ function renderProject(wrap,tag){
       h("div",{class:"gest-hint",style:"text-align:left"},"Título e prazo destas tarefas atualizam o cronograma automaticamente; concluídas saem dele. Toque em − para tirar uma tarefa do cronograma."+(noDue?` ${noDue} sem prazo: só aparece${noDue===1?"":"m"} no cronograma depois de ter prazo.`:"")),"tirar")));
   // ----- membros do projeto (e tarefas atribuídas a eles)
   if(!p.membros.some(m=>m.id===EU)) setTimeout(()=>ensureEu(tag),0);
+  if(p.membros.some(m=>m.funcao)) setTimeout(()=>migrateFuncoes(tag),0);
   wrap.append(membrosSection(tag,p,all));
   // ----- cronograma (ou modo de edição)
   const sec=h("section",{class:"proj-crono","aria-label":"Cronograma"},h("div",{class:"col-head"},h("h3",{},"Cronograma")));
@@ -2384,10 +2416,10 @@ const EMAIL_RE=/^[^\s@<>,;:"'()\[\]\\?&#%]+@[^\s@<>,;:"'()\[\]\\?&#%]+\.[^\s@<>,
 const membroNome=m=>m.nome||m.email;
 /* membros atribuídos a uma tarefa (na ordem do cadastro) */
 const membrosDe=p=>id=>{ const l=(p.atrib||{})[id]||[]; return (p.membros||[]).filter(m=>l.includes(m.id)); };
-function saveMembros(tag,membros,atrib,msg){
+function saveMembros(tag,membros,atrib,msg,funcoes){
   const prev=VIEW.projects[tag]; if(!prev) return;
   atrib=Object.fromEntries(Object.entries(atrib||{}).filter(([id])=>VIEW.tasks[id]));   // tarefas apagadas saem das atribuições
-  putProject(tag,{...cleanProject(prev),membros,atrib});
+  const c=cleanProject(prev); putProject(tag,{...c,membros,atrib,funcoes:funcoes||c.funcoes});
   toast(msg,()=>enqueue({op:"set",path:"projects/"+tag,data:prev}));
 }
 /* garante o membro "eu" (primeiro da equipe) no projeto; nome e e-mail vêm do "eu" de outro projeto */
@@ -2407,20 +2439,40 @@ function ensureEu(tag){
   if(EU_FEITO.has(tag)) return; const p=getProject(tag); if(!p) return;
   if(p.membros.some(m=>m.id===EU)){ EU_FEITO.add(tag); return; }
   EU_FEITO.add(tag);
-  putProject(tag,{...p,membros:[{id:EU,...euBase(),funcao:""},...p.membros].slice(0,100)});
+  putProject(tag,{...p,membros:[{id:EU,...euBase(),funcao:"",funcoes:[]},...p.membros].slice(0,100)});
 }
+/* nomes das funções de um membro (ordem do catálogo) */
+const funcNomes=(p,m)=>(p.funcoes||[]).filter(f=>(m.funcoes||[]).includes(f.id)).map(f=>f.nome);
+/* funções em texto (até a v21) viram funções do catálogo, uma vez por projeto */
+const FUNC_FEITO=new Set();
+function migrateFuncoes(tag){
+  if(FUNC_FEITO.has(tag)) return; FUNC_FEITO.add(tag);
+  const p=getProject(tag); if(!p||!p.membros.some(m=>m.funcao)) return;
+  const funcoes=[...p.funcoes];
+  const idDe=nome=>{ if(/^coord/i.test(nome.trim())) return COORD;   // "Coordenador(a)" → Coordenação
+    let f=funcoes.find(x=>x.nome.toLowerCase()===nome.toLowerCase()); if(!f&&funcoes.length<50){ f={id:"f"+uid().slice(1),nome:nome.slice(0,60)}; funcoes.push(f); } return f&&f.id; };
+  const membros=p.membros.map(m=>{ if(!m.funcao) return m; const id=idDe(m.funcao); return {...m,funcao:"",funcoes:id&&!m.funcoes.includes(id)?[...m.funcoes,id]:m.funcoes}; });
+  putProject(tag,{...p,funcoes,membros});
+}
+/* nomes de funções já usados em todos os projetos (sugestões ao criar) */
+const funcSugestoes=()=>[...new Set(projectsArr().flatMap(q=>q.funcoes.filter(f=>f.id!==COORD).map(f=>f.nome)))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+/* coordenadores primeiro; depois a ordem do cadastro */
+const membrosOrdem=p=>[...p.membros.filter(m=>m.funcoes.includes(COORD)),...p.membros.filter(m=>!m.funcoes.includes(COORD))];
 function membrosSection(tag,p,all){
   const sec=h("section",{class:"proj-memb","aria-label":"Membros"},h("div",{class:"col-head"},h("h3",{},"Membros"),
     h("span",{class:"col-count"},`${p.membros.length} membro${p.membros.length===1?"":"s"}`),
+    h("button",{class:"btn",onclick:()=>openFuncoesModal(tag)},svg(ICON.tag,15),"Funções"),
+    p.membros.some(m=>m.email)?h("button",{class:"btn",onclick:()=>openMailCrono(tag,{anexo:false})},svg(ICON.mail,15),"Enviar mensagem"):null,
     h("button",{class:"btn",onclick:()=>openMembroModal(tag,null)},svg(ICON.plus,15),"Adicionar membro")));
   if(!p.membros.length){ sec.append(h("div",{class:"empty"},"Nenhum membro. Cadastre a equipe do projeto para escolher os responsáveis de cada tarefa e enviar o cronograma por e-mail.")); return sec; }
   sec.append(h("div",{class:"gest-hint",style:"text-align:left"},"Para definir os responsáveis, clique na tarefa e escolha em “Responsáveis”."));
   const abertas=new Set(all.filter(t=>!t.done).map(t=>t.id));
-  sec.append(h("div",{class:"memb-list"},p.membros.map(m=>{
-    const n=Object.entries(p.atrib||{}).filter(([id,l])=>abertas.has(id)&&l.includes(m.id)).length;
+  sec.append(h("div",{class:"memb-list"},membrosOrdem(p).map(m=>{
+    const n=Object.entries(p.atrib||{}).filter(([id,l])=>abertas.has(id)&&l.includes(m.id)).length, fs=funcNomes(p,m);
     return h("div",{class:"memb"},
       h("span",{class:"memb-av","aria-hidden":"true"},(membroNome(m).trim()[0]||"?").toUpperCase()),
-      h("div",{class:"memb-main"},h("div",{class:"memb-name",title:membroNome(m)},membroNome(m),m.id===EU?h("span",{class:"memb-func"}," (você)"):null,m.funcao?h("span",{class:"memb-func"}," · "+m.funcao):null),
+      h("div",{class:"memb-main"},h("div",{class:"memb-name",title:membroNome(m)},membroNome(m),m.id===EU?h("span",{class:"memb-func"}," (você)"):null),
+        fs.length?h("div",{class:"memb-funcs"},fs.map(f=>h("span",{class:"chip"},f))):null,
         h("div",{class:"memb-sub"},[m.email&&m.nome?m.email:(m.email?"":"sem e-mail"),`responsável por ${n} tarefa${n===1?"":"s"} aberta${n===1?"":"s"}`].filter(Boolean).join(" · "))),
       h("button",{class:"btn",title:"Editar membro","aria-label":"Editar membro",onclick:()=>openMembroModal(tag,m.id)},svg(ICON.edit,15)),
       m.id===EU?null:h("button",{class:"btn",title:"Remover membro","aria-label":"Remover membro",onclick:()=>{
@@ -2431,32 +2483,82 @@ function membrosSection(tag,p,all){
   })));
   return sec;
 }
+/* escolher funções: botões do catálogo (liga/desliga) + campo para criar uma nova (sugestões de outros projetos) */
+function funcPicker(funcoes,sel,idp){
+  const box=h("div",{class:"opts"});
+  const lista="funcSug"+idp, nova=h("input",{type:"text",id:"funcNova"+idp,list:lista,maxlength:"60",placeholder:"Nova função, ex.: Identidade visual"});
+  const paint=()=>{ box.replaceChildren(...funcoes.map(f=>h("button",{class:"opt"+(sel.has(f.id)?" on":""),"aria-pressed":sel.has(f.id)?"true":"false",onclick:()=>{ sel.has(f.id)?sel.delete(f.id):sel.add(f.id); paint(); }},f.nome))); if(!funcoes.length) box.append(h("span",{class:"gest-hint"},"Nenhuma função ainda: crie abaixo.")); };
+  const add=()=>{ const n=nova.value.trim().slice(0,60); if(!n) return;
+    let f=funcoes.find(x=>x.nome.toLowerCase()===n.toLowerCase());
+    if(!f){ if(funcoes.length>=50){ toast("Limite de 50 funções por projeto."); return; } f={id:"f"+uid().slice(1),nome:n}; funcoes.push(f); }
+    sel.add(f.id); nova.value=""; paint(); };
+  nova.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); e.stopPropagation(); add(); } });
+  paint();
+  return {el:h("div",{style:"display:flex;flex-direction:column;gap:8px"},box,h("div",{class:"func-add"},nova,h("datalist",{id:lista},funcSugestoes().map(n=>h("option",{value:n}))),h("button",{class:"btn",onclick:add},svg(ICON.plus,15),"Criar"))),
+    pend:()=>{ if(nova.value.trim()) add(); }};
+}
 function openMembroModal(tag,mid){
   const p=getProject(tag); if(!p) return;
   const cur=mid?p.membros.find(m=>m.id===mid):null; if(mid&&!cur) return;
   const nome=h("input",{type:"text",id:"mbNome",maxlength:"120",placeholder:"Ex.: Ana Souza"}), email=h("input",{type:"text",id:"mbEmail",inputmode:"email",autocomplete:"email",maxlength:"200",placeholder:"ana@exemplo.com"});
-  const funcao=h("input",{type:"text",id:"mbFuncao",maxlength:"120",placeholder:"Ex.: Coordenadora, Engenheiro responsável"});
-  nome.value=cur?cur.nome:""; email.value=cur?cur.email:""; funcao.value=cur?(cur.funcao||""):"";
+  nome.value=cur?cur.nome:""; email.value=cur?cur.email:"";
+  const funcoes=p.funcoes.map(f=>({...f})), sel=new Set(cur?cur.funcoes:[]), fp=funcPicker(funcoes,sel,"M");
   const salvar=()=>{
     const q=getProject(tag); if(!q) return;
-    const n=nome.value.trim(), e=email.value.trim(), fn=funcao.value.trim();
+    fp.pend();
+    const n=nome.value.trim(), e=email.value.trim();
     if(!n){ toast("Informe o nome do membro."); nome.focus(); return false; }
     if(e&&!EMAIL_RE.test(e)){ toast("E-mail inválido."); email.focus(); return false; }
     if(e&&q.membros.some(m=>m.id!==mid&&m.email.toLowerCase()===e.toLowerCase())){ toast("Já há um membro com esse e-mail."); email.focus(); return false; }
     if(q.membros.length>=100&&!mid){ toast("Limite de 100 membros por projeto."); return false; }
-    const membros=mid?q.membros.map(m=>m.id===mid?{...m,nome:n,email:e,funcao:fn}:m):[...q.membros,{id:"m"+uid().slice(1),nome:n,email:e,funcao:fn}];
-    saveMembros(tag,membros,q.atrib,mid?"Membro atualizado":"Membro adicionado");
+    const cat=[...q.funcoes]; for(const f of funcoes) if(!cat.some(x=>x.id===f.id)) cat.push(f);   // funções criadas nesta janela
+    const fs=cat.map(f=>f.id).filter(id=>sel.has(id));
+    const membros=mid?q.membros.map(m=>m.id===mid?{...m,nome:n,email:e,funcao:"",funcoes:fs}:m):[...q.membros,{id:"m"+uid().slice(1),nome:n,email:e,funcao:"",funcoes:fs}];
+    saveMembros(tag,membros,q.atrib,mid?"Membro atualizado":"Membro adicionado",cat);
     if(mid===EU) saveMeusDados(n,e,tag);   // você: mesmo nome e e-mail em Configurações e em todos os projetos
   };
   const enter=ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); if(salvar()!==false) $("#modalRoot").replaceChildren(); } };
-  nome.addEventListener("keydown",enter); email.addEventListener("keydown",enter); funcao.addEventListener("keydown",enter);
+  nome.addEventListener("keydown",enter); email.addEventListener("keydown",enter);
   openModal(mid===EU?"Editar seus dados":mid?"Editar membro":"Adicionar membro",h("div",{style:"display:flex;flex-direction:column;gap:10px"},
-    mid===EU?h("p",{class:"mail-note"},"Você é responsável possível em todos os projetos. Nome e e-mail valem para todos (são os de Configurações › Meus dados); a função é deste projeto."):null,
+    mid===EU?h("p",{class:"mail-note"},"Você é responsável possível em todos os projetos. Nome e e-mail valem para todos (são os de Configurações › Meus dados); as funções são deste projeto."):null,
     h("div",{class:"field"},h("label",{for:"mbNome"},"Nome"),nome),
-    h("div",{class:"field"},h("label",{for:"mbFuncao"},"Função no projeto"),funcao),
+    h("div",{class:"field"},h("span",{class:"lbl"},"Funções no projeto (pode marcar mais de uma)"),fp.el),
     h("div",{class:"field"},h("label",{for:"mbEmail"},"E-mail (para receber o cronograma)"),email)),
     [{label:mid?"Salvar":"Adicionar",cls:"primary",run:salvar}]);
   setTimeout(()=>{ const md=nome.closest(".modal"); if(md&&!md.contains(document.activeElement)) nome.focus(); },30);   // não tira o foco de um campo já escolhido
+}
+/* catálogo de funções do projeto: criar, renomear, excluir (excluir tira a função dos membros) */
+function openFuncoesModal(tag){
+  const p=getProject(tag); if(!p) return;
+  const funcoes=p.funcoes.map(f=>({...f})), apagar=new Set();
+  const lista=h("div",{class:"func-list"}), nova=h("input",{type:"text",id:"funcNovaCat",list:"funcSugCat",maxlength:"60",placeholder:"Nova função, ex.: Pesquisadores"});
+  const conta=id=>p.membros.filter(m=>m.funcoes.includes(id)).length;
+  const paint=()=>{ lista.replaceChildren(...funcoes.filter(f=>!apagar.has(f.id)).map(f=>{
+      const fixa=f.id===COORD;
+      const i=h("input",{type:"text",maxlength:"60","aria-label":"Nome da função",disabled:fixa?true:null,title:fixa?"Função fixa: os coordenadores aparecem primeiro na equipe":null}); i.value=f.nome; i.addEventListener("input",()=>{ f.nome=i.value; });
+      const n=conta(f.id);
+      return h("div",{class:"func-row"},i,h("span",{class:"gest-hint"},n?`${n} membro${n===1?"":"s"}`:"ninguém"),
+        fixa?h("span",{class:"func-fixa",title:"Função fixa"},"fixa"):h("button",{class:"btn",title:"Excluir função","aria-label":"Excluir função "+f.nome,onclick:()=>{ apagar.add(f.id); paint(); }},svg(ICON.trash,15))); }));
+    if(!lista.children.length) lista.append(h("div",{class:"gest-hint"},"Nenhuma função. Crie as sub-equipes do projeto (ex.: Identidade visual, Pesquisadores)."));
+  };
+  const add=()=>{ const n=nova.value.trim().slice(0,60); if(!n) return;
+    if(funcoes.some(x=>!apagar.has(x.id)&&x.nome.trim().toLowerCase()===n.toLowerCase())){ toast("Essa função já existe."); return; }
+    if(funcoes.filter(x=>!apagar.has(x.id)).length>=50){ toast("Limite de 50 funções por projeto."); return; }
+    funcoes.push({id:"f"+uid().slice(1),nome:n}); nova.value=""; paint(); };
+  nova.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); e.stopPropagation(); add(); } });
+  paint();
+  openModal("Funções do projeto",h("div",{style:"display:flex;flex-direction:column;gap:10px"},
+    h("p",{class:"mail-note"},"Funções são as sub-equipes do projeto. Cada membro pode ter várias (escolha em Editar membro). Servem para enviar mensagens só para uma sub-equipe e organizam a equipe no cronograma. “Coordenação” é fixa: os coordenadores aparecem primeiro."),
+    lista,h("div",{class:"func-add"},nova,h("datalist",{id:"funcSugCat"},funcSugestoes().map(n=>h("option",{value:n}))),h("button",{class:"btn",onclick:add},svg(ICON.plus,15),"Criar"))),
+    [{label:"Salvar",cls:"primary",run:()=>{
+      if(nova.value.trim()) add();
+      const q=getProject(tag); if(!q) return;
+      const keep=funcoes.filter(f=>!apagar.has(f.id)).map(f=>({...f,nome:f.nome.trim()}));
+      if(keep.some(f=>!f.nome)){ toast("Toda função precisa de um nome."); return false; }
+      const nomes=keep.map(f=>f.nome.toLowerCase()); if(new Set(nomes).size!==nomes.length){ toast("Há duas funções com o mesmo nome."); return false; }
+      const ids=new Set(keep.map(f=>f.id));
+      saveMembros(tag,q.membros.map(m=>({...m,funcoes:m.funcoes.filter(x=>ids.has(x))})),q.atrib,"Funções salvas",keep);
+    }}]);
 }
 /* responsáveis de uma tarefa do projeto: liga/desliga um membro (escolhido em Detalhes da tarefa) */
 function toggleResp(tag,taskId,mid){
@@ -2517,7 +2619,7 @@ async function makeCronoPDF(tag){
     const root=d.querySelector(".crono");
     crFixColors(root); crAjustar(d);
     const rt=root.getBoundingClientRect(), total=rt.height;
-    const cuts=[...root.querySelectorAll(".evento,.cr-equipe")].map(e=>e.getBoundingClientRect().top-rt.top);
+    const cuts=[...root.querySelectorAll(".evento,.cr-equipe,.cr-eq-grupo")].map(e=>e.getBoundingClientRect().top-rt.top);
     const pages=[]; let y=0;
     while(y<total-1){
       const off=pages.length?TOP:0, lim=y+H-off; let end=total;
@@ -2541,21 +2643,28 @@ async function makeCronoPDF(tag){
     return pdf.output("blob");
   } finally { fr.remove(); }
 }
-function openMailCrono(tag){
+/* opt.anexo=false: “Enviar mensagem” (da seção Membros), sem o PDF do cronograma */
+function openMailCrono(tag,opt={}){
   const p=getProject(tag); if(!p) return;
-  if(!cronoEvents(p).length){ toast("O cronograma ainda não tem datas."); return; }
-  if(!p.membros.some(m=>m.email)){ toast("Cadastre membros com e-mail em “Membros” para enviar o cronograma."); return; }
+  const anexo=opt.anexo!==false;
+  if(anexo&&!cronoEvents(p).length){ toast("O cronograma ainda não tem datas."); return; }
+  if(!p.membros.some(m=>m.email)){ toast("Cadastre membros com e-mail em “Membros” para "+(anexo?"enviar o cronograma.":"enviar mensagens.")); return; }
   const titulo=p.titulo||projTitle(tag), fname=`cronograma-${tag}.pdf`;
   const touch=window.matchMedia&&matchMedia("(hover:none)").matches;
   let canShare=false; try{ canShare=!!(navigator.share&&navigator.canShare&&typeof File==="function"&&navigator.canShare({files:[new File(["x"],fname,{type:"application/pdf"})]})); }catch(e){}
   // destinatários
   const boxes=[];
-  const lista=h("div",{class:"pick-list"},p.membros.map(m=>{
+  const lista=h("div",{class:"pick-list"},membrosOrdem(p).map(m=>{
     const cb=h("input",{type:"checkbox",disabled:!m.email}); cb.checked=!!m.email&&m.id!==EU; if(m.email) boxes.push([m,cb]);
-    cb.addEventListener("change",()=>{ if(!edited) msg.value=texto(); });
-    return h("label",{class:"pick"+(m.email?"":" off")},cb,h("span",{title:m.email},m.nome?m.nome+(m.email?" · "+m.email:""):m.email),m.email?null:h("small",{},"sem e-mail"));
+    cb.addEventListener("change",()=>{ if(!edited) msg.value=texto(); paintGrupos(); });
+    const fs=funcNomes(p,m);
+    return h("label",{class:"pick"+(m.email?"":" off")},cb,h("span",{title:m.email},m.nome?m.nome+(m.email?" · "+m.email:""):m.email),m.email?(fs.length?h("small",{},fs.join(", ")):null):h("small",{},"sem e-mail"));
   }));
-  const todos=on=>{ boxes.forEach(([,cb])=>cb.checked=on); if(!edited) msg.value=texto(); };
+  const todos=on=>{ boxes.forEach(([,cb])=>cb.checked=on); if(!edited) msg.value=texto(); paintGrupos(); };
+  /* sub-equipes: tocar marca todos os membros (com e-mail) daquela função; tocar de novo desmarca */
+  const grupos=p.funcoes.map(f=>({f,bs:boxes.filter(([m])=>m.funcoes.includes(f.id))})).filter(g=>g.bs.length);
+  const gBtns=grupos.map(g=>{ const b=h("button",{class:"opt",onclick:()=>{ const all=g.bs.every(([,cb])=>cb.checked); g.bs.forEach(([,cb])=>cb.checked=!all); if(!edited) msg.value=texto(); paintGrupos(); }},g.f.nome+" ("+g.bs.length+")"); return [g,b]; });
+  const paintGrupos=()=>gBtns.forEach(([g,b])=>{ const on=g.bs.every(([,cb])=>cb.checked); b.classList.toggle("on",on); b.setAttribute("aria-pressed",on?"true":"false"); });
   const sel=()=>boxes.filter(([,cb])=>cb.checked).map(([m])=>m);
   // mensagem: texto sugerido com as tarefas atribuídas aos selecionados (refeito ao mudar a seleção, até ser editado)
   const texto=()=>{
@@ -2564,26 +2673,27 @@ function openMailCrono(tag){
       const ts=sortTasks(tasksArr().filter(t=>!t.done&&(t.tags||[]).includes(tag)&&porId(t.id).some(x=>x.id===m.id)),"manual");
       if(ts.length) linhas.push(`• ${membroNome(m)}: `+ts.map(t=>t.title+(t.due?` (${fmtBR(t.due).slice(0,5)})`:"")).join("; "));
     }
+    if(!anexo) return "Olá!\n\n"+(linhas.length?"\n\nTarefas de cada um no projeto “"+titulo+"”:\n"+linhas.join("\n")+"\n":"");
     return `Olá!\n\nSegue em anexo o cronograma do projeto “${titulo}”`+(ev.length?` (${(q.subtitulo||crPeriodo(ev)).replace(/^Cronograma d/,"d")})`:"")+"."+(linhas.length?"\n\nTarefas atribuídas:\n"+linhas.join("\n"):"")+"\n";
   };
   let edited=false;
-  const assunto=h("input",{type:"text",id:"mailSub",maxlength:"200"}); assunto.value="Cronograma — "+titulo;
+  const assunto=h("input",{type:"text",id:"mailSub",maxlength:"200"}); assunto.value=(anexo?"Cronograma — ":"Projeto ")+titulo;
   const msg=h("textarea",{id:"mailBody",style:"min-height:150px;font-size:14px"}); msg.value=texto();
   msg.addEventListener("input",()=>{ edited=true; });
-  const status=h("p",{class:"mail-note",role:"status"},"Preparando o PDF do cronograma…");
+  const status=h("p",{class:"mail-note",role:"status"},anexo?"Preparando o PDF do cronograma…":"");
   let blob=null, falhou=false;
-  makeCronoPDF(tag).then(b=>{ blob=b; status.textContent=`PDF pronto: ${fname} (${Math.max(1,Math.round(b.size/1024))} kB).`; })
+  if(anexo) makeCronoPDF(tag).then(b=>{ blob=b; status.textContent=`PDF pronto: ${fname} (${Math.max(1,Math.round(b.size/1024))} kB).`; })
     .catch(()=>{ falhou=true; status.textContent="Não foi possível gerar o PDF aqui. O e-mail abre sem anexo: use “Exportar PDF” e anexe o arquivo."; });
   // ação comum: confere destinatários e o PDF; devolve false para manter a janela aberta
   const preparar=()=>{
     const to=sel().map(m=>m.email);
     if(!to.length){ toast("Selecione ao menos um membro."); return null; }
     if(!assunto.value.trim()){ toast("Escreva o assunto."); assunto.focus(); return null; }
-    if(!blob&&!falhou){ toast("Aguarde: o PDF ainda está sendo preparado."); return null; }
+    if(anexo&&!blob&&!falhou){ toast("Aguarde: o PDF ainda está sendo preparado."); return null; }
     return {to,sub:assunto.value.trim(),body:msg.value};
   };
   let salvo=false;   // PDF já salvo nesta janela (celular: passo 1)
-  const baixar=()=>{ if(salvo) return; if(blob&&downloadFile(fname,blob,"application/pdf")) toast("PDF baixado: anexe-o ao e-mail."); };
+  const baixar=()=>{ if(salvo||!anexo) return; if(blob&&downloadFile(fname,blob,"application/pdf")) toast("PDF baixado: anexe-o ao e-mail."); };
   const abrirMailto=x=>{ const a=h("a",{href:`mailto:${x.to.join(",")}?subject=${enc(x.sub)}&body=${enc(x.body)}`}); document.body.append(a); a.click(); a.remove(); };
   const enc=s=>encodeURIComponent(s.replace(/\r?\n/g,"\r\n"));
   const acoes=[
@@ -2592,7 +2702,7 @@ function openMailCrono(tag){
       baixar(); window.open(url,"_blank","noopener"); }},
     {label:"App de e-mail",run:()=>{ const x=preparar(); if(!x) return false;
       baixar(); abrirMailto(x); }}];
-  if(canShare) acoes.push({label:"Compartilhar PDF",run:()=>{ const x=preparar(); if(!x) return false;
+  if(canShare&&anexo) acoes.push({label:"Compartilhar PDF",run:()=>{ const x=preparar(); if(!x) return false;
     if(!blob){ toast("Sem o PDF não há o que compartilhar: use “Abrir no Gmail” ou “App de e-mail”."); return false; }
     try{ navigator.clipboard.writeText(x.to.join(", ")).catch(()=>{}); }catch(e){}
     const f=new File([blob],fname,{type:"application/pdf"}), ok=()=>toast("E-mails copiados: cole em “Para”, se preciso.");
@@ -2604,7 +2714,7 @@ function openMailCrono(tag){
   /* celular: o compartilhamento do sistema não leva destinatários (não existe campo "Para" nele).
      Fluxo principal em dois toques: 1) salvar o PDF no aparelho; 2) abrir o e-mail já com destinatários,
      assunto e mensagem (mailto) e anexar o PDF salvo. "Compartilhar PDF" fica como alternativa. */
-  if(canShare&&touch){
+  if(canShare&&touch&&anexo){
     const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
     /* alguns apps de e-mail do Android não leem os destinatários do link mailto: os e-mails ficam copiados para colar em “Para” */
     const copiarPara=x=>{
@@ -2642,28 +2752,31 @@ function openMailCrono(tag){
     acoes.forEach(a=>delete a.cls);
     acoes.unshift({label:"Enviar agora",cls:"primary",run:()=>{
       const x=preparar(); if(!x) return false;
-      if(!blob){ toast("Sem o PDF não dá para enviar daqui: use as outras opções."); return false; }
+      if(anexo&&!blob){ toast("Sem o PDF não dá para enviar daqui: use as outras opções."); return false; }
       if(enviando) return false;
       if(!navigator.onLine){ toast("Sem internet: o envio direto precisa de conexão."); return false; }
       enviando=true; status.textContent=`Enviando para ${x.to.length} destinatário${x.to.length===1?"":"s"}…`;
-      blobB64(blob).then(pdf=>fnCall({method:"POST",body:JSON.stringify({to:x.to,subject:x.sub,text:x.body,filename:fname,pdf,copia:copiaChk.checked})},fnMailURL()))
-        .then(j=>{ if(status.isConnected) $("#modalRoot").replaceChildren(); toast(`Cronograma enviado para ${j.enviados} destinatário${j.enviados===1?"":"s"}`+(j.copia?" (com cópia para você).":".")); })
+      (anexo?blobB64(blob):Promise.resolve("")).then(pdf=>fnCall({method:"POST",body:JSON.stringify({to:x.to,subject:x.sub,text:x.body,...(pdf?{filename:fname,pdf}:{}),copia:copiaChk.checked})},fnMailURL()))
+        .then(j=>{ if(status.isConnected) $("#modalRoot").replaceChildren(); toast(`${anexo?"Cronograma enviado":"Mensagem enviada"} para ${j.enviados} destinatário${j.enviados===1?"":"s"}`+(j.copia?" (com cópia para você).":".")); })
         .catch(e=>{
           const m=String(e&&e.message||e);
-          const txt=/^HTTP 404|not found/i.test(m)?"a função “cronograma-email” não está publicada no Supabase (veja o guia ENVIO-EMAIL).":/Failed to fetch|NetworkError|Load failed/i.test(m)?"sem conexão com o servidor.":m;
+          const txt=/^HTTP 404|not found/i.test(m)?"a função “cronograma-email” não está publicada no Supabase (veja o guia ENVIO-EMAIL).":/Failed to fetch|NetworkError|Load failed/i.test(m)?"sem conexão com o servidor.":!anexo&&/PDF ausente/i.test(m)?"atualize a função “cronograma-email” e o script do Google (guia ENVIO-EMAIL) para enviar mensagens sem anexo.":m;
           status.textContent="Não foi enviado: "+txt; toast("Não foi enviado: "+txt);
         })
         .finally(()=>{ enviando=false; });
       return false;   // a janela só fecha quando o envio der certo
     }});
   }
-  openModal("Enviar cronograma por e-mail",h("div",{style:"display:flex;flex-direction:column;gap:10px"},
-    h("div",{class:"field"},h("span",{class:"lbl"},"Destinatários"),h("div",{class:"opts"},h("button",{class:"opt",onclick:()=>todos(true)},"Todos"),h("button",{class:"opt",onclick:()=>todos(false)},"Nenhum")),lista),
+  paintGrupos();
+  openModal(anexo?"Enviar cronograma por e-mail":"Enviar mensagem à equipe",h("div",{style:"display:flex;flex-direction:column;gap:10px"},
+    h("div",{class:"field"},h("span",{class:"lbl"},"Destinatários"),h("div",{class:"opts"},h("button",{class:"opt",onclick:()=>todos(true)},"Toda a equipe"),...gBtns.map(([,b])=>b),h("button",{class:"opt",onclick:()=>todos(false)},"Nenhum")),
+      gBtns.length?h("p",{class:"mail-note"},"Toque numa função para marcar (ou desmarcar) toda a sub-equipe; ajuste pessoa por pessoa na lista."):null,lista),
     h("div",{class:"field"},h("label",{for:"mailSub"},"Assunto"),assunto),
     h("div",{class:"field"},h("label",{for:"mailBody"},"Mensagem"),msg),
     status,
     servidor?h("label",{class:"pick",style:"padding:2px 0"},copiaChk,h("span",{},"Enviar cópia para mim"+(S.user.email?" ("+S.user.email+")":""))):null,
-    servidor?h("p",{class:"mail-note"},"“Enviar agora” envia daqui mesmo, pelo servidor, com o PDF anexado e os destinatários marcados."):(CFG.url?h("p",{class:"mail-note"},"Para enviar direto daqui, já com anexo e destinatários, entre na sua conta (Configurações › Sincronização e backup)."):null),
+    servidor?h("p",{class:"mail-note"},anexo?"“Enviar agora” envia daqui mesmo, pelo servidor, com o PDF anexado e os destinatários marcados.":"“Enviar agora” envia daqui mesmo, pelo servidor, para os destinatários marcados."):(CFG.url?h("p",{class:"mail-note"},"Para enviar direto daqui"+(anexo?", já com anexo e destinatários,":"")+" entre na sua conta (Configurações › Sincronização e backup)."):null),
+    !anexo?h("p",{class:"mail-note"},"“Abrir no Gmail” e “App de e-mail” abrem o rascunho com destinatários, assunto e mensagem preenchidos."):
     (n=>servidor?h("details",{class:"mail-note"},h("summary",{style:"cursor:pointer"},"Como funcionam as outras opções"),n):n)(h("p",{class:"mail-note"},canShare&&touch
       ?"Os destinatários só vão junto quando o e-mail é aberto por “2 · Abrir e-mail” (ou “Abrir no Gmail”), que não aceita anexo: por isso salve antes o PDF (passo 1) e anexe-o pelo clipe. Os e-mails também ficam copiados: se o app de e-mail abrir com “Para” vazio, cole-os ali. “Compartilhar PDF” já leva o anexo, mas o compartilhamento do celular não tem campo de destinatário: escolha-os no app (os e-mails ficam copiados)."
       :"O Gmail e o app de e-mail abrem com destinatários, assunto e mensagem preenchidos, mas não aceitam anexo pelo link: o PDF é baixado ao mesmo tempo para você anexá-lo."+(canShare?" “Compartilhar PDF” leva o arquivo anexado, mas sem os destinatários (escolha-os no app; os e-mails ficam copiados).":"")+(touch&&!canShare?" No celular, se o download não acontecer, use “Exportar PDF”.":"")))),
@@ -2729,7 +2842,7 @@ function cronoEditor(tag){
     // linhas criadas só para as tarefas do cronograma: guardadas apenas se receberam algum dado
     const keep=D.eventos.filter(e=>!e.virt||e.horario.trim()||e.contexto.trim()||e.rotulo.trim()||e.atividades.length||e.sem);
     const cur=getProject(tag)||{};   // membros e atribuições são editados fora do rascunho: grava os atuais
-    putProject(tag,{titulo:D.titulo.trim(),subtitulo:D.subtitulo.trim(),departamento:(D.departamento||"").trim(),logo:D.logo||"",createdAt:D.createdAt,mig:D.mig,extras:D.extras,membros:cur.membros,atrib:cur.atrib,eventos:keep.map(({k,virt,...e})=>({...e,horario:e.horario.trim(),contexto:e.contexto.trim(),rotulo:e.rotulo.trim()})).sort((a,b)=>crUtc(a)-crUtc(b))});
+    putProject(tag,{titulo:D.titulo.trim(),subtitulo:D.subtitulo.trim(),departamento:(D.departamento||"").trim(),logo:D.logo||"",createdAt:D.createdAt,mig:D.mig,extras:D.extras,membros:cur.membros,atrib:cur.atrib,funcoes:cur.funcoes,eventos:keep.map(({k,virt,...e})=>({...e,horario:e.horario.trim(),contexto:e.contexto.trim(),rotulo:e.rotulo.trim()})).sort((a,b)=>crUtc(a)-crUtc(b))});
     UI.cronEdit=null; UI.cronDraft=null; render(true); toast("Cronograma salvo");
   };
   const ordered=D.eventos.filter(e=>cleanEvent(e)).map(e=>({...e})).sort((a,b)=>crUtc(a)-crUtc(b)); crCores(ordered);
@@ -3031,7 +3144,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v21";
+const APP_VER="v22";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
