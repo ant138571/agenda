@@ -975,7 +975,14 @@ function toggleDone(id,occ){
   if(!t.done) toast("Tarefa concluída",()=>patchTask(id,{done:false,doneAt:null}));
 }
 const isLate=t=>!t.done&&t.due&&t.due<today();
-const inMyDay=t=>{const td=today(); return !t.done&&t.myDay!=="no:"+td&&(t.myDay===td||(t.due&&t.due<=td));};
+/* opções do Meu Dia (Configurações; ligadas por padrão):
+   semAtrasadas  — atrasadas não entram sozinhas no Meu Dia: só as adicionadas ao dia ou com prazo exatamente hoje;
+   tirarAtrasada — “Tirar do Meu Dia” numa atrasada vale até o prazo mudar (myDay "no:X" com prazo anterior a X) */
+const dueNoDia=(t,td)=>!!t.due&&(PREFS.semAtrasadas!==false?t.due===td:t.due<=td);
+const tiradaDoDia=(t,td)=>{ const m=t.myDay; if(m==="no:"+td) return true;
+  if(PREFS.tirarAtrasada===false||typeof m!=="string"||!/^no:\d{4}-\d{2}-\d{2}$/.test(m)) return false;
+  const x=m.slice(3); return x<td&&!!t.due&&t.due<x; };
+const inMyDay=t=>{const td=today(); return !t.done&&!tiradaDoDia(t,td)&&(t.myDay===td||dueNoDia(t,td));};
 function toggleMyDay(t){ const td=today(); if(inMyDay(t)){ patchTask(t.id,{myDay:"no:"+td}); toast("Tirada do Meu Dia"); } else { patchTask(t.id,{myDay:td}); toast("Adicionada ao Meu Dia"); } }
 /* restaura uma tarefa exatamente como estava (usado no “Desfazer”) */
 function restoreTask(id,data){ enqueue({op:"set",path:"tasks/"+id,data:{...data,updatedAt:new Date().toISOString()}}); }
@@ -1302,7 +1309,7 @@ function renderList(wrap,v){
   else if(v==="search"){ title="Pesquisa"; sub=`Resultados para “${UI.q}”`; list=searchTasks(list,UI.q); showDoneDefault=true; }
   else if(v==="today"){ title="Meu Dia"; sub=fmtLong(new Date());
     const recDone=list.filter(t=>isRec(t)&&(t.doneDates||[]).includes(td)&&!inMyDay(t)).map(t=>occView(t,td));
-    list=[...list.filter(t=>inMyDay(t)||(t.done&&(t.myDay===td||(t.myDay!=="no:"+td&&t.due&&t.due<=td&&t.doneAt&&ymd(new Date(t.doneAt))===td)))),...recDone]; defaults={myDay:td}; }
+    list=[...list.filter(t=>inMyDay(t)||(t.done&&(t.myDay===td||(!tiradaDoDia(t,td)&&dueNoDia(t,td)&&t.doneAt&&ymd(new Date(t.doneAt))===td)))),...recDone]; defaults={myDay:td}; }
   else if(v==="important"){ title="Importantes"; sub="Importância alta"; list=list.filter(t=>t.importance===3); defaults={importance:3}; }
   else if(v==="priority"){ title="Por prioridade"; sub="Agrupadas de P1 (urgente) a P3"; groupBy="priority"; }
   else if(v==="planned"){ title="Planejado"; sub="Tarefas com prazo"; list=list.filter(t=>t.due); groupBy="due"; }
@@ -3144,7 +3151,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v22";
+const APP_VER="v23";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
@@ -3193,6 +3200,11 @@ function configBody(){
   box.append(h("div",{class:"settings-sec"},h("h4",{},"Tarefas inacabadas"),
     h("p",{},"Passar as tarefas não concluídas do dia para o próximo dia útil (sábado e domingo ficam de fora: vão para segunda). Vale para prazos vencidos e para o Meu Dia; tarefas recorrentes não mudam."),
     h("div",{},h("span",{class:"seg"},[[false,"Desligado"],[true,"Ligado"]].map(([v,l])=>h("button",{class:!!PREFS.rollover===v?"on":"",onclick:()=>{ PREFS.rollover=v; lsSet(PREF_KEY,PREFS); refreshConfig(); if(v) requestRollOver(); }},l))))));
+  const mdOpt=(k,txt)=>h("div",{style:"margin-top:10px"},h("p",{},txt),
+    h("div",{},h("span",{class:"seg"},[[false,"Desligado"],[true,"Ligado"]].map(([v,l])=>h("button",{class:(PREFS[k]!==false)===v?"on":"",onclick:()=>{ PREFS[k]=v; lsSet(PREF_KEY,PREFS); render(); refreshConfig(); }},l)))));
+  box.append(h("div",{class:"settings-sec"},h("h4",{},"Meu Dia"),
+    mdOpt("semAtrasadas","Atrasadas não entram sozinhas no Meu Dia: só entram as adicionadas ao dia ou com prazo exatamente hoje. As atrasadas continuam em Planejado › Atrasadas."),
+    mdOpt("tirarAtrasada","“Tirar do Meu Dia” numa tarefa atrasada vale até você mudar o prazo (e não só naquele dia).")));
   box.append(h("div",{class:"settings-sec"},h("h4",{},"Tamanho do texto no computador"),
     h("p",{},"Vale para telas de computador; no celular o tamanho não muda. Padrão: 90%."),
     h("div",{},h("span",{class:"seg"},[[0.8,"80%"],[0.9,"90%"],[1,"100%"],[1.1,"110%"]].map(([z,l])=>h("button",{class:PREFS.zoom===z?"on":"",onclick:()=>{ PREFS.zoom=z; lsSet(PREF_KEY,PREFS); applyZoom(); refreshConfig(); }},l))))));
