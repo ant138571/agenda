@@ -78,6 +78,7 @@ button{cursor:pointer}
 .nav-sep{height:1px;background:var(--line);margin:10px 8px}
 .nav-label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:6px 10px;display:flex;justify-content:space-between;align-items:center;font-weight:700}
 .tag-swatch{width:10px;height:10px;border-radius:50%;flex:none;margin:0 3px}
+.nav-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .new-tag{display:flex;gap:6px;padding:4px 8px}
 .new-tag input{flex:1;min-width:0;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel)}
 .icon-btn{border:0;background:none;padding:6px;border-radius:8px;color:var(--muted);display:inline-grid;place-items:center}
@@ -376,6 +377,13 @@ tr:last-child td{border-bottom:0}
 @media (max-width:1100px){ .proj-cols{grid-template-columns:1fr} }
 /* projeto: tarefas gerais (esquerda) e tarefas do cronograma (direita); cronograma abaixo */
 .proj-cols2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
+.proj-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:0 0 16px;overflow-x:auto;scrollbar-width:none}
+.proj-tab{display:inline-flex;align-items:center;gap:7px;border:0;background:none;padding:9px 14px;margin-bottom:-1px;border-bottom:2.5px solid transparent;color:var(--muted);font-weight:600;font-size:15px;white-space:nowrap}
+.proj-tab:hover{color:var(--ink)}
+.proj-tab.on{color:var(--accent-text);border-bottom-color:var(--accent)}
+.proj-pane{display:flex;flex-direction:column;gap:10px;min-width:0}
+.proj-pane>.eq-envio{display:flex;flex-direction:column;gap:8px}
+.eq-envio .opt{display:inline-flex;align-items:center;gap:6px}
 .proj-crono{display:flex;flex-direction:column;gap:10px;margin-top:8px;border-top:1px solid var(--line);padding-top:16px}
 .proj-memb{display:flex;flex-direction:column;gap:10px;margin-top:8px;border-top:1px solid var(--line);padding-top:16px}
 .memb-list{display:flex;flex-direction:column;gap:6px}
@@ -418,7 +426,7 @@ details.mail-note p{margin-top:6px}
 /* celular: quando o cabeçalho tem mais de um botão (ex.: grupo), os botões descem para uma linha própria abaixo do título */
 @media (max-width:860px){
   .band{flex-wrap:wrap}
-  .band .band-actions:has(>:nth-child(2)){order:4;flex-basis:100%;margin-left:0}
+  .band .band-actions:has(>:nth-child(2)),.band .band-actions:has(>.band-row){order:4;flex-basis:100%;margin-left:0}
 }
 /* tamanho do texto no computador (Configurações) */
 @media (min-width:861px){ html{zoom:var(--ui-zoom,1)} }
@@ -555,6 +563,12 @@ body.has-bulk .content{padding-bottom:110px}
 .crono .cr-eq-func,.crono .cr-eq-mail{display:block;color:var(--suave);font-size:.9em}
 .crono .cr-eq-grupo{margin-bottom:1rem;break-inside:avoid}
 .crono .cr-eq-grupo h4{margin:0 0 .45rem;font-family:var(--display);font-weight:600;font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;color:var(--suave)}
+.crono .cr-eq-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.crono .cr-eq-cols.um{grid-template-columns:minmax(0,1fr)}
+.crono .cr-eq-col{min-width:0;padding-right:1.5rem}
+.crono .cr-eq-col+.cr-eq-col{padding:0 0 0 1.5rem;border-left:1px solid var(--linha)}
+.crono .cr-eq-cols ul{grid-template-columns:minmax(0,1fr)}
+.crono .cr-eq-cols li,.crono .cr-eq-cols h4{overflow-wrap:anywhere}
 @container (max-width:40rem){
   .crono .rotulo small{display:none}
   .crono .evento{grid-template-columns:1.75rem minmax(0,1fr)}
@@ -708,6 +722,11 @@ const hm=d=>`${pad(d.getHours())}:${pad(d.getMinutes())}`;
 /* lembrete: guardado como data/hora ISO (UTC); exibido no horário local */
 const fmtRemind=iso=>{const d=new Date(iso), k=ymd(d); if(k===today()) return "hoje "+hm(d); if(k===ymd(addDays(new Date(),1))) return "amanhã "+hm(d); return `${DIAS[d.getDay()]} ${pad(d.getDate())}/${pad(d.getMonth()+1)} ${hm(d)}`;};
 const toLocalInput=iso=>{const d=new Date(iso); return isNaN(d)?"":`${ymd(d)}T${hm(d)}`;};
+/* prazo e lembrete escolhidos nos campos: só de hoje (agora) em diante e até 2099 — ao digitar o ano, o campo passa
+   por datas como 0002-10-07, que são ignoradas (e desfeitas ao sair do campo) */
+const DATA_MAX="2099-12-31";
+const dataValida=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||"")&&v>=today()&&v<=DATA_MAX;
+const lembreteValido=d=>!!d&&!isNaN(d)&&d.getTime()>=Date.now()-60e3&&d.getFullYear()<=2099;
 const uid=()=> "t"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const normTag=s=>String(s).trim().replace(/^#+/,"").toLowerCase().replace(/\s+/g,"-").replace(/[^\p{L}\p{N}_.\-]/gu,"").slice(0,40);
 const TAG_COLORS=["#2F6FB0","#B5563A","#3C8A5E","#8A5AB5","#B08A2F","#2F8C95","#B54A7A","#5C6BC0","#7A8B2F","#C0662F"];
@@ -1011,9 +1030,13 @@ function applyOrder(ids){
 }
 
 /* ================= Estado de UI ================= */
-const UI=Object.assign({view:"home",imp:0,pri:0,sort:"due",showDone:false,sel:null,q:"",rep:{from:null,to:null,tags:[]},panels:{}},lsGet(UI_KEY,{}),{sel:null,detailHidden:false,q:"",homeDay:null,tlLeft:null,multi:new Set(),multiOn:false});
+const UI=Object.assign({view:"home",imp:0,pri:0,sort:"due",showDone:false,sel:null,q:"",rep:{from:null,to:null,tags:[]},panels:{}},lsGet(UI_KEY,{}),{sel:null,detailHidden:false,q:"",homeDay:null,tlLeft:null,multi:new Set(),multiOn:false,projTab:"tarefas"});
 function saveUI(){ lsSet(UI_KEY,{view:UI.view,imp:UI.imp,pri:UI.pri,sort:UI.sort,showDone:UI.showDone,panels:UI.panels}); }
-function go(view){ if(UI.cronEdit&&view!=="proj:"+UI.cronEdit){ UI.cronEdit=null; UI.cronDraft=null; } UI.multiOn=false; UI.multi=new Set(); UI.view=view; UI.q=""; $("#q").value=""; saveUI(); closeNav(); render(); $("#content").scrollTop=0; }
+/* grupo que virou projeto: a tela do grupo dá lugar à do projeto (aba Tarefas). tab: aba do projeto (tarefas | cronograma | equipe) */
+function go(view,tab){ if(view.startsWith("tag:")&&(VIEW.projects||{})[view.slice(4)]){ view="proj:"+view.slice(4); tab=tab||"tarefas"; }
+  if(view.startsWith("proj:")&&(tab||view!==UI.view)) UI.projTab=PROJ_TABS.includes(tab)?tab:"tarefas";
+  if(UI.cronEdit&&view!=="proj:"+UI.cronEdit){ UI.cronEdit=null; UI.cronDraft=null; } UI.multiOn=false; UI.multi=new Set(); UI.view=view; UI.q=""; $("#q").value=""; saveUI(); closeNav(); render(); $("#content").scrollTop=0; }
+const PROJ_TABS=["tarefas","cronograma","equipe"];
 function closeNav(){ $("#app").classList.remove("nav-open"); }
 
 /* ================= Render ================= */
@@ -1034,10 +1057,11 @@ function render(force){
   // o campo perder o foco (antes, ele apagava o texto; ver bgRender)
   addDeferred=false;
   pendingRender=false;
+  if(!UI.q&&UI.view.startsWith("tag:")&&(VIEW.projects||{})[UI.view.slice(4)]){ UI.view="proj:"+UI.view.slice(4); UI.projTab="tarefas"; saveUI(); }   // grupo que virou projeto
   renderNav();
   const wrap=$("#wrap");
   // guarda o que estava escrito nos campos Adicionar (e o foco) para devolver depois do redesenho, na mesma tela
-  const vKey=UI.q?"search":UI.view, ae=document.activeElement;
+  const vKey=UI.q?"search":UI.view+(UI.view.startsWith("proj:")?"#"+UI.projTab:""), ae=document.activeElement;
   const keepAdd=[...wrap.querySelectorAll("form.add input")].filter(i=>i.id).map(i=>({id:i.id,v:i.value,f:ae===i,s:i.type==="text"?i.selectionStart:null,e:i.type==="text"?i.selectionEnd:null}));
   wrap.replaceChildren(); wrap.classList.remove("wide");
   $("#bandActions").replaceChildren(); $("#viewEyebrow").replaceChildren();
@@ -1056,7 +1080,7 @@ function render(force){
   renderDetail();
   placeTimeline();
   const mb=$("#mselBtn");
-  mb.hidden=v==="report"||v==="projects"||!!(v.startsWith("proj:")&&UI.cronEdit);
+  mb.hidden=v==="report"||v==="projects"||!!(v.startsWith("proj:")&&UI.cronEdit&&UI.projTab==="cronograma");
   mb.classList.toggle("on",UI.multiOn); mb.classList.toggle("home-v",v==="home"); mb.replaceChildren(svg(ICON.select,15),h("span",{class:"msel-lbl"},UI.multiOn?"Cancelar seleção":"Selecionar")); mb.setAttribute("aria-label",UI.multiOn?"Cancelar seleção":"Selecionar várias tarefas");
   renderBulk();
 }
@@ -1081,10 +1105,19 @@ function renderNav(){
   ];
   nav.replaceChildren();
   for(const [id,label,ic,n] of items){
-    nav.append(h("button",{class:"nav-item"+((UI.view===id||(id==="projects"&&UI.view.startsWith("proj:")))&&!UI.q?" active":""),onclick:()=>go(id)},svg(ic),label,n?h("span",{class:"count"},n):null));
+    nav.append(h("button",{class:"nav-item"+(UI.view===id&&!UI.q?" active":""),onclick:()=>go(id)},svg(ic),label,n?h("span",{class:"count"},n):null));
   }
   nav.append(h("div",{class:"nav-sep"}));
-  const {names}=allTags();
+  // projetos (acima dos grupos): um grupo que virou projeto aparece só aqui
+  const projs=projectsArr().sort((a,b)=>(a.titulo||projTitle(a.tag)).localeCompare(b.titulo||projTitle(b.tag),"pt-BR"));
+  nav.append(h("div",{class:"nav-label"},h("span",{},"Projetos"),h("button",{class:"icon-btn",title:"Novo projeto","aria-label":"Novo projeto",onclick:openNewProject},svg(ICON.plus,16))));
+  for(const pj of projs){
+    const c=open.filter(t=>(t.tags||[]).includes(pj.tag)).length, nome=pj.titulo||projTitle(pj.tag);
+    nav.append(h("button",{class:"nav-item"+(UI.view==="proj:"+pj.tag&&!UI.q?" active":""),title:nome+" · #"+pj.tag,onclick:()=>go("proj:"+pj.tag)},
+      h("span",{class:"tag-swatch",style:`background:${tagColor(pj.tag)}`}),h("span",{class:"nav-txt"},nome),c?h("span",{class:"count"},c):null));
+  }
+  if(!projs.length) nav.append(h("div",{class:"nav-label",style:"text-transform:none;letter-spacing:0;font-weight:400"},"Clique com o botão direito num grupo e escolha “Transformar em projeto”."));
+  const names=allTags().names.filter(n=>!(VIEW.projects||{})[n]);
   const addRow=h("div",{class:"new-tag",hidden:true});
   const inp=h("input",{type:"text",id:"newTagInput",placeholder:"nome do grupo, ex.: pesquisa","aria-label":"Novo grupo"});
   const commit=()=>{const n=normTag(inp.value); if(n){ensureTags([n]); go("tag:"+n);} addRow.hidden=true; inp.value="";};
@@ -1094,8 +1127,11 @@ function renderNav(){
   nav.append(addRow);
   for(const n of names){
     const c=open.filter(t=>(t.tags||[]).includes(n)).length;
-    nav.append(h("button",{class:"nav-item"+(UI.view==="tag:"+n&&!UI.q?" active":""),onclick:()=>go("tag:"+n)},
-      h("span",{class:"tag-swatch",style:`background:${tagColor(n)}`}),"#"+n,c?h("span",{class:"count"},c):null));
+    const it=h("button",{class:"nav-item"+(UI.view==="tag:"+n&&!UI.q?" active":""),onclick:()=>go("tag:"+n)},
+      h("span",{class:"tag-swatch",style:`background:${tagColor(n)}`}),"#"+n,c?h("span",{class:"count"},c):null);
+    // clique direito: transformar o grupo em projeto (o grupo passa a aparecer só como projeto)
+    it.addEventListener("contextmenu",e=>{ e.preventDefault(); openCtx(e.clientX,e.clientY,[{label:"Transformar em projeto",icon:ICON.folder,run:()=>createProject(n)}]); });
+    nav.append(it);
   }
   if(!names.length) nav.append(h("div",{class:"nav-label",style:"text-transform:none;letter-spacing:0;font-weight:400"},"Crie grupos aqui ou escreva #grupo no nome da tarefa."));
 }
@@ -1178,7 +1214,7 @@ function renderHome(wrap){
     wrap.append(h("section",{class:"home-proj","aria-label":"Cronogramas dos projetos"},
       h("div",{class:"col-head"},h("h3",{},"Projetos"),h("button",{class:"btn small",onclick:()=>go("projects")},"Ver todos")),
       h("div",{class:"proj-grid"},projs.map(p=>{ const c=cronoView(p,"mini"); c.setAttribute("role","link"); c.tabIndex=0; c.title="Abrir projeto #"+p.tag;
-        c.addEventListener("click",()=>go("proj:"+p.tag)); c.addEventListener("keydown",e=>{ if(e.key==="Enter") go("proj:"+p.tag); }); return c; }))));
+        c.addEventListener("click",()=>go("proj:"+p.tag,"cronograma")); c.addEventListener("keydown",e=>{ if(e.key==="Enter") go("proj:"+p.tag,"cronograma"); }); return c; }))));
     crAjustarTudo();
   }
 }
@@ -1298,7 +1334,8 @@ function searchTasks(list,q){
   }
   return out.sort((a,b)=>b[0]-a[0]).map(x=>x[1]);
 }
-function renderList(wrap,v){
+/* po (aba Tarefas do projeto): {membros} — mesma lista do grupo, sem trocar o cabeçalho */
+function renderList(wrap,v,po){
   let list=myTasks(), title="", sub="", defaults={}, groupBy=null, showDoneDefault=UI.showDone;
   const td=today();
   if(v==="search"&&isTagQuery(UI.q)){   // #grupo na pesquisa: só as tarefas do grupo; Enter abre o grupo
@@ -1315,8 +1352,8 @@ function renderList(wrap,v){
   else if(v==="planned"){ title="Planejado"; sub="Tarefas com prazo"; list=list.filter(t=>t.due); groupBy="due"; }
   else if(v==="all"){ title="Tarefas"; sub="Todas as tarefas"; }
   else if(v==="done"){ title="Concluídas"; sub="Histórico de tarefas feitas"; list=list.filter(t=>t.done); showDoneDefault=true; }
-  else if(v.startsWith("tag:")){ const g=v.slice(4); title="#"+g; sub="Grupo de tarefas"; list=list.filter(t=>(t.tags||[]).includes(g)); defaults={tags:[g]}; tagActions(g); }
-  setHeader(title,sub.replace(/^./,c=>c.toUpperCase()));
+  else if(v.startsWith("tag:")){ const g=v.slice(4); title="#"+g; sub="Grupo de tarefas"; list=list.filter(t=>(t.tags||[]).includes(g)); defaults={tags:[g]}; if(!po) tagActions(g); }
+  if(!po) setHeader(title,sub.replace(/^./,c=>c.toUpperCase()));
   // grupo: lista à esquerda e, à direita, Urgentes e Importantes só deste grupo (como na home)
   let out=wrap;
   if(v.startsWith("tag:")){
@@ -1339,7 +1376,7 @@ function renderList(wrap,v){
   else if(v!=="search") list=sortTasks(list,groupBy==="due"?"due":manual?"manual":UI.sort);   // pesquisa: ordem por relevância
   const open=list.filter(t=>!t.done), done=list.filter(t=>t.done);
   const body = v==="done"?list:open;
-  const row=t=>taskRow(t,{drag:manual&&!t.done});
+  const row=t=>taskRow(t,{drag:manual&&!t.done,membros:po&&po.membros?po.membros(t.id):undefined});
   if(!list.length){ out.append(h("div",{class:"empty"},v==="search"?"Nenhuma tarefa encontrada.":"Nenhuma tarefa aqui com estes filtros.")); return; }
   if(groupBy==="priority"){
     for(const p of [1,2,3]){ const g=body.filter(t=>(t.priority||2)===p); if(!g.length) continue;
@@ -1381,6 +1418,7 @@ function addBar(defaults,ids){
     e.preventDefault();
     const raw=inp.value.trim(); if(!raw) return;
     const p=parseQuick(raw); if(!p.title){toast("Escreva o nome da tarefa.");return;}
+    if(date.value&&!dataValida(date.value)){ toast("O prazo precisa ser de hoje em diante."); date.focus(); return; }
     const extra={...defaults};
     extra.tags=[...new Set([...(defaults.tags||[]),...p.tags])];
     if(p.importance) extra.importance=p.importance;
@@ -1391,14 +1429,14 @@ function addBar(defaults,ids){
     inp.value=""; date.value="";   // limpa antes de criar: o campo vazio deixa a lista ser redesenhada na hora
     const nid=createTask(p.title,extra), nt=VIEW.tasks[nid];
     // filtros de importância/prioridade (só nas listas) esconderiam a nova tarefa: são limpos para ela aparecer selecionada
-    const inList=!UI.q&&UI.view!=="home"&&!UI.view.startsWith("proj:")&&UI.view!=="report"&&UI.view!=="projects";
+    const inList=!UI.q&&UI.view!=="home"&&(!UI.view.startsWith("proj:")||UI.projTab==="tarefas")&&UI.view!=="report"&&UI.view!=="projects";
     if(inList&&nt&&((UI.imp&&(nt.importance||2)!==UI.imp)||(UI.pri&&(nt.priority||2)!==UI.pri))){ UI.imp=0; UI.pri=0; saveUI(); toast("Tarefa adicionada · filtros limpos para mostrá-la"); }
     else toast("Tarefa adicionada");
     if(!UI.multiOn){ UI.sel=nid; UI.detailHidden=!detOpen; render(); }
     setTimeout(()=>{const i=document.getElementById(inId); if(i) i.focus();},0);
   }});
   const inp=h("input",{type:"text",id:inId,placeholder:(ids&&ids.ph)||"Adicionar tarefa…",autocomplete:"off","aria-label":"Nova tarefa"});
-  const date=h("input",{type:"date",id:dtId,"aria-label":"Prazo",title:"Prazo"});
+  const date=h("input",{type:"date",id:dtId,"aria-label":"Prazo",title:"Prazo",min:today(),max:DATA_MAX});
   form.append(inp,date,h("button",{class:"add-btn",type:"submit","aria-label":"Adicionar"},svg(ICON.plus,20,'stroke-width="2.4"')));
   const frag=document.createDocumentFragment();
   frag.append(form,h("div",{class:"hint",html:"Atalhos no nome: <code>#grupo</code> <code>!alta</code> <code>!media</code> <code>!baixa</code> <code>p1</code> <code>p2</code> <code>p3</code> — ex.: <code>Corrigir provas #preparar-aula !alta p1</code>"}));
@@ -1699,9 +1737,9 @@ function bulkRun(fn,msg,exit){
 const nTxt=(n,s,p)=>`${n} ${n===1?s:p}`;
 function bulkDue(due,label){ bulkRun(t=>t.due===due?null:(due?{due}:(t.repeat?{due:null,repeat:null}:{due:null})),n=>nTxt(n,"tarefa","tarefas")+" · "+label); }
 function bulkPickDate(){
-  const inp=h("input",{type:"date",id:"bulkDate",style:"border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)"});
+  const inp=h("input",{type:"date",id:"bulkDate",min:today(),max:DATA_MAX,style:"border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)"});
   openModal("Prazo para "+nTxt(UI.multi.size,"tarefa","tarefas"),h("div",{class:"field"},h("label",{for:"bulkDate"},"Data"),inp),[
-    {label:"Aplicar",cls:"primary",run:()=>{ if(!inp.value){ toast("Escolha uma data."); return false; } bulkDue(inp.value,"prazo "+fmtShort(inp.value)); }}]);
+    {label:"Aplicar",cls:"primary",run:()=>{ if(!inp.value){ toast("Escolha uma data."); return false; } if(!dataValida(inp.value)){ toast("Escolha uma data de hoje em diante."); return false; } bulkDue(inp.value,"prazo "+fmtShort(inp.value)); }}]);
   setTimeout(()=>inp.focus(),30);
 }
 function bulkGroup(){
@@ -1847,7 +1885,8 @@ function renderDetail(){
     const a=document.activeElement;
     if(tagsDirty&&!(pane.contains(a)&&a.matches("textarea,input[type=text]"))){ tagsDirty=false; UI.forceDetail=true; render(); } },0));
   tagBox.append(tagIn,dl);
-  const dueIn=h("input",{type:"date",id:"dDue",value:t.due||"",onchange:e=>{ const v=e.target.value||null, cur=VIEW.tasks[id]; patchTask(id,!v&&cur&&cur.repeat?{due:null,repeat:null}:{due:v}); }});
+  const dueIn=h("input",{type:"date",id:"dDue",min:today(),max:DATA_MAX,value:t.due||"",onchange:e=>{ const v=e.target.value||null, cur=VIEW.tasks[id]; if(v&&!dataValida(v)) return; patchTask(id,!v&&cur&&cur.repeat?{due:null,repeat:null}:{due:v}); }});
+  dueIn.addEventListener("blur",()=>{ const v=dueIn.value, cur=(VIEW.tasks[id]||{}).due||""; if(v&&v!==cur&&!dataValida(v)){ dueIn.value=cur; toast("Escolha um prazo de hoje em diante."); } });
   const notes=h("textarea",{id:"dNotes",placeholder:"Anotações, links, passos…"}); notes.value=t.notes||"";
   notes.addEventListener("blur",()=>{ if(notes.value!==(VIEW.tasks[id]?.notes||"")) patchTask(id,{notes:notes.value}); });
   const quickDue=(n,l)=>h("button",{class:"opt",onclick:()=>patchTask(id,{due:ymd(addDays(new Date(),n))})},l);
@@ -1866,7 +1905,8 @@ function renderDetail(){
     rep?h("div",{class:"gest-hint",style:"text-align:left"},(rep.freq==="monthly"?`Todo dia ${rep.day||parseYmd(t.due||today()).getDate()}. `:"")+"O prazo mostra a próxima data. Ao concluir, a tarefa passa para a data seguinte e continua aparecendo nas próximas semanas."+(nOcc?` Concluída ${nOcc} vez${nOcc===1?"":"es"}.`:"")):null);
   // ----- lembrete (alarme)
   const setRemind=d=>patchTask(id,{remindAt:d?d.toISOString():null});
-  const remIn=h("input",{type:"datetime-local",id:"dRemind",value:t.remindAt?toLocalInput(t.remindAt):"",onchange:e=>{ const d=e.target.value?new Date(e.target.value):null; if(d&&isNaN(d)) return; setRemind(d); if(d) toast("Lembrete: "+fmtRemind(d.toISOString())); }});
+  const remIn=h("input",{type:"datetime-local",id:"dRemind",min:toLocalInput(new Date().toISOString()),max:DATA_MAX+"T23:59",value:t.remindAt?toLocalInput(t.remindAt):"",onchange:e=>{ const d=e.target.value?new Date(e.target.value):null; if(d&&!lembreteValido(d)) return; setRemind(d); if(d) toast("Lembrete: "+fmtRemind(d.toISOString())); }});
+  remIn.addEventListener("blur",()=>{ const v=remIn.value, ra=(VIEW.tasks[id]||{}).remindAt, cur=ra?toLocalInput(ra):""; if(v&&v!==cur&&!lembreteValido(new Date(v))){ remIn.value=cur; toast("Escolha um lembrete de agora em diante."); } });
   const at=(days,hh,mm)=>{const d=addDays(new Date(),days); d.setHours(hh,mm,0,0); return d;};
   const quickRem=(l,fn)=>h("button",{class:"opt",onclick:()=>{const d=fn(); setRemind(d); toast("Lembrete: "+fmtRemind(d.toISOString()));}},l);
   const remOpts=h("div",{class:"opts"},quickRem("Em 1 hora",()=>{const d=new Date(Date.now()+3600e3); d.setSeconds(0,0); return d;}),
@@ -1894,7 +1934,7 @@ function renderDetail(){
       ...projTags.map(g=>{ const pj=getProject(g); if(!pj) return null; const sel=(pj.atrib||{})[id]||[];
         return h("div",{class:"field d-resp"},h("span",{class:"lbl"},"Responsáveis"+(projTags.length>1?" · #"+g:"")),
           pj.membros.length?h("div",{class:"opts"},pj.membros.map(m=>h("button",{class:"opt"+(sel.includes(m.id)?" on":""),"aria-pressed":sel.includes(m.id)?"true":"false",title:funcNomes(pj,m).join(", "),onclick:()=>toggleResp(g,id,m.id)},svg(ICON.user,13),membroNome(m))))
-            :h("div",{class:"gest-hint",style:"text-align:left"},"Cadastre a equipe em “Membros”, na tela do projeto, para escolher os responsáveis.",h("button",{class:"pn-more",onclick:()=>go("proj:"+g)},"Abrir projeto #"+g+" ›"))); }),
+            :h("div",{class:"gest-hint",style:"text-align:left"},"Cadastre a equipe na aba “Equipe” do projeto para escolher os responsáveis.",h("button",{class:"pn-more",onclick:()=>go("proj:"+g,"equipe")},"Abrir equipe do projeto #"+g+" ›"))); }),
       h("div",{class:"field"},h("label",{for:"dDue"},"Prazo de execução"),dueIn,h("div",{class:"opts"},quickDue(0,"Hoje"),quickDue(1,"Amanhã"),quickDue(7,"Em 1 semana"),t.due?h("button",{class:"opt",onclick:()=>patchTask(id,t.repeat?{due:null,repeat:null}:{due:null})},"Sem prazo"):null)),
       repField,
       h("div",{class:"field"},h("label",{for:"dRemind"},"Lembrete (alarme)"),remIn,remOpts,
@@ -2072,11 +2112,12 @@ function openTagModal(g){
 }
 function openImport(){
   const ta=h("textarea",{id:"importBox",placeholder:"Uma tarefa por linha. Ex.:\n#imagem4 Aula: distribuir manual de pós-produção\nLer artigo sobre fotografia #pesquisa !alta p2"});
-  const date=h("input",{type:"date",id:"importDate",style:"border:1px solid var(--line);border-radius:10px;padding:6px 8px;background:var(--panel)"});
+  const date=h("input",{type:"date",id:"importDate",min:today(),max:DATA_MAX,style:"border:1px solid var(--line);border-radius:10px;padding:6px 8px;background:var(--panel)"});
   openModal("Importar lista de tarefas",h("div",{style:"display:flex;flex-direction:column;gap:10px"},
     h("p",{style:"margin:0;color:var(--muted);font-size:14px"},"Cole aqui tarefas de outro aplicativo (por exemplo, copiadas do Microsoft To Do). Cada linha vira uma tarefa; #tags, !alta e p1 são reconhecidos. Linhas começando com “-” viram etapas da tarefa de cima."),
     ta,h("label",{class:"check-lbl",for:"importDate"},"Prazo para todas (opcional):",date)),[
     {label:"Importar",cls:"primary",run:()=>{
+      if(date.value&&!dataValida(date.value)){ toast("O prazo precisa ser de hoje em diante."); return false; }
       const lines=ta.value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean); const todo=[];
       for(let l of lines){
         if(/^[-–•]\s*/.test(l)&&todo.length){ const st=l.replace(/^[-–•]\s*/,""); const L=todo[todo.length-1].steps; if(st) L.push({id:"s"+(L.length+1),title:st,done:false}); continue; }
@@ -2299,9 +2340,15 @@ function crEquipe(p){
   const grupos=(p.funcoes||[]).map(f=>({nome:f.nome,ms:ms.filter(m=>(m.funcoes||[]).includes(f.id))})).filter(g=>g.ms.length);
   const sem=ms.filter(m=>!(m.funcoes||[]).length);
   const box=h("section",{class:"cr-equipe"},h("h3",{class:"cr-eq-titulo"},"Equipe"));
-  if(!grupos.length){ box.append(h("ul",{},sem.map(item))); return box; }
-  for(const g of grupos) box.append(h("div",{class:"cr-eq-grupo"},h("h4",{},g.nome),h("ul",{},g.ms.map(item))));
-  if(sem.length) box.append(h("div",{class:"cr-eq-grupo"},h("h4",{},"Demais membros"),h("ul",{},sem.map(item))));
+  // duas colunas com separador no meio: os tópicos (ou as pessoas, sem funções) são divididos ao meio, na ordem
+  if(grupos.length&&sem.length) grupos.push({nome:"Demais membros",ms:sem});
+  let us=grupos.length?grupos.map(g=>({nome:g.nome,ms:g.ms,w:1+g.ms.length})):sem.map(m=>({ms:[m],w:1}));
+  if(us.length===1&&us[0].nome&&us[0].ms.length>1){ const g=us[0], k=Math.ceil(g.ms.length/2); us=[{nome:g.nome,ms:g.ms.slice(0,k),w:1+k},{nome:g.nome,cont:true,ms:g.ms.slice(k),w:1+g.ms.length-k}]; }
+  const total=us.reduce((a,u)=>a+u.w,0); let k=us.length, best=Infinity, acc=0;
+  for(let i=0;i<=us.length;i++){ const d=Math.abs(2*acc-total)+(2*acc<total?.5:0); if(d<best){ best=d; k=i; } if(i<us.length) acc+=us[i].w; }
+  const col=l=>h("div",{class:"cr-eq-col"},grupos.length?l.map(u=>h("div",{class:"cr-eq-grupo"},h("h4",u.cont?{class:"cr-eq-cont","aria-hidden":"true"}:{},u.cont?"\u00a0":u.nome),h("ul",{},u.ms.map(item)))):h("ul",{},l.map(u=>item(u.ms[0]))));
+  const esq=us.slice(0,k), dir=us.slice(k);
+  box.append(h("div",{class:"cr-eq-cols"+(dir.length&&esq.length?"":" um")},esq.length?col(esq):null,dir.length?col(dir):null));
   return box;
 }
 /* evita rótulos sobrepostos na faixa: primeiro some a legenda, depois a própria data (autocontida: também roda na página de impressão) */
@@ -2335,7 +2382,12 @@ function exportCronoPDF(tag){
   if(!cronoEvents(p).length){ toast("O cronograma ainda não tem datas."); return; }
   const titulo=p.titulo||projTitle(tag);
   const fonts=[...document.querySelectorAll('link[rel=stylesheet][href*="fonts.googleapis"]')].map(l=>l.outerHTML).join("");
-  const html=`<!doctype html><html lang="pt-BR" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cronograma: ${esc(titulo)}</title>${fonts}<style>html,body{margin:0;background:#f4f5f7}${$("#cronoCss").textContent}</style></head><body>${cronoView(p,"print").outerHTML}<script>(function(){var aj=${crAjustar.toString()};function ir(){aj(document);setTimeout(function(){window.focus();window.print();},250);}(document.fonts&&document.fonts.ready?Promise.race([document.fonts.ready,new Promise(function(r){setTimeout(r,2500);})]):Promise.resolve()).then(ir);})();<\/script></body></html>`;
+  /* logotipo em cima à direita em todas as páginas: cabeçalho de tabela (thead), que o navegador repete em cada página
+     impressa; na primeira página ele ocupa o lugar do logotipo do cabeçalho do cronograma */
+  const folha=cronoView(p,"print").outerHTML;
+  const corpo=p.logo?`<table class="cr-pg"><thead><tr><td><div class="cr-pg-logo"><img src="${p.logo}" alt="Logotipo"></div></td></tr></thead><tbody><tr><td>${folha}</td></tr></tbody></table>`:folha;
+  const pgCss=p.logo?".cr-pg{border-collapse:collapse;width:100%;max-width:52rem;margin:0 auto}.cr-pg td{padding:0;vertical-align:top}.cr-pg-logo{position:relative;z-index:1;display:flex;justify-content:flex-end;align-items:flex-start;height:5.5rem;padding:2.5rem 1.25rem 0}.cr-pg-logo img{display:block;max-width:12rem;max-height:5.5rem;object-fit:contain}.cr-pg .crono .cr-logo{display:none}.cr-pg .crono.cr-print{margin-top:calc(-2.5rem - 5.5rem)}@media print{.cr-pg{max-width:none}.cr-pg-logo{padding:13mm 16mm 0}.cr-pg .crono.cr-print{margin-top:calc(-13mm - 5.5rem)}}":"";
+  const html=`<!doctype html><html lang="pt-BR" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cronograma: ${esc(titulo)}</title>${fonts}<style>html,body{margin:0;background:#f4f5f7}${$("#cronoCss").textContent}${pgCss}</style></head><body>${corpo}<script>(function(){var aj=${crAjustar.toString()};function ir(){aj(document);setTimeout(function(){window.focus();window.print();},250);}(document.fonts&&document.fonts.ready?Promise.race([document.fonts.ready,new Promise(function(r){setTimeout(r,2500);})]):Promise.resolve()).then(ir);})();<\/script></body></html>`;
   const w=window.open("","_blank");
   if(w){ w.document.open(); w.document.write(html); w.document.close(); toast("Escolha “Salvar como PDF” na janela de impressão."); return; }
   // janela bloqueada: imprime por um quadro oculto
@@ -2354,7 +2406,7 @@ function renderProjects(wrap){
   wrap.append(h("div",{class:"proj-grid"},list.map(p=>{
     const n=tasksArr().filter(t=>!t.done&&(t.tags||[]).includes(p.tag)).length;
     const card=cronoView(p,"mini"); card.setAttribute("role","link"); card.tabIndex=0; card.title="Abrir projeto #"+p.tag;
-    card.addEventListener("click",()=>go("proj:"+p.tag)); card.addEventListener("keydown",e=>{ if(e.key==="Enter") go("proj:"+p.tag); });
+    card.addEventListener("click",()=>go("proj:"+p.tag,"cronograma")); card.addEventListener("keydown",e=>{ if(e.key==="Enter") go("proj:"+p.tag,"cronograma"); });
     card.querySelector("header").append(h("p",{class:"periodo",style:"margin-top:.1rem;font-size:.9rem"},`#${p.tag} · ${n} tarefa${n===1?"":"s"} aberta${n===1?"":"s"}`));
     return card;
   })));
@@ -2377,7 +2429,22 @@ function renderProject(wrap,tag){
   wrap.classList.add("wide");
   $("#viewEyebrow").append("Projeto");
   setHeader("#"+tag,"");
+  // o grupo do projeto não aparece mais sozinho: renomear/excluir o grupo fica aqui
+  $("#bandActions").append(h("button",{class:"btn small band-row",onclick:()=>openTagModal(tag)},svg(ICON.edit,15),"Renomear / excluir grupo"));
   const editing=UI.cronEdit===tag;
+  // abas: Tarefas (como na tela do grupo) · Cronograma (montagem e cronograma) · Equipe (membros e envio)
+  const tab=PROJ_TABS.includes(UI.projTab)?UI.projTab:"tarefas";
+  wrap.append(h("div",{class:"proj-tabs",role:"tablist","aria-label":"Seções do projeto"},
+    [["tarefas","Tarefas",ICON.list],["cronograma","Cronograma",ICON.cal],["equipe","Equipe",ICON.user]].map(([k,l,ic])=>
+      h("button",{class:"proj-tab"+(tab===k?" on":""),role:"tab","aria-selected":tab===k?"true":"false",onclick:()=>{ if(UI.projTab===k) return; UI.projTab=k; render(); $("#content").scrollTop=0; }},svg(ic,16),l))));
+  if(!p.membros.some(m=>m.id===EU)) setTimeout(()=>ensureEu(tag),0);
+  if(p.membros.some(m=>m.funcao)) setTimeout(()=>migrateFuncoes(tag),0);
+  if(tab==="tarefas"){ const box=h("div",{class:"proj-pane"}); wrap.append(box); renderList(box,"tag:"+tag,{membros:membrosDe(p)}); return; }
+  if(tab==="equipe"){
+    const all=tasksArr().filter(t=>(t.tags||[]).includes(tag));
+    wrap.append(h("div",{class:"proj-pane"},equipeEnvio(tag,p),membrosSection(tag,p,all)));
+    return;
+  }
   // ----- tarefas: gerais (esquerda) e as que entram no cronograma (direita)
   const all=tasksArr().filter(t=>(t.tags||[]).includes(tag));
   const mb=membrosDe(p);
@@ -2398,10 +2465,6 @@ function renderProject(wrap,tag){
     col("Tarefas do cronograma",cr,{tags:[tag],crono:true},{input:"addInputCr",date:"addDateCr",ph:"Adicionar ao cronograma…"},
       "Nenhuma tarefa no cronograma. Adicione aqui (com prazo) ou abra uma tarefa e escolha “Incluir” em Cronograma do projeto.",
       h("div",{class:"gest-hint",style:"text-align:left"},"Título e prazo destas tarefas atualizam o cronograma automaticamente; concluídas saem dele. Toque em − para tirar uma tarefa do cronograma."+(noDue?` ${noDue} sem prazo: só aparece${noDue===1?"":"m"} no cronograma depois de ter prazo.`:"")),"tirar")));
-  // ----- membros do projeto (e tarefas atribuídas a eles)
-  if(!p.membros.some(m=>m.id===EU)) setTimeout(()=>ensureEu(tag),0);
-  if(p.membros.some(m=>m.funcao)) setTimeout(()=>migrateFuncoes(tag),0);
-  wrap.append(membrosSection(tag,p,all));
   // ----- cronograma (ou modo de edição)
   const sec=h("section",{class:"proj-crono","aria-label":"Cronograma"},h("div",{class:"col-head"},h("h3",{},"Cronograma")));
   if(!editing) sec.append(h("div",{class:"row-end",style:"justify-content:flex-start"},
@@ -2412,6 +2475,22 @@ function renderProject(wrap,tag){
   sec.append(editing?cronoEditor(tag):cronoView(p,"card"));
   wrap.append(sec);
   if(!editing) crAjustarTudo();
+}
+/* aba Equipe: abre o Gmail já com destinatários (toda a equipe ou uma função) e assunto preenchidos; você ("eu") não entra */
+function equipeEnvio(tag,p){
+  const comMail=ms=>ms.filter(m=>m.email&&m.id!==EU), todos=comMail(membrosOrdem(p)), titulo=p.titulo||projTitle(tag);
+  const sec=h("section",{class:"eq-envio","aria-label":"Enviar e-mail à equipe"},h("div",{class:"col-head"},h("h3",{},"Enviar e-mail")));
+  if(!todos.length){ sec.append(h("div",{class:"gest-hint",style:"text-align:left"},"Cadastre o e-mail dos membros (abaixo) para enviar e-mails à equipe.")); return sec; }
+  const abrir=(ms,grupo)=>{
+    const to=[...new Set(ms.map(m=>m.email))], su="Projeto "+titulo+(grupo?" — "+grupo:"");
+    window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to.join(","))}&su=${encodeURIComponent(su)}`,"_blank","noopener");
+  };
+  const grupos=p.funcoes.map(f=>({f,ms:comMail(membrosOrdem(p).filter(m=>m.funcoes.includes(f.id)))})).filter(g=>g.ms.length);
+  sec.append(h("div",{class:"opts"},
+      h("button",{class:"opt on",title:todos.map(m=>m.email).join(", "),onclick:()=>abrir(todos,"")},svg(ICON.mail,14),`Toda a equipe (${todos.length})`),
+      ...grupos.map(g=>h("button",{class:"opt",title:g.ms.map(m=>m.email).join(", "),onclick:()=>abrir(g.ms,g.f.nome)},svg(ICON.mail,14),`${g.f.nome} (${g.ms.length})`))),
+    h("p",{class:"mail-note"},"Abre o Gmail com os destinatários e o assunto já preenchidos. Para escolher pessoa por pessoa ou incluir a mensagem com as tarefas de cada um, use “Enviar mensagem”."));
+  return sec;
 }
 function confirmRemoveProject(tag){
   openModal("Remover projeto #"+tag,h("p",{style:"margin:0;color:var(--muted)"},"O cronograma deste projeto será apagado. O grupo e as tarefas continuam como estão."),[
@@ -2626,10 +2705,19 @@ async function makeCronoPDF(tag){
     const root=d.querySelector(".crono");
     crFixColors(root); crAjustar(d);
     const rt=root.getBoundingClientRect(), total=rt.height;
-    const cuts=[...root.querySelectorAll(".evento,.cr-equipe,.cr-eq-grupo")].map(e=>e.getBoundingClientRect().top-rt.top);
+    // equipe em duas colunas: só corta onde nenhum tópico/pessoa da outra coluna fica partido
+    const atoms=[...root.querySelectorAll(".cr-eq-cols .cr-eq-grupo,.cr-eq-cols li")].map(e=>{ const r=e.getBoundingClientRect(); return [r.top-rt.top,r.bottom-rt.top]; });
+    const cuts=[...root.querySelectorAll(".evento,.cr-equipe,.cr-eq-grupo,.cr-eq-cols li")].map(e=>e.getBoundingClientRect().top-rt.top).filter(v=>!atoms.some(([a,b])=>v>a+1&&v<b-1));
+    // logotipo em cima à direita também nas páginas seguintes (mesmo tamanho e posição do cabeçalho)
+    const LTOP=Math.round(W*13/210), LDIR=Math.round(W*16/210);
+    const logo=p.logo?await new Promise(ok=>{ const im=new Image();
+      im.onload=()=>{ try{ const w0=im.naturalWidth||1, h0=im.naturalHeight||1, sc=Math.min(1,192/w0,88/h0), w=Math.max(1,Math.round(w0*sc)), hh=Math.max(1,Math.round(h0*sc));
+        const c=document.createElement("canvas"); c.width=w*2; c.height=hh*2; c.getContext("2d").drawImage(im,0,0,c.width,c.height); ok({url:c.toDataURL("image/png"),w,h:hh}); }catch(e){ ok(null); } };
+      im.onerror=()=>ok(null); im.src=p.logo; }):null;
+    const TOPN=logo?LTOP+logo.h+Math.round(W*6/210):TOP;
     const pages=[]; let y=0;
     while(y<total-1){
-      const off=pages.length?TOP:0, lim=y+H-off; let end=total;
+      const off=pages.length?TOPN:0, lim=y+H-off; let end=total;
       if(lim<total){ const c=cuts.filter(v=>v>y+40&&v<=lim); end=c.length?Math.max(...c):lim; }
       pages.push([y,end,off]); y=end;
     }
@@ -2644,6 +2732,7 @@ async function makeCronoPDF(tag){
       if(i) pdf.addPage();
       pdf.setFillColor(244,245,247); pdf.rect(0,0,PW,PH,"F");
       pdf.addImage(c.toDataURL("image/jpeg",.92),"JPEG",0,off*pt,PW,hh*pt);
+      if(i&&logo) pdf.addImage(logo.url,"PNG",(W-LDIR-logo.w)*pt,LTOP*pt,logo.w*pt,logo.h*pt);
       c.width=c.height=shot.width=shot.height=0;   // libera a memória (celular)
     }
     pdf.setProperties({title:"Cronograma: "+(p.titulo||projTitle(tag))});
@@ -2655,7 +2744,7 @@ function openMailCrono(tag,opt={}){
   const p=getProject(tag); if(!p) return;
   const anexo=opt.anexo!==false;
   if(anexo&&!cronoEvents(p).length){ toast("O cronograma ainda não tem datas."); return; }
-  if(!p.membros.some(m=>m.email)){ toast("Cadastre membros com e-mail em “Membros” para "+(anexo?"enviar o cronograma.":"enviar mensagens.")); return; }
+  if(!p.membros.some(m=>m.email)){ toast("Cadastre membros com e-mail na aba “Equipe” para "+(anexo?"enviar o cronograma.":"enviar mensagens.")); return; }
   const titulo=p.titulo||projTitle(tag), fname=`cronograma-${tag}.pdf`;
   const touch=window.matchMedia&&matchMedia("(hover:none)").matches;
   let canShare=false; try{ canShare=!!(navigator.share&&navigator.canShare&&typeof File==="function"&&navigator.canShare({files:[new File(["x"],fname,{type:"application/pdf"})]})); }catch(e){}
@@ -2793,7 +2882,7 @@ function openMailCrono(tag,opt={}){
 /* ---- Modo de edição do cronograma (rascunho; só grava ao salvar) ---- */
 function startCronoEdit(tag){
   const p=getProject(tag); if(!p) return;
-  UI.cronEdit=tag;
+  UI.cronEdit=tag; UI.projTab="cronograma";
   UI.cronDraft={titulo:p.titulo,subtitulo:p.subtitulo,departamento:p.departamento,logo:p.logo,createdAt:p.createdAt,mig:p.mig,extras:JSON.parse(JSON.stringify(p.extras||{})),eventos:p.eventos.map(e=>({...e,atividades:[...e.atividades],k:uid()}))};
   fillLinked(UI.cronDraft,tag);
   UI.cronDraft.eventos.sort((a,b)=>crUtc(a)-crUtc(b));
@@ -3151,7 +3240,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v23";
+const APP_VER="v24";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
