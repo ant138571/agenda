@@ -240,6 +240,11 @@ button{cursor:pointer}
 .cr-btn{border:1px solid var(--line);background:var(--panel);color:var(--accent-text);border-radius:999px;width:30px;height:30px;display:inline-grid;place-items:center;flex:none;margin-right:2px;padding:0}
 .cr-btn:hover{background:var(--accent-soft);border-color:var(--accent)}
 .cr-btn.tirar{color:var(--muted)}
+.coment-list{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+.coment{background:var(--soft);border-radius:10px;padding:7px 10px}
+.coment-h{display:flex;gap:8px;align-items:baseline;font-size:12px;color:var(--muted)}
+.coment-h b{color:var(--ink);font-size:12.5px}
+.coment-t{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px;margin-top:1px}
 .crono .corpo li.cr-tk{padding-left:1.9rem}
 .crono .corpo li.cr-tk::before{display:none}
 .cr-chk{position:absolute;left:0;top:.12em;width:1.3rem;height:1.3rem;border-radius:50%;border:2px solid var(--c);background:transparent;color:transparent;padding:0;display:grid;place-items:center;cursor:pointer}
@@ -1981,10 +1986,39 @@ function renderDetail(){
       h("div",{class:"field"},h("span",{class:"lbl"},"Prioridade  (em que ordem fazer)"),
         h("div",{class:"opts"},[1,2,3].map(v=>h("button",{class:"opt"+((t.priority||2)===v?" on":""),onclick:()=>patchTask(id,{priority:v})},h("span",{class:"pill p"+v},"P"+v),PRI[v].split(" · ")[1])))),
       h("div",{class:"field"},h("span",{class:"lbl"},"Grupos"),tagBox),
-      h("div",{class:"field"},h("label",{for:"dNotes"},"Anotações"),notes)
+      h("div",{class:"field"},h("label",{for:"dNotes"},"Anotações"),notes),
+      projTags.length?comentSection(id):null   // comentários com a equipe (tarefas de projeto)
     ),
     h("div",{class:"d-foot"},h("span",{},t.done&&t.doneAt?`Concluída em ${fmtBR(t.doneAt)}`:`Criada em ${fmtBR(t.createdAt)}`),delZone)
   );
+}
+
+/* comentários da tarefa (tabela comentarios no Supabase): você comenta aqui; os membros, pela página equipe.html.
+   Carregados ao abrir os Detalhes (de novo depois de 20 s); só com login. */
+const COMENT={};
+const fmtComent=iso=>{ const d=new Date(iso); return isNaN(d)?"":`${pad(d.getDate())}/${pad(d.getMonth()+1)} ${hm(d)}`; };
+function comentSection(id){
+  const lista=h("div",{class:"coment-list"}), box=h("div",{class:"field d-coment"},h("span",{class:"lbl"},"Comentários"),lista);
+  if(!(S.sb&&S.user)){ lista.append(h("div",{class:"gest-hint",style:"text-align:left"},"Entre na sua conta (Configurações › Sincronização e backup) para ver e escrever comentários com a equipe.")); return box; }
+  const paint=()=>{ const c=COMENT[id]; lista.replaceChildren();
+    if(!c||!c.list){ lista.append(h("div",{class:"gest-hint",style:"text-align:left"},c&&c.erro?c.erro:"Carregando comentários…")); return; }
+    if(!c.list.length) lista.append(h("div",{class:"gest-hint",style:"text-align:left"},"Nenhum comentário."));
+    for(const x of c.list) lista.append(h("div",{class:"coment"},h("div",{class:"coment-h"},h("b",{},x.autor_nome||x.autor_email||"?"),h("span",{},fmtComent(x.criado_em))),h("div",{class:"coment-t"},x.texto))); };
+  const carregar=()=>S.sb.from("comentarios").select("id,autor_email,autor_nome,texto,criado_em").eq("tarefa",id).order("criado_em",{ascending:true}).limit(500)
+    .then(({data,error})=>{ COMENT[id]={at:Date.now(),list:error?null:(data||[]),erro:error?(/comentarios|relation|schema/i.test(error.message||"")?"Comentários ainda não ativados no servidor (rode o supabase.sql novo; guia EQUIPE.html).":"Não foi possível carregar os comentários."):""}; if(lista.isConnected) paint(); },
+      ()=>{ COMENT[id]={at:Date.now(),list:null,erro:"Sem conexão: não foi possível carregar os comentários."}; if(lista.isConnected) paint(); });
+  paint(); if(!COMENT[id]||Date.now()-COMENT[id].at>20000) carregar();
+  const inp=h("textarea",{id:"dComent",rows:"2",maxlength:"2000",placeholder:"Escreva um comentário para a equipe…",style:"min-height:60px"});
+  let enviando=false;
+  const enviar=()=>{ const tx=inp.value.trim(); if(!tx||enviando) return;
+    if(!navigator.onLine){ toast("Sem internet: o comentário precisa de conexão."); return; }
+    enviando=true;
+    S.sb.from("comentarios").insert({dono:S.user.id,tarefa:id,autor_email:(S.user.email||"").slice(0,200),autor_nome:String(euBase().nome||"").slice(0,120),texto:tx.slice(0,2000)})
+      .then(({error})=>{ enviando=false; if(error){ toast("Comentário não enviado: "+error.message); return; } inp.value=""; toast("Comentário enviado"); carregar(); },
+        ()=>{ enviando=false; toast("Comentário não enviado: sem conexão."); }); };
+  inp.addEventListener("keydown",e=>{ if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){ e.preventDefault(); enviar(); } });
+  box.append(inp,h("div",{class:"row-end",style:"justify-content:flex-end"},h("button",{class:"btn small",onclick:enviar},"Comentar")));
+  return box;
 }
 
 /* ---------- Relatório ---------- */
@@ -2488,7 +2522,7 @@ function renderProject(wrap,tag){
     return; }
   if(tab==="equipe"){
     const all=tasksArr().filter(t=>(t.tags||[]).includes(tag));
-    wrap.append(h("div",{class:"proj-pane"},equipeEnvio(tag,p),membrosSection(tag,p,all)));
+    wrap.append(h("div",{class:"proj-pane"},equipeEnvio(tag,p),acessoEquipe(tag,p),membrosSection(tag,p,all)));
     return;
   }
   // ----- tarefas: gerais (esquerda) e as que entram no cronograma (direita)
@@ -2556,6 +2590,21 @@ function equipeEnvio(tag,p){
       h("button",{class:"opt on",title:todos.map(m=>m.email).join(", "),onclick:()=>abrir(todos,"")},svg(ICON.mail,14),`Toda a equipe (${todos.length})`),
       ...grupos.map(g=>h("button",{class:"opt",title:g.ms.map(m=>m.email).join(", "),onclick:()=>abrir(g.ms,g.f.nome)},svg(ICON.mail,14),`${g.f.nome} (${g.ms.length})`))),
     h("p",{class:"mail-note"},"Abre o Gmail no navegador (conta "+(contaGmail()||"de Configurações › Meus dados")+") com os destinatários e o assunto já preenchidos. Para escolher pessoa por pessoa ou incluir a mensagem com as tarefas de cada um, use “Enviar mensagem”."));
+  return sec;
+}
+/* aba Equipe: link da página equipe.html, onde cada membro entra com a própria conta (mesmo e-mail da equipe)
+   e vê, atualiza, conclui e comenta só as tarefas atribuídas a ele (guia EQUIPE.html) */
+const linkEquipe=()=>CFG.url&&CFG.key?new URL("equipe.html",location.href.split("#")[0].split("?")[0]).href+"#s="+encodeURIComponent(CFG.url.trim().replace(/\/+$/,""))+"&k="+encodeURIComponent(CFG.key.trim()):"";
+function acessoEquipe(tag,p){
+  const sec=h("section",{class:"eq-envio","aria-label":"Acesso da equipe"},h("div",{class:"col-head"},h("h3",{},"Acesso da equipe")));
+  const link=linkEquipe();
+  if(!link){ sec.append(h("div",{class:"gest-hint",style:"text-align:left"},"Para a equipe entrar e atualizar as tarefas, configure o servidor em Configurações › Sincronização e backup.")); return sec; }
+  const titulo=p.titulo||projTitle(tag), todos=membrosOrdem(p).filter(m=>m.email&&m.id!==EU);
+  sec.append(h("p",{class:"mail-note"},"Cada membro entra com login e senha na página da equipe e vê só as tarefas atribuídas a ele: pode atualizar (nome, prazo, etapas e anotações), concluir e comentar. Para entrar, ele cria a conta com o mesmo e-mail cadastrado aqui."),
+    h("div",{class:"opts",style:"margin-top:8px"},
+      h("button",{class:"opt",onclick:()=>{ try{ navigator.clipboard.writeText(link).then(()=>toast("Link copiado"),()=>toast("Não foi possível copiar o link.")); }catch(e){ toast("Não foi possível copiar o link."); } }},svg(ICON.list,14),"Copiar link de acesso"),
+      todos.length?h("button",{class:"opt",onclick:()=>abrirGmail([...new Set(todos.map(m=>m.email))],"Acesso às tarefas — Projeto "+titulo,
+        "Olá!\n\nVocê pode ver e atualizar as suas tarefas do projeto “"+titulo+"” por este link:\n"+link+"\n\nNa primeira vez, toque em “Criar conta” e use este mesmo e-mail. Depois de confirmar o e-mail, entre com a sua senha.\n")},svg(ICON.mail,14),`Enviar link à equipe (${todos.length})`):null));
   return sec;
 }
 function confirmRemoveProject(tag){
@@ -3230,7 +3279,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v25";
+const APP_VER="v26";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";

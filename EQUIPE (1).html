@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Equipe nos projetos — como ligar</title>
+<style>
+:root{--ink:#1C1B1A;--muted:#6B665F;--line:#ECE9E4;--soft:#F6F5F2;--accent:#F0643C;--accent-text:#B83E1C;--warn:#FFF4DB}
+@media (prefers-color-scheme:dark){:root{--ink:#F2EFEA;--muted:#B0AAA1;--line:#2E2B28;--soft:#262422;--accent-text:#FF9A78;--warn:#3A2E14}body{background:#161514}}
+body{margin:0;font-family:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);line-height:1.55;font-size:16px}
+main{max-width:760px;margin:0 auto;padding:28px 18px 64px}
+h1{font-size:26px;margin:0 0 6px}h2{font-size:19px;margin:30px 0 8px;display:flex;gap:10px;align-items:baseline}
+h2 .n{background:var(--accent);color:#fff;border-radius:999px;min-width:28px;height:28px;display:inline-grid;place-items:center;font-size:15px;flex:none}
+p,li{color:var(--ink)}.sub{color:var(--muted);margin-top:0}
+code{background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:.92em}
+.box{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:12px 0}
+.warn{background:var(--warn);border-color:transparent}
+b.o{color:var(--accent-text)}
+</style>
+</head>
+<body>
+<main>
+<h1>Equipe nos projetos</h1>
+<p class="sub">Cada membro da equipe entra com login e senha na página <code>equipe.html</code> e vê <b>só as tarefas atribuídas a ele</b>, em todos os projetos. Ele pode atualizar o nome, o prazo, as etapas e as anotações, concluir e comentar. As mudanças chegam ao seu app pela sincronização normal, e os comentários aparecem nos Detalhes da tarefa.</p>
+
+<div class="box">Leva uns 10 minutos, uma vez só. Você precisa do servidor já configurado (guia <code>COMO-INSTALAR.html</code>) e de estar com a conta da Agenda aberta no app.</div>
+
+<h2><span class="n">1</span>Atualizar o banco</h2>
+<ol>
+<li>No <a href="https://supabase.com/dashboard" target="_blank" rel="noopener">painel do Supabase</a>, abra o projeto da Agenda › <b>SQL Editor</b> › <b>New query</b>.</li>
+<li>Cole o arquivo <code>supabase.sql</code> inteiro (a versão nova, com a parte “Equipe dos projetos”) e clique em <b>Run</b>.<br>Pode rodar de novo sem medo: nada é apagado.</li>
+</ol>
+
+<h2><span class="n">2</span>Confirmação de e-mail ligada</h2>
+<p>Em <b>Authentication › Sign In / Providers › Email</b>, confira que <b class="o">Confirm email</b> está <b>ligado</b>.</p>
+<div class="box warn"><b>Obrigatório.</b> É a confirmação que prova que a pessoa é dona do e-mail. Sem ela, alguém poderia criar uma conta com o e-mail de um membro e ver as tarefas dele. A função do servidor recusa contas com e-mail não confirmado.</div>
+
+<h2><span class="n">3</span>Endereço da página da equipe</h2>
+<p>Em <b>Authentication › URL Configuration › Redirect URLs</b>, clique em <b>Add URL</b> e coloque o endereço da página da equipe no seu site do GitHub Pages, por exemplo:</p>
+<p><code>https://ant138571.github.io/agenda/equipe.html</code></p>
+<p>É para onde voltam os links de confirmação de conta e de “Esqueci a senha”.</p>
+
+<h2><span class="n">4</span>Publicar a função “equipe”</h2>
+<ol>
+<li>No Supabase, abra <b>Edge Functions</b> › <b>Deploy a new function</b> › <b>Via Editor</b>.</li>
+<li>Nome da função: <code>equipe</code>.</li>
+<li>Apague o código de exemplo e cole o arquivo <code>supabase/functions/equipe/index.ts</code> inteiro. Clique em <b>Deploy</b>.</li>
+<li>Abra a função › <b>Details</b> (ou Settings) e <b>desligue “Verify JWT”</b>. A própria função confere o login. Salve.</li>
+</ol>
+<p>Não precisa de segredos novos: a função usa os que o Supabase já cria (<code>SUPABASE_URL</code>, <code>SUPABASE_SERVICE_ROLE_KEY</code>).</p>
+
+<h2><span class="n">5</span>Subir os arquivos no GitHub</h2>
+<p>No repositório do site, use <b>Add file › Upload files</b> e envie <code>index.html</code>, <code>sw.js</code>, <code>equipe.html</code> e <code>EQUIPE.html</code>. No app, use <b>Configurações › Procurar atualização</b> (versão <b>v26</b>).</p>
+
+<h2><span class="n">6</span>Mandar o link para a equipe</h2>
+<ol>
+<li>No app, abra o projeto (ex.: Labcor) › aba <b>Equipe</b>.</li>
+<li>Confira que cada membro tem o <b>e-mail</b> certo: é com ele que a pessoa entra.</li>
+<li>Em <b>Acesso da equipe</b>, toque em <b>Enviar link à equipe</b>: o Gmail abre com o link e as instruções. Ou use <b>Copiar link de acesso</b> e mande como quiser.</li>
+</ol>
+<p>Na primeira vez, o membro toca em <b>Criar conta</b>, usa o mesmo e-mail, confirma pelo e-mail que recebe e depois entra com a senha. O link já leva o endereço do servidor; ele fica guardado no aparelho da pessoa.</p>
+
+<h2><span class="n">7</span>Como funciona no dia a dia</h2>
+<ul>
+<li><b>Quem vê o quê:</b> a tarefa aparece para o membro quando você o marca em <b>Responsáveis</b> (Detalhes da tarefa). Tirou a atribuição, ela some da página dele. Tarefas apagadas (na Lixeira) também somem.</li>
+<li><b>O que o membro muda:</b> concluir/reabrir, nome, prazo (de hoje em diante), etapas e anotações. Grupos, importância, prioridade, lembrete e responsáveis só você muda.</li>
+<li><b>Comentários:</b> todos os responsáveis da tarefa e você leem e escrevem. No app, ficam em <b>Detalhes da tarefa › Comentários</b> (com a conta aberta).</li>
+<li><b>Ao mesmo tempo:</b> se você e um membro mudarem a mesma tarefa quase juntos, vale a última alteração enviada (como entre os seus aparelhos).</li>
+</ul>
+
+<h2><span class="n">?</span>Se algo não funcionar</h2>
+<ul>
+<li><b>“A função equipe não está publicada”</b> → passo 4 (nome exatamente <code>equipe</code>).</li>
+<li><b>“Servidor sem a parte da equipe”</b> ou <b>“Comentários ainda não ativados”</b> → passo 1.</li>
+<li><b>“Confirme seu e-mail”</b> → a pessoa precisa tocar no link de confirmação. Se não chegou, olhar o spam.</li>
+<li><b>Entrou, mas a lista está vazia</b> → o e-mail da conta precisa ser igual ao cadastrado na aba Equipe (maiúsculas não importam) e a tarefa precisa ter a pessoa em Responsáveis.</li>
+<li><b>E-mails de confirmação demoram ou param de chegar</b> → o envio de e-mails do próprio Supabase tem um limite baixo por hora. Para uma equipe grande, configure um SMTP próprio em <b>Authentication › Emails › SMTP Settings</b>.</li>
+<li>Os e-mails de confirmação saem em inglês. Para traduzir, edite os modelos em <b>Authentication › Emails › Templates</b>.</li>
+</ul>
+</main>
+</body>
+</html>
