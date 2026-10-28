@@ -10,11 +10,12 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=7">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Bricolage+Grotesque:wght@700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap">
 <style>
 :root{
   --bg:#FFFFFF; --panel:#FFFFFF; --soft:#F6F5F2; --ink:#1C1B1A; --muted:#6B665F; --faint:#A19D96;
   --line:#ECE9E4; --line-strong:#DAD5CD; --accent:#F0643C; --accent-ink:#FFFFFF; --accent-soft:#FFEDE6; --accent-text:#B83E1C;
+  --imp:#F5A524; --p1:#F0643C; --p2:#CFCAC2; --p3:#9BC7AA;
   --danger:#D93A2B; --ok:#2F9E5F; --shadow:0 1px 2px rgba(30,25,20,.06),0 8px 24px rgba(30,25,20,.08);
   --font:"Plus Jakarta Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
 }
@@ -23,6 +24,7 @@
     color-scheme:dark;
     --bg:#161514; --panel:#1F1D1B; --soft:#262422; --ink:#F2EFEA; --muted:#B0AAA1; --faint:#7D776F;
     --line:#2E2B28; --line-strong:#3D3935; --accent:#FF7A52; --accent-ink:#1C1B1A; --accent-soft:#3A241C; --accent-text:#FF9A78;
+    --imp:#F5B544; --p1:#FF7A52; --p2:#5A5550; --p3:#6FA886;
     --danger:#FF6B5E; --ok:#5CC98A; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.3);
   }
 }
@@ -30,11 +32,12 @@
   color-scheme:dark;
   --bg:#161514; --panel:#1F1D1B; --soft:#262422; --ink:#F2EFEA; --muted:#B0AAA1; --faint:#7D776F;
   --line:#2E2B28; --line-strong:#3D3935; --accent:#FF7A52; --accent-ink:#1C1B1A; --accent-soft:#3A241C; --accent-text:#FF9A78;
+  --imp:#F5B544; --p1:#FF7A52; --p2:#5A5550; --p3:#6FA886;
   --danger:#FF6B5E; --ok:#5CC98A; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.3);
 }
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.45;-webkit-text-size-adjust:100%}
-button,input,textarea{font:inherit;color:inherit}
+button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 .wrap{max-width:760px;margin:0 auto;padding:20px 16px 80px}
 .top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
@@ -77,8 +80,19 @@ input:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(--accent) 40%
 .t-title{font-weight:600}
 .task.done .t-title{text-decoration:line-through;color:var(--muted)}
 .t-meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12.5px;color:var(--muted);margin-top:2px}
-.late{color:var(--danger);font-weight:600}
-.today{color:var(--accent-text);font-weight:600}
+/* indicadores das tarefas: mesmo desenho do app (prazo, P1/P3, baixa importância, estrela de importância alta) */
+.m-late{color:var(--danger);font-weight:700}
+.m-due{color:var(--muted);font-weight:600}
+.m-due.today{color:var(--accent-text)}
+.m-p1{background:var(--p1);color:#fff;font-weight:800;padding:0 6px;border-radius:6px;line-height:17px}
+.m-p3{color:var(--faint);font-weight:700}
+.m-low{color:var(--faint)}
+.star-ic{color:var(--imp);flex:none;display:inline-grid;padding:0 4px;align-self:center}
+.chk.p1{border-color:var(--p1)}
+/* ordenar (mesmo controle do app) */
+.filters{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:13px;margin:4px 0 2px}
+.flabel{color:var(--muted);margin-right:6px}
+.filters select{padding:5px 8px;border:1px solid var(--line);border-radius:9px;background:var(--panel)}
 .t-body{border-top:1px solid var(--line);padding:14px 14px 16px;display:flex;flex-direction:column;gap:2px}
 .row2{display:grid;grid-template-columns:1fr 170px;gap:10px}
 @media (max-width:520px){ .row2{grid-template-columns:1fr} }
@@ -101,19 +115,96 @@ input:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(--accent) 40%
 .sep{height:1px;background:var(--line);margin:10px 0}
 .sec-t{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:22px 0 8px;font-weight:800;display:flex;gap:8px;align-items:baseline}
 .sec-t small{font-weight:600;text-transform:none;letter-spacing:0}
-.crono{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:6px 14px}
-.cr-per{font-size:13px;color:var(--muted);margin:2px 0 10px}
-.ev{display:grid;grid-template-columns:86px 1fr;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
-.ev:first-of-type{border-top:0}
-.ev.passou{opacity:.55}
-.ev-d b{display:block;font-size:19px;font-weight:800;line-height:1.1}
-.ev-d span{display:block;font-size:12px;color:var(--muted)}
-.ev-tag{display:inline-block;font-size:11px;font-weight:700;border:1px solid var(--accent);color:var(--accent-text);border-radius:999px;padding:0 7px;margin-top:4px}
-.ev-c p{margin:0 0 4px;font-style:italic;color:var(--muted);font-size:13.5px}
-.ev-c ul{margin:0;padding:0;list-style:none}
-.ev-c li{margin:0 0 4px;padding-left:14px;position:relative}
-.ev-c li::before{content:"";position:absolute;left:0;top:.7em;width:7px;height:2px;background:var(--accent)}
-.ev-c small{display:block;color:var(--muted);font-size:12.5px}
+/* Cronograma: o mesmo desenho do cartão do app (aba Cronograma do projeto; bloco cronoCss do index.html) */
+.crono{
+  --fundo:#f4f5f7; --texto:#16181d; --suave:#565c67; --linha:#c9cdd5; --erro:#b3261e;
+  --azul:#2f6fdb; --cinza:#8b9099; --verde:#2a9d5c; --rosa:#e0709a; --amarelo:#e3b400;
+  --display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+  --corpo:"Source Serif 4",Georgia,"Times New Roman",serif;
+  container-type:inline-size;
+  background:var(--fundo); color:var(--texto); font-family:var(--corpo); font-size:1.0625rem; line-height:1.6;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .crono{ --fundo:#14161a; --texto:#eceef2; --suave:#a0a7b2; --linha:#333842; --erro:#ff8a80; --azul:#5b95ff; --cinza:#8b9099; --verde:#43c17c; --rosa:#f08db2; --amarelo:#f0c928; } }
+:root[data-theme="dark"] .crono{ --fundo:#14161a; --texto:#eceef2; --suave:#a0a7b2; --linha:#333842; --erro:#ff8a80; --azul:#5b95ff; --cinza:#8b9099; --verde:#43c17c; --rosa:#f08db2; --amarelo:#f0c928; }
+.crono *,.crono *::before,.crono *::after{box-sizing:border-box}
+.crono.cr-card{border-radius:16px;padding:2rem 2.25rem 1.5rem}
+.crono .cr-titulo{margin:0;font-family:var(--display);font-weight:700;font-size:clamp(1.9rem,5.2vw,3.1rem);line-height:1.06;letter-spacing:-.02em;text-wrap:balance}
+.crono.cr-card .cr-titulo{font-size:clamp(1.7rem,4vw,2.6rem)}
+.crono .periodo{margin:1.1rem 0 0;color:var(--suave);font-size:1.05rem}
+.crono .faixa{margin:3rem 0 3.5rem}
+.crono .escala{position:relative;height:8rem;margin:0 12px}
+.crono .barra{position:absolute;left:0;right:0;top:3.75rem;height:10px;border-radius:5px;background:var(--cinza)}
+.crono .ticks{position:absolute;left:0;right:0;top:calc(3.75rem + 16px);height:6px;border-right:1px solid var(--linha);background-image:linear-gradient(to right,var(--linha) 1px,transparent 1px)}
+.crono .marca{position:absolute;top:0;left:var(--x);height:100%}
+.crono .ponto{position:absolute;left:0;top:calc(3.75rem - 4px);width:18px;height:18px;border-radius:50%;transform:translateX(-50%);background:var(--c);box-shadow:0 0 0 3px var(--fundo)}
+.crono .marca.vazia .ponto{background:var(--fundo);border:2px solid var(--c)}
+.crono .rotulo{position:absolute;white-space:nowrap;text-align:center;transform:translateX(-50%);line-height:1.25}
+.crono .rotulo b{display:block;font-family:var(--display);font-weight:700;font-size:.95rem}
+.crono .rotulo small{display:block;font-size:.85rem;color:var(--suave)}
+.crono .rotulo.sem-legenda small{display:none}
+.crono .rotulo.oculto{visibility:hidden}
+.crono .acima .rotulo{bottom:4.85rem}
+.crono .abaixo .rotulo{top:5.15rem}
+.crono .ini .rotulo{transform:none;text-align:left;left:-12px}
+.crono .fim .rotulo{transform:none;text-align:right;right:-12px;left:auto}
+.crono .hoje{position:absolute;top:.9rem;bottom:.5rem;width:1px;background:var(--texto);opacity:.55}
+.crono .hoje span{position:absolute;top:-1.1rem;left:50%;transform:translateX(-50%);font-family:var(--display);font-size:.8rem}
+.crono .linha{list-style:none;margin:0;padding:0}
+.crono .evento{display:grid;grid-template-columns:9.5rem 2.25rem minmax(0,1fr)}
+.crono .data{grid-column:1;padding-bottom:2.75rem}
+.crono .trilho{grid-column:2;position:relative}
+.crono .corpo{grid-column:3;padding-bottom:2.75rem}
+.crono .trilho::before{content:"";position:absolute;left:50%;top:1.1rem;bottom:0;width:2px;transform:translateX(-50%);background:linear-gradient(var(--c),var(--cn,var(--c)))}
+.crono .evento:last-child .trilho::before{display:none}
+.crono .trilho::after{content:"";position:absolute;left:50%;top:calc(1.1rem - 8px);width:16px;height:16px;border-radius:50%;transform:translateX(-50%);background:var(--c);box-shadow:0 0 0 4px var(--fundo)}
+.crono .evento[data-sem] .trilho::after{background:var(--fundo);border:2px solid var(--c)}
+.crono .dia{display:block;font-family:var(--display);font-weight:700;font-size:2rem;line-height:1.1;letter-spacing:-.01em}
+.crono .sem,.crono .hora{display:block}
+.crono .sem{color:var(--suave)}
+.crono .hora{font-weight:600}
+.crono .proximo{display:inline-block;margin-top:.6rem;padding:.1rem .65rem;border:1.5px solid var(--c);border-radius:999px;font-family:var(--display);font-size:.82rem;line-height:1.5}
+.crono .corpo>:first-child{margin-top:.3rem}
+.crono .contexto{margin:0 0 .9rem;color:var(--suave);font-style:italic}
+.crono .evento[data-sem] .contexto{margin:.3rem 0 0}
+.crono .evento[data-sem] .contexto+.contexto{margin-top:.4rem}
+.crono .corpo ul{list-style:none;margin:0;padding:0;max-width:38rem}
+.crono .corpo li{position:relative;padding-left:1.5rem;margin:0 0 .85rem}
+.crono .corpo li .info{display:block;color:var(--suave);font-size:.88em;line-height:1.4}
+.crono .corpo li::before{content:"";position:absolute;left:0;top:.82em;width:.75rem;height:2px;background:var(--c)}
+.crono .passou .data,.crono .passou .corpo{opacity:.6}
+.crono .cr-vazio{margin:1.5rem 0 1rem;color:var(--suave);font-style:italic}
+.crono header.cr-com-logo{position:relative;padding-right:min(34%,13rem);min-height:4.5rem}
+.crono .cr-logo{position:absolute;top:0;right:0;max-width:min(32%,12rem);max-height:5.5rem;object-fit:contain}
+.crono .cr-depto{margin:0 0 .5rem;font-family:var(--display);font-weight:600;font-size:.95rem;letter-spacing:.06em;text-transform:uppercase;color:var(--suave)}
+.crono .cr-equipe{margin-top:.5rem;padding-top:1.4rem;border-top:1px solid var(--linha);break-inside:avoid}
+.crono .cr-eq-titulo{margin:0 0 .8rem;font-family:var(--display);font-weight:700;font-size:1.35rem}
+.crono .cr-equipe ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.6rem 1.5rem}
+.crono .cr-equipe li{line-height:1.35}
+.crono .cr-equipe b{display:block;font-family:var(--display);font-weight:700}
+.crono .cr-eq-func,.crono .cr-eq-mail{display:block;color:var(--suave);font-size:.9em}
+.crono .cr-eq-grupo{margin-bottom:1rem;break-inside:avoid}
+.crono .cr-eq-grupo h4{margin:0 0 .45rem;font-family:var(--display);font-weight:600;font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;color:var(--suave)}
+.crono .cr-eq-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.crono .cr-eq-cols.um{grid-template-columns:minmax(0,1fr)}
+.crono .cr-eq-col{min-width:0;padding-right:1.5rem}
+.crono .cr-eq-col+.cr-eq-col{padding:0 0 0 1.5rem;border-left:1px solid var(--linha)}
+.crono .cr-eq-cols ul{grid-template-columns:minmax(0,1fr)}
+.crono .cr-eq-cols li,.crono .cr-eq-cols h4{overflow-wrap:anywhere}
+@container (max-width:40rem){
+  .crono .rotulo small{display:none}
+  .crono .evento{grid-template-columns:1.75rem minmax(0,1fr)}
+  .crono .trilho{grid-column:1;grid-row:1/span 2}
+  .crono .data{grid-column:2;grid-row:1;padding-bottom:.7rem;display:flex;flex-wrap:wrap;align-items:baseline;gap:.15rem .8rem}
+  .crono .corpo{grid-column:2;grid-row:2}
+  .crono .proximo{margin-top:0}
+  .crono .escala{height:7rem}
+  .crono .barra{top:3.25rem}
+  .crono .ticks{top:calc(3.25rem + 16px)}
+  .crono .ponto{top:calc(3.25rem - 4px)}
+  .crono .acima .rotulo{bottom:4.35rem}
+  .crono .abaixo .rotulo{top:4.65rem}
+}
+@media (max-width:860px){ .crono.cr-card{padding:1.4rem 1.1rem 1rem} }
 .nova{display:grid;grid-template-columns:1fr 150px auto;gap:8px}
 @media (max-width:520px){ .nova{grid-template-columns:1fr auto} .nova input[type=text]{grid-column:1/-1} }
 .pt{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:6px}
@@ -141,6 +232,21 @@ const today=()=>ymd(new Date());
 const DIAS=["dom","seg","ter","qua","qui","sex","sáb"];
 const fmtDue=s=>{ const [y,m,d]=s.split("-").map(Number), x=new Date(y,m-1,d); return `${DIAS[x.getDay()]} ${pad(d)}/${pad(m)}`; };
 const fmtQuando=iso=>{ const d=new Date(iso); return isNaN(d)?"":`${pad(d.getDate())}/${pad(d.getMonth()+1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+/* prazo, importância e prioridade: mesmos textos, desenho e ordem do app (taskRow, PRI, sortTasks) */
+const PRI={1:"P1 · Urgente",2:"P2 · Normal",3:"P3 · Pode esperar"};
+const STAR='<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></svg>';
+const prazoTag=(t,td)=>t.due<td?h("span",{class:"m-late",title:"Prazo"},"atrasada · "+fmtDue(t.due).slice(-5)):h("span",{class:"m-due"+(t.due===td?" today":""),title:"Prazo"},t.due===td?"hoje":fmtDue(t.due));
+const classTags=t=>t.done?[]:[t.priority===1?h("span",{class:"m-p1",title:PRI[1]},"P1"):null,t.priority===3?h("span",{class:"m-p3",title:PRI[3]},"P3"):null,t.importance===1?h("span",{class:"m-low"},"baixa imp."):null].filter(Boolean);
+const estrela=t=>t.importance===3&&!t.done?h("span",{class:"star-ic",title:"Importância alta"},ic(STAR)):null;
+const ORDENS=[["due","Prazo"],["importance","Importância"],["priority","Prioridade"]];
+function ordenar(l,by){
+  const key={due:t=>(t.due||"9999")+(t.priority||2)+(4-(t.importance||2)),
+    priority:t=>`${t.priority||2}${4-(t.importance||2)}${t.due||"9999"}`,
+    importance:t=>`${4-(t.importance||2)}${t.priority||2}${t.due||"9999"}`}[by]||(t=>(t.due||"9999"));
+  return [...l].sort((a,b)=>{ const x=key(a), y=key(b); return x<y?-1:x>y?1:0; });
+}
+const ordemBar=()=>h("div",{class:"filters"},h("span",{},h("span",{class:"flabel"},"Ordenar"),
+  h("select",{id:"ordem","aria-label":"Ordenar por",onchange:e=>{ ST.ordem=e.target.value; render(); }},ORDENS.map(([k,l])=>h("option",{value:k,selected:ST.ordem===k},l)))));
 let toastT;
 function toast(m){ let t=$("#toast"); if(!t){ t=h("div",{class:"toast",id:"toast",role:"status"}); document.body.append(t); } t.textContent=m; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,3000); }
 const lsGet=(k,f)=>{ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):f; }catch(e){ return f; } };
@@ -158,7 +264,7 @@ if(!CFG.url||!CFG.key||!window.supabase){
 }
 const sb=window.supabase.createClient(CFG.url,CFG.key,{auth:{persistSession:true,autoRefreshToken:true,storageKey:"equipe-auth",detectSessionInUrl:true}});
 const FN=CFG.url+"/functions/v1/equipe";
-const ST={user:null,tarefas:null,projetos:[],proj:null,erro:"",ver:"abertas",aberta:null,carregando:false,recuperar:false};
+const ST={user:null,tarefas:null,projetos:[],proj:null,erro:"",ver:"abertas",aberta:null,carregando:false,recuperar:false,ordem:"due"};
 
 async function chamar(body){
   const {data}=await sb.auth.getSession(); const tk=data&&data.session&&data.session.access_token;
@@ -239,7 +345,8 @@ function render(){
     out.push(h("div",{class:"seg",role:"tablist"},[["abertas",`Minhas (${ab.length})`],["concluidas",`Concluídas (${co.length})`],["projeto",ST.projetos.length>1?"Projetos":"Projeto"]].map(([k,l])=>h("button",{class:ST.ver===k?"on":"",onclick:()=>{ ST.ver=k; ST.aberta=null; render(); }},l))));
     if(ST.ver==="projeto") out.push(...telaProjeto());
     else {
-      const lista=(ST.ver==="abertas"?ab:co).slice().sort((a,b)=>ST.ver==="abertas"?(a.due||"9999").localeCompare(b.due||"9999"):(b.doneAt||"").localeCompare(a.doneAt||""));
+      const lista=ST.ver==="abertas"?ordenar(ab,ST.ordem):co.slice().sort((a,b)=>(b.doneAt||"").localeCompare(a.doneAt||""));
+      if(ST.ver==="abertas"&&lista.length) out.push(ordemBar());
       if(!ST.projetos.length) out.push(h("div",{class:"empty"},"Você ainda não está na equipe de nenhum projeto. Peça ao coordenador para cadastrar o seu e-mail ("+ST.user.email+") na equipe."));
       else if(!minhas.length) out.push(h("div",{class:"empty"},"Nenhuma tarefa sua ainda. Veja as tarefas do projeto em “"+(ST.projetos.length>1?"Projetos":"Projeto")+"” e toque em “Pegar”, ou crie uma tarefa."));
       else if(!lista.length) out.push(h("div",{class:"empty"},ST.ver==="abertas"?"Nenhuma tarefa aberta. Veja se há outras para pegar em “"+(ST.projetos.length>1?"Projetos":"Projeto")+"”.":"Nenhuma tarefa concluída."));
@@ -248,6 +355,7 @@ function render(){
     }
   }
   app.replaceChildren(...out);
+  if(ST.ver==="projeto") crAjustarTudo();
 }
 /* aba Projeto: cronograma geral, nova tarefa e todas as tarefas do projeto (pegar as que não são suas) */
 function telaProjeto(){
@@ -259,16 +367,7 @@ function telaProjeto(){
   const p=ps.find(x=>kp(x)===ST.proj), td=today();
   // cronograma
   out.push(h("div",{class:"sec-t"},"Cronograma"));
-  if(!p.cronograma.length) out.push(h("div",{class:"empty",style:"margin-top:0"},"O cronograma ainda não tem datas."));
-  else { let achou=false;
-    out.push(h("div",{class:"crono"},h("p",{class:"cr-per"},p.subtitulo||p.periodo),p.cronograma.map(e=>{
-      const [y,m,d]=e.data.split("-"), prox=!achou&&!e.sem&&e.data>=td; if(prox) achou=true;
-      const ativ=e.sem?[]:e.atividades;
-      return h("div",{class:"ev"+(e.data<td?" passou":"")},
-        h("div",{class:"ev-d"},h("b",{},d+"/"+m),h("span",{},e.dia),e.horario?h("span",{},e.horario):null,prox?h("span",{class:"ev-tag"},e.data===td?"Hoje":"Próximo"):null),
-        h("div",{class:"ev-c"},e.rotulo?h("p",{style:"font-style:normal;font-weight:700;color:var(--ink)"},e.rotulo):null,
-          e.sem?h("p",{},e.contexto||"Sem encontro nesta data."):e.contexto?h("p",{},e.contexto):null,
-          ativ.length?h("ul",{},ativ.map(a=>h("li",{},a.t,a.info?h("small",{},a.info):null))):null)); }))); }
+  out.push(cronoView(p));
   // nova tarefa
   out.push(h("div",{class:"sec-t"},"Nova tarefa",h("small",{},"fica com você")));
   const nome=h("input",{type:"text",id:"nNome",maxlength:"500",placeholder:"Nome da tarefa"}), dt=h("input",{type:"date",id:"nPrazo",min:td,max:"2099-12-31","aria-label":"Prazo"});
@@ -279,23 +378,125 @@ function telaProjeto(){
     try{ await chamar({acao:"criar",dono:p.dono,projeto:p.tag,title:t,due:dt.value||null}); toast("Tarefa criada (está em “Minhas”)"); await carregar(); }
     catch(x){ toast("Não foi criada: "+x.message); criar.disabled=false; } }},nome,dt,criar));
   // todas as tarefas do projeto
-  const todas=ST.tarefas.filter(t=>t.dono===p.dono&&t.projeto===p.tag), ab=todas.filter(t=>!t.done).sort((a,b)=>(a.due||"9999").localeCompare(b.due||"9999")), nd=todas.length-ab.length;
+  const todas=ST.tarefas.filter(t=>t.dono===p.dono&&t.projeto===p.tag), ab=ordenar(todas.filter(t=>!t.done),ST.ordem), nd=todas.length-ab.length;
   out.push(h("div",{class:"sec-t"},"Tarefas do projeto",h("small",{},`${ab.length} aberta${ab.length===1?"":"s"}`+(nd?` · ${nd} concluída${nd===1?"":"s"}`:""))));
   if(!ab.length) out.push(h("div",{class:"empty",style:"margin-top:0"},"Nenhuma tarefa aberta no projeto."));
+  else out.push(ordemBar());
   for(const t of ab){
     const meta=[];
-    if(t.due) meta.push(h("span",{class:t.due<td?"late":t.due===td?"today":null},t.due<td?"atrasada · "+fmtDue(t.due):t.due===td?"hoje":fmtDue(t.due)));
+    if(t.due) meta.push(prazoTag(t,td));
     else meta.push(h("span",{},"sem prazo"));
+    meta.push(...classTags(t));
     if(t.crono) meta.push(h("span",{},"no cronograma"));
     meta.push(h("span",{},t.responsaveis.length?"resp.: "+t.responsaveis.join(", "):"sem responsável"));
     const pegar=h("button",{class:"btn small",onclick:async()=>{ pegar.disabled=true;
       try{ await chamar({acao:"pegar",dono:t.dono,projeto:t.projeto,tarefa:t.id}); toast("A tarefa agora é sua também"); await carregar(); }
       catch(x){ toast("Não foi possível pegar: "+x.message); pegar.disabled=false; } }},"Pegar");
-    out.push(h("div",{class:"pt"},h("div",{class:"t-main"},h("div",{class:"t-title"},t.title),h("div",{class:"t-meta"},meta)),
+    out.push(h("div",{class:"pt"},h("div",{class:"t-main"},h("div",{class:"t-title"},t.title),h("div",{class:"t-meta"},meta)),estrela(t),
       t.minha?h("span",{class:"mine"},"✓ sua"):pegar));
   }
   return out;
 }
+/* ---------- cronograma: mesmo desenho do cartão do app (cronoView "card" com crCores, crFaixa, crLista,
+   crEquipe e crAjustar do index.html), a partir do cronograma calculado na função "equipe" ---------- */
+const CR_PAL=["var(--azul)","var(--verde)","var(--rosa)","var(--amarelo)"], DIA_MS=86400000;
+const crUtc=e=>Date.UTC(e.y,e.m-1,e.d);
+const cap=x=>x.replace(/^./,c=>c.toUpperCase());
+const projTitle=tag=>cap(String(tag).replace(/[-_]+/g," "));
+function crCor(t){ const k=Math.min(Math.floor(t),2), f=t-k; if(f<.001) return CR_PAL[k]; if(f>.999) return CR_PAL[k+1]; return `color-mix(in srgb, ${CR_PAL[k+1]} ${Math.round(f*100)}%, ${CR_PAL[k]})`; }
+function crCores(ev){
+  const n=ev.filter(e=>!e.sem).length; let i=0;
+  ev.forEach(e=>{ if(e.sem){ e.cor="var(--cinza)"; return; } e.cor=crCor(n<=1?0:i/(n-1)*3); i++; });
+  ev.forEach((e,j)=>{ e.corProx=ev[j+1]?ev[j+1].cor:e.cor; });
+}
+function crFaixa(ev){
+  const esc=h("div",{class:"escala","aria-hidden":"true"});
+  const t0=crUtc(ev[0]), t1=crUtc(ev[ev.length-1]), span=t1-t0;
+  const barra=h("div",{class:"barra"});
+  barra.style.background=ev.length>1?"linear-gradient(to right, "+ev.map(e=>e.cor+" "+(span?(crUtc(e)-t0)/span*100:0).toFixed(3)+"%").join(", ")+")":ev[0].cor;
+  esc.append(barra);
+  const dias=Math.round(span/DIA_MS);
+  if(dias>0){ const tk=h("div",{class:"ticks"}); tk.style.backgroundSize="calc(100% / "+(dias<=60?dias:dias/7)+") 100%"; esc.append(tk); }
+  const d=new Date(), hoje=Date.UTC(d.getFullYear(),d.getMonth(),d.getDate());
+  if(t1>t0&&hoje>=t0&&hoje<=t1){ const hj=h("div",{class:"hoje"},h("span",{},"hoje")); hj.style.left=((hoje-t0)/(t1-t0)*100)+"%"; esc.append(hj); }
+  ev.forEach((e,i)=>{
+    const mk=h("div",{class:"marca "+(i%2===0?"acima":"abaixo")+(i===0?" ini":"")+(i===ev.length-1&&i>0?" fim":"")+(e.sem?" vazia":"")});
+    mk.style.setProperty("--x",(span?(crUtc(e)-t0)/span*100:0).toFixed(3)+"%"); mk.style.setProperty("--c",e.cor);
+    const leg=e.rotulo||(e.sem?"Sem encontro":"");
+    mk.append(h("span",{class:"ponto"}),h("span",{class:"rotulo"},h("b",{},pad(e.d)+"/"+pad(e.m)),leg?h("small",{},leg):null));
+    esc.append(mk);
+  });
+  return h("figure",{class:"faixa",style:"margin-inline:0"},esc);
+}
+function crLista(ev){
+  const d=new Date(), hoje=Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()); let achou=false;
+  return h("ol",{class:"linha"},ev.map(e=>{
+    const dia=crUtc(e);
+    const li=h("li",{class:"evento"+(dia<hoje?" passou":""),"data-dia":e.data,"data-sem":e.sem?"":null});
+    li.style.setProperty("--c",e.cor); li.style.setProperty("--cn",e.corProx);
+    const data=h("div",{class:"data"},h("time",{class:"dia",datetime:e.data},pad(e.d)+"/"+pad(e.m)),h("span",{class:"sem"},e.dia),e.horario?h("span",{class:"hora"},e.horario):null);
+    if(dia>=hoje&&!achou&&!e.sem){ achou=true; data.append(h("span",{class:"proximo"},dia===hoje?"Hoje":"Próximo encontro")); }
+    const corpo=h("div",{class:"corpo"});
+    if(e.sem){ let f=[e.contexto,...e.atividades.map(a=>a.t)].filter(Boolean); if(!f.length) f=["Não haverá encontro."]; f.forEach(x=>corpo.append(h("p",{class:"contexto"},x))); }
+    else { if(e.contexto) corpo.append(h("p",{class:"contexto"},e.contexto)); if(e.atividades.length) corpo.append(h("ul",{},e.atividades.map(a=>h("li",{},a.t,a.info?h("small",{class:"info"},a.info):null)))); }
+    li.append(data,h("span",{class:"trilho","aria-hidden":"true"}),corpo);
+    return li;
+  }));
+}
+/* Equipe no final do cronograma: por função (Coordenação primeiro), em duas colunas — mesma regra do app */
+function crEquipe(eq){
+  const ms=(eq&&eq.membros)||[]; if(!ms.length) return null;
+  const item=m=>h("li",{},h("b",{},m.nome||m.email),!(m.funcoes||[]).length&&m.funcao?h("span",{class:"cr-eq-func"},m.funcao):null,m.email&&m.nome?h("span",{class:"cr-eq-mail"},m.email):null);
+  const grupos=(eq.funcoes||[]).map(f=>({nome:f.nome,ms:ms.filter(m=>(m.funcoes||[]).includes(f.id))})).filter(g=>g.ms.length);
+  const sem=ms.filter(m=>!(m.funcoes||[]).length);
+  const box=h("section",{class:"cr-equipe"},h("h3",{class:"cr-eq-titulo"},"Equipe"));
+  if(grupos.length&&sem.length) grupos.push({nome:"Demais membros",ms:sem});
+  let us=grupos.length?grupos.map(g=>({nome:g.nome,ms:g.ms,w:1+g.ms.length})):sem.map(m=>({ms:[m],w:1}));
+  if(us.length===1&&us[0].nome&&us[0].ms.length>1){ const g=us[0], k=Math.ceil(g.ms.length/2); us=[{nome:g.nome,ms:g.ms.slice(0,k),w:1+k},{nome:g.nome,cont:true,ms:g.ms.slice(k),w:1+g.ms.length-k}]; }
+  const total=us.reduce((a,u)=>a+u.w,0); let k=us.length, best=Infinity, acc=0;
+  for(let i=0;i<=us.length;i++){ const d=Math.abs(2*acc-total)+(2*acc<total?.5:0); if(d<best){ best=d; k=i; } if(i<us.length) acc+=us[i].w; }
+  const col=l=>h("div",{class:"cr-eq-col"},grupos.length?l.map(u=>h("div",{class:"cr-eq-grupo"},h("h4",u.cont?{class:"cr-eq-cont","aria-hidden":"true"}:{},u.cont?"\u00a0":u.nome),h("ul",{},u.ms.map(item)))):h("ul",{},l.map(u=>item(u.ms[0]))));
+  const esq=us.slice(0,k), dir=us.slice(k);
+  box.append(h("div",{class:"cr-eq-cols"+(dir.length&&esq.length?"":" um")},esq.length?col(esq):null,dir.length?col(dir):null));
+  return box;
+}
+function cronoView(p){
+  const ev=(p.cronograma||[]).map(e=>{ const [y,m,d]=e.data.split("-").map(Number); return {...e,y,m,d}; });
+  const titulo=p.titulo&&p.titulo!==p.tag?p.titulo:projTitle(p.tag||"");
+  const head=h("header",{class:p.logo?"cr-com-logo":null},
+    p.departamento?h("p",{class:"cr-depto"},p.departamento):null,
+    h("h2",{class:"cr-titulo"},titulo),h("p",{class:"periodo"},ev.length?(p.subtitulo||p.periodo):"Cronograma sem datas."),
+    p.logo?h("img",{class:"cr-logo",src:p.logo,alt:"Logotipo"}):null);
+  const box=h("div",{class:"crono cr-card"},head);
+  if(!ev.length){ box.append(h("p",{class:"cr-vazio"},"O cronograma ainda não tem datas."),crEquipe(p.equipe)||""); return box; }
+  crCores(ev);
+  box.append(crFaixa(ev),crLista(ev)); const eq=crEquipe(p.equipe); if(eq) box.append(eq);
+  return box;
+}
+/* evita rótulos sobrepostos na faixa: primeiro some a legenda, depois a própria data (igual ao app) */
+function crAjustar(root){
+  root.querySelectorAll(".escala").forEach(function(esc){
+    var marcas=Array.prototype.slice.call(esc.querySelectorAll(".marca")), limite=esc.getBoundingClientRect();
+    if(!limite.width) return;
+    ["acima","abaixo"].forEach(function(lado){
+      var ultimo=-Infinity;
+      marcas.filter(function(m){return m.classList.contains(lado);}).forEach(function(m){
+        var r=m.querySelector(".rotulo"); r.classList.remove("sem-legenda","oculto"); r.style.transform=""; r.style.left=""; r.style.textAlign="";
+        var box=r.getBoundingClientRect();
+        if(!m.classList.contains("ini")&&!m.classList.contains("fim")){
+          if(box.left<limite.left-12){ r.style.transform="none"; r.style.left="-12px"; r.style.textAlign="left"; box=r.getBoundingClientRect(); }
+          else if(box.right>limite.right+12){ r.style.transform="translateX(-100%)"; r.style.left="12px"; r.style.textAlign="right"; box=r.getBoundingClientRect(); }
+        }
+        if(box.left<ultimo+8){ r.classList.add("sem-legenda"); box=r.getBoundingClientRect(); }
+        if(box.left<ultimo+8){ r.classList.add("oculto"); return; }
+        ultimo=box.right;
+      });
+    });
+  });
+}
+function crAjustarTudo(){ requestAnimationFrame(()=>crAjustar(document)); }
+window.addEventListener("resize",()=>{ clearTimeout(crAjustarTudo.t); crAjustarTudo.t=setTimeout(crAjustarTudo,80); });
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(crAjustarTudo);
 const chave=t=>t.dono+"/"+t.id;
 async function salvar(t,mudancas,msgOk){
   try{ const j=await chamar({acao:"alterar",dono:t.dono,tarefa:t.id,mudancas}); const n=j.tarefa;
@@ -306,16 +507,18 @@ function cartao(t){
   const td=today(), aberta=ST.aberta===chave(t);
   const meta=[];
   if(t.done&&t.doneAt) meta.push(h("span",{},"concluída em "+fmtQuando(t.doneAt).slice(0,5)));
-  else if(t.due) meta.push(h("span",{class:t.due<td?"late":t.due===td?"today":null},t.due<td?"atrasada · "+fmtDue(t.due):t.due===td?"hoje":fmtDue(t.due)));
+  if(t.done&&t.due) meta.push(h("span",{class:"m-due",title:"Prazo"},"prazo "+fmtDue(t.due)));
+  else if(t.due) meta.push(prazoTag(t,td));
   if(t.repete) meta.push(h("span",{},"repete: "+t.repete));
+  meta.push(...classTags(t));
   if(t.steps.length) meta.push(h("span",{},`etapas ${t.steps.filter(s=>s.done).length}/${t.steps.length}`));
   if(t.responsaveis.length>1) meta.push(h("span",{},"com "+t.responsaveis.filter(n=>n!==ST.nome).join(", ")));
   if(t.comentarios.length) meta.push(h("span",{},`${t.comentarios.length} comentário${t.comentarios.length===1?"":"s"}`));
-  const chk=h("button",{class:"chk",title:t.done?"Marcar como pendente":"Concluir","aria-label":t.done?"Marcar como pendente":"Concluir",onclick:e=>{ e.stopPropagation(); chk.disabled=true;
+  const chk=h("button",{class:"chk"+(t.priority===1&&!t.done?" p1":""),title:t.done?"Marcar como pendente":"Concluir","aria-label":t.done?"Marcar como pendente":"Concluir",onclick:e=>{ e.stopPropagation(); chk.disabled=true;
     salvar(t,{done:!t.done},t.done?"Tarefa reaberta":t.repete?"Concluída nesta data":"Tarefa concluída").finally(()=>{ chk.disabled=false; }); }},ic(CHECK));
   const box=h("div",{class:"task"+(t.done?" done":"")+(aberta?" open":"")},
     h("div",{class:"t-row",onclick:()=>{ ST.aberta=aberta?null:chave(t); render(); }},chk,
-      h("div",{class:"t-main"},h("div",{class:"t-title"},t.title),meta.length?h("div",{class:"t-meta"},meta):null)));
+      h("div",{class:"t-main"},h("div",{class:"t-title"},t.title),meta.length?h("div",{class:"t-meta"},meta):null),estrela(t)));
   if(aberta) box.append(detalhe(t));
   return box;
 }
