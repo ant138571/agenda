@@ -755,7 +755,11 @@ function toast(msg,undo){
 /* ================= Dados + sincronização ================= */
 const CACHE_KEY="agenda-cache-v1", QUEUE_KEY="agenda-queue-v1", UI_KEY="agenda-ui-v1", CFG_KEY="agenda-sync-v1", PULL_KEY="agenda-lastpull-v1";
 const cache=lsGet(CACHE_KEY,{tasks:{},tags:{}});
-let CFG=lsGet(CFG_KEY,{url:"",key:""});
+/* servidor de reserva: se o navegador apagar os dados do site (agenda-sync-v1 some junto com o resto), o app
+   volta a apontar para este servidor e basta entrar de novo para baixar tudo. Vazio = sem reserva (como antes).
+   "Trocar servidor" grava {url:"",key:""} e continua valendo (a reserva só entra quando a chave não existe). */
+const SERVIDOR_PADRAO={url:"",key:""};
+let CFG=lsGet(CFG_KEY,null)||{...SERVIDOR_PADRAO};
 const S={
   server:{tasks:cache.tasks||{},tags:cache.tags||{},projects:cache.projects||{},perfil:cache.perfil||{},trash:cache.trash||{}},  // último estado confirmado (cópia local)
   queue:lsGet(QUEUE_KEY,[]),                            // alterações ainda não enviadas
@@ -860,7 +864,7 @@ function initClient(){
   }catch(e){ S.sb=null; S.lastError="Endereço ou chave do Supabase inválidos."; updateSync(); return; }
   S.sb.auth.onAuthStateChange((ev,session)=>{
     S.user=session?session.user:null;
-    if(S.user) ownerCheck(S.user.id);
+    if(S.user){ ownerCheck(S.user.id); pedirPersistencia(); }
     setTimeout(()=>{ updateSync(); renderSettingsIfOpen(); if(S.user){ sync(); ensurePush(); } else if(rollPending){ rollPending=false; rollOver(); } },0);
   });
 }
@@ -875,6 +879,14 @@ function ownerCheck(uid){
     setTimeout(()=>{ render(); toast("Outra conta: os dados deste aparelho foram trocados pelos da nova conta"+(n?` (${n} alteração(ões) não enviada(s) descartada(s))`:"")+"."); },0);
   }
   if(prev!==uid) lsSet(OWNER_KEY,uid);
+}
+/* armazenamento persistente: sem ele, o navegador pode apagar os dados do site (cópia local, servidor e login)
+   quando falta espaço ou depois de dias sem uso. Pede uma vez por abertura; o navegador decide (sem aviso no app). */
+let persistPedido=false;
+function pedirPersistencia(){
+  if(persistPedido) return; persistPedido=true;
+  try{ if(navigator.storage&&navigator.storage.persist&&navigator.storage.persisted)
+    navigator.storage.persisted().then(p=>p||navigator.storage.persist()).catch(()=>{}); }catch(e){}
 }
 window.addEventListener("online",()=>scheduleSync(200));
 window.addEventListener("offline",()=>{ S.mode="offline"; updateSync(); });
@@ -2163,9 +2175,13 @@ function openTagModal(g){
   const colors=h("div",{class:"opts"},TAG_COLORS.map(c=>h("button",{class:"opt"+(tagColor(g)===c?" on":""),"aria-label":"Cor",style:`width:30px;height:30px;padding:0;background:${c}`,onclick:e=>{colors.querySelectorAll(".opt").forEach(x=>x.classList.remove("on"));e.currentTarget.classList.add("on");colors.dataset.c=c;}})));
   const n=tasksArr().filter(t=>(t.tags||[]).includes(g)).length;
   const isProj=!!(VIEW.projects||{})[g];
+  // nome do projeto (título do cronograma; vazio = nome do grupo), só quando o grupo é projeto
+  const tit0=isProj?String(VIEW.projects[g].titulo||""):"";
+  const tit=isProj?h("input",{type:"text",id:"projRename",value:tit0,placeholder:projTitle(g),maxlength:200,style:"border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)"}):null;
   const delWrap=h("div",{style:"font-size:13px;color:var(--muted)"},`Excluir o grupo remove a tag de ${n} tarefa(s). As tarefas não são apagadas.`+(isProj?" O cronograma do projeto também é apagado.":""));
   openModal("Grupo #"+g,h("div",{style:"display:flex;flex-direction:column;gap:12px"},
-    h("div",{class:"field"},h("label",{for:"tagRename"},"Nome"),inp),h("div",{class:"field"},h("span",{class:"lbl"},"Cor"),colors),delWrap),[
+    tit&&h("div",{class:"field"},h("label",{for:"projRename"},"Nome do projeto"),tit),
+    h("div",{class:"field"},h("label",{for:"tagRename"},isProj?"Nome do grupo":"Nome"),inp),h("div",{class:"field"},h("span",{class:"lbl"},"Cor"),colors),delWrap),[
     {label:"Excluir grupo",cls:"danger",run:()=>{
       for(const t of tasksArr()) if((t.tags||[]).includes(g)) patchTask(t.id,{tags:t.tags.filter(x=>x!==g)});
       if(isProj) enqueue({op:"delete",path:"projects/"+g});
@@ -2175,10 +2191,14 @@ function openTagModal(g){
       const merge=nn!==g&&allTags().names.includes(nn);   // o nome já é de outro grupo: os dois grupos são juntados
       if(merge&&isProj&&(VIEW.projects||{})[nn]){ toast(`#${nn} já existe e também é projeto. Remova um dos projetos antes de juntar os grupos.`); return false; }
       const m={...VIEW.tags}; const color=colors.dataset.c||(merge?tagColor(nn):tagColor(g));   // juntando: fica a cor do grupo de destino (salvo se outra foi escolhida)
+      const nt=tit?tit.value.trim().slice(0,200):tit0, titMud=isProj&&nt!==tit0;   // nome do projeto mudou
+      const projNovo=titMud?{...VIEW.projects[g],titulo:nt,updatedAt:new Date().toISOString()}:VIEW.projects[g];
+      if(titMud&&UI.cronEdit===g&&UI.cronDraft) UI.cronDraft.titulo=nt;   // editor do cronograma aberto: o rascunho não desfaz o novo nome
       delete m[g]; m[nn]={color}; saveTags(m);
       if(nn!==g){ for(const t of tasksArr()) if((t.tags||[]).includes(g)) patchTask(t.id,{tags:[...new Set(t.tags.map(x=>x===g?nn:x))]});
-        if(isProj&&!(VIEW.projects||{})[nn]){ enqueueMany([{op:"set",path:"projects/"+nn,data:VIEW.projects[g]},{op:"delete",path:"projects/"+g}]); } }
-      go("tag:"+nn); toast(merge?`Grupos juntados em #${nn}`:"Grupo atualizado");}}
+        if(isProj&&!(VIEW.projects||{})[nn]){ enqueueMany([{op:"set",path:"projects/"+nn,data:projNovo},{op:"delete",path:"projects/"+g}]); } }
+      else if(titMud) enqueue({op:"set",path:"projects/"+g,data:projNovo});
+      go("tag:"+nn); toast(merge?`Grupos juntados em #${nn}`:titMud?"Projeto atualizado":"Grupo atualizado");}}
   ]);
 }
 function openImport(){
@@ -3279,7 +3299,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v27";
+const APP_VER="v28";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
@@ -3479,7 +3499,7 @@ if("serviceWorker" in navigator && location.protocol.startsWith("http")){
 recompute();
 // aberto por uma notificação de lembrete (?t=id): já mostra a tarefa
 { const qt=new URLSearchParams(location.search).get("t"); if(qt){ if(VIEW.tasks[qt]) UI.sel=qt; try{ history.replaceState(null,"",location.pathname); }catch(e){} } }
-render(); updateSync(); initClient(); checkReminders();
+render(); updateSync(); initClient(); checkReminders(); pedirPersistencia();
 purgeTrash();   // lixeira: apaga de vez o que passou de 10 dias
 // ao abrir: com sincronização, espera o login ser lido e o primeiro download (ver onAuthStateChange e sync)
 if(S.sb) rollPending=true; else rollOver();
