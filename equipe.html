@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tarefas da equipe</title>
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161514" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="icons/icon-192.png?v=7">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=7">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+:root{
+  --bg:#FFFFFF; --panel:#FFFFFF; --soft:#F6F5F2; --ink:#1C1B1A; --muted:#6B665F; --faint:#A19D96;
+  --line:#ECE9E4; --line-strong:#DAD5CD; --accent:#F0643C; --accent-ink:#FFFFFF; --accent-soft:#FFEDE6; --accent-text:#B83E1C;
+  --danger:#D93A2B; --ok:#2F9E5F; --shadow:0 1px 2px rgba(30,25,20,.06),0 8px 24px rgba(30,25,20,.08);
+  --font:"Plus Jakarta Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#161514; --panel:#1F1D1B; --soft:#262422; --ink:#F2EFEA; --muted:#B0AAA1; --faint:#7D776F;
+    --line:#2E2B28; --line-strong:#3D3935; --accent:#FF7A52; --accent-ink:#1C1B1A; --accent-soft:#3A241C; --accent-text:#FF9A78;
+    --danger:#FF6B5E; --ok:#5CC98A; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#161514; --panel:#1F1D1B; --soft:#262422; --ink:#F2EFEA; --muted:#B0AAA1; --faint:#7D776F;
+  --line:#2E2B28; --line-strong:#3D3935; --accent:#FF7A52; --accent-ink:#1C1B1A; --accent-soft:#3A241C; --accent-text:#FF9A78;
+  --danger:#FF6B5E; --ok:#5CC98A; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.45;-webkit-text-size-adjust:100%}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.wrap{max-width:760px;margin:0 auto;padding:20px 16px 80px}
+.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.logo{width:34px;height:34px;border-radius:9px;flex:none}
+.top h1{font-size:20px;margin:0;font-weight:800;letter-spacing:-.01em}
+.top .who{font-size:13px;color:var(--muted)}
+.top .sp{flex:1}
+.btn{border:1px solid var(--line-strong);background:var(--panel);border-radius:10px;padding:8px 14px;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--soft)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(.96)}
+.btn.small{padding:5px 10px;font-size:13px}
+.btn:disabled{opacity:.55;cursor:default}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:var(--shadow)}
+.auth{max-width:400px;margin:8vh auto 0}
+.auth h1{font-size:22px;margin:0 0 4px}
+.auth p{color:var(--muted);margin:0 0 16px;font-size:14px}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.field label,.lbl{font-size:12.5px;font-weight:700;color:var(--muted)}
+input[type=text],input[type=email],input[type=password],input[type=date],textarea{border:1px solid var(--line-strong);border-radius:10px;padding:9px 11px;background:var(--panel);width:100%}
+textarea{min-height:80px;resize:vertical}
+input:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(--accent) 40%,transparent);outline-offset:0;border-color:var(--accent)}
+.links{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;font-size:13.5px}
+.link{background:none;border:0;padding:0;color:var(--accent-text);font-weight:600}
+.msg{font-size:13.5px;margin:10px 0 0;color:var(--muted)}
+.msg.err{color:var(--danger)}
+.msg.ok{color:var(--ok)}
+.seg{display:inline-flex;background:var(--soft);border-radius:10px;padding:2px;gap:2px;margin-bottom:6px}
+.seg button{border:0;background:none;padding:6px 12px;color:var(--muted);border-radius:8px;font-weight:600;font-size:13.5px}
+.seg button.on{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.proj{margin-top:20px}
+.proj h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 8px;font-weight:800}
+.task{border:1px solid var(--line);border-radius:14px;background:var(--panel);margin-bottom:8px;overflow:hidden}
+.task.open{border-color:var(--line-strong);box-shadow:var(--shadow)}
+.t-row{display:flex;align-items:flex-start;gap:10px;padding:11px 12px;cursor:pointer}
+.chk{width:24px;height:24px;border-radius:50%;border:2px solid var(--line-strong);background:none;flex:none;display:grid;place-items:center;padding:0;margin-top:1px;color:transparent}
+.chk:hover{border-color:var(--accent);color:var(--accent)}
+.task.done .chk{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.t-main{flex:1;min-width:0}
+.t-title{font-weight:600}
+.task.done .t-title{text-decoration:line-through;color:var(--muted)}
+.t-meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12.5px;color:var(--muted);margin-top:2px}
+.late{color:var(--danger);font-weight:600}
+.today{color:var(--accent-text);font-weight:600}
+.t-body{border-top:1px solid var(--line);padding:14px 14px 16px;display:flex;flex-direction:column;gap:2px}
+.row2{display:grid;grid-template-columns:1fr 170px;gap:10px}
+@media (max-width:520px){ .row2{grid-template-columns:1fr} }
+.steps{display:flex;flex-direction:column;gap:4px;margin-bottom:6px}
+.step{display:flex;align-items:center;gap:8px}
+.step input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);flex:none}
+.step input[type=text]{padding:6px 9px}
+.step.feita input[type=text]{text-decoration:line-through;color:var(--muted)}
+.x{border:0;background:none;color:var(--faint);font-size:18px;line-height:1;padding:4px 6px}
+.x:hover{color:var(--danger)}
+.coms{display:flex;flex-direction:column;gap:8px;margin-bottom:8px}
+.com{background:var(--soft);border-radius:10px;padding:8px 10px}
+.com-h{display:flex;gap:8px;align-items:baseline;font-size:12.5px;color:var(--muted)}
+.com-h b{color:var(--ink);font-size:13px}
+.com-t{white-space:pre-wrap;word-wrap:break-word;font-size:14px;margin-top:2px}
+.acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px}
+.empty{text-align:center;color:var(--muted);padding:32px 12px;border:1.5px dashed var(--line);border-radius:14px;font-size:14px;margin-top:16px}
+.hint{font-size:12.5px;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;font-weight:600;z-index:10;max-width:calc(100% - 32px);box-shadow:var(--shadow)}
+.sep{height:1px;background:var(--line);margin:10px 0}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script src="vendor/supabase.js"></script>
+<script>
+(function(){
+"use strict";
+/* Página da equipe: cada membro entra com a própria conta (mesmo e-mail cadastrado na aba Equipe do projeto) e vê
+   só as tarefas atribuídas a ele. Tudo passa pela função "equipe" do servidor (guia EQUIPE.html). */
+const $=(s,el=document)=>el.querySelector(s);
+const h=(tag,attrs={},...kids)=>{ const el=document.createElement(tag);
+  for(const [k,v] of Object.entries(attrs||{})){ if(v==null||v===false) continue; if(k==="class") el.className=v; else if(k.startsWith("on")) el.addEventListener(k.slice(2),v); else el.setAttribute(k,v===true?"":v); }
+  for(const k of kids.flat()){ if(k==null||k===false) continue; el.append(k.nodeType?k:document.createTextNode(String(k))); } return el; };
+const CHECK='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>';
+const ic=html=>{ const s=h("span",{style:"display:inline-grid"}); s.innerHTML=html; return s; };
+const pad=n=>String(n).padStart(2,"0");
+const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const today=()=>ymd(new Date());
+const DIAS=["dom","seg","ter","qua","qui","sex","sáb"];
+const fmtDue=s=>{ const [y,m,d]=s.split("-").map(Number), x=new Date(y,m-1,d); return `${DIAS[x.getDay()]} ${pad(d)}/${pad(m)}`; };
+const fmtQuando=iso=>{ const d=new Date(iso); return isNaN(d)?"":`${pad(d.getDate())}/${pad(d.getMonth()+1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+let toastT;
+function toast(m){ let t=$("#toast"); if(!t){ t=h("div",{class:"toast",id:"toast",role:"status"}); document.body.append(t); } t.textContent=m; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,3000); }
+const lsGet=(k,f)=>{ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):f; }catch(e){ return f; } };
+const lsSet=(k,v)=>{ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} };
+
+/* servidor: vem no link enviado pelo dono (#s=<endereço>&k=<chave pública>) e fica guardado neste aparelho */
+const CFG_KEY="equipe-cfg-v1";
+let CFG=lsGet(CFG_KEY,{url:"",key:""});
+{ const q=new URLSearchParams(location.hash.slice(1)); const s=q.get("s"), k=q.get("k");
+  if(s&&k&&/^https:\/\/[\w.-]+(:\d+)?\/?$/.test(s)){ CFG={url:s.replace(/\/+$/,""),key:k}; lsSet(CFG_KEY,CFG); try{ history.replaceState(null,"",location.pathname+location.search); }catch(e){} } }
+const app=$("#app");
+if(!CFG.url||!CFG.key||!window.supabase){
+  app.append(h("div",{class:"card auth"},h("h1",{},"Tarefas da equipe"),h("p",{},!window.supabase?"Não foi possível carregar a página. Verifique a internet e recarregue.":"Abra esta página pelo link de acesso enviado pelo coordenador do projeto.")));
+  return;
+}
+const sb=window.supabase.createClient(CFG.url,CFG.key,{auth:{persistSession:true,autoRefreshToken:true,storageKey:"equipe-auth",detectSessionInUrl:true}});
+const FN=CFG.url+"/functions/v1/equipe";
+const ST={user:null,tarefas:null,erro:"",ver:"abertas",aberta:null,carregando:false,recuperar:false};
+
+async function chamar(body){
+  const {data}=await sb.auth.getSession(); const tk=data&&data.session&&data.session.access_token;
+  if(!tk) throw new Error("Entre na sua conta.");
+  let r; try{ r=await fetch(FN,{method:"POST",headers:{apikey:CFG.key,Authorization:"Bearer "+tk,"Content-Type":"application/json"},body:JSON.stringify(body)}); }
+  catch(e){ throw new Error("Sem conexão com o servidor."); }
+  let j={}; try{ j=await r.json(); }catch(e){}
+  if(r.status===404) throw new Error("A função “equipe” não está publicada no servidor. Avise o coordenador do projeto.");
+  if(!r.ok) throw new Error(j.error||("Erro "+r.status));
+  return j;
+}
+async function carregar(){
+  ST.carregando=true; ST.erro=""; render();
+  try{ const j=await chamar({acao:"listar"}); ST.tarefas=j.tarefas||[]; ST.nome=(j.usuario&&j.usuario.nome)||""; }
+  catch(e){ ST.erro=e.message; }
+  ST.carregando=false; render();
+}
+
+/* ---------- entrar / criar conta / esqueci a senha ---------- */
+const traduz=m=>{ m=String(m||"");
+  if(/Invalid login credentials/i.test(m)) return "E-mail ou senha incorretos.";
+  if(/Email not confirmed/i.test(m)) return "Confirme seu e-mail pelo link enviado no cadastro.";
+  if(/already registered|already exists/i.test(m)) return "Já existe uma conta com este e-mail: use “Entrar” (ou “Esqueci a senha”).";
+  if(/Password should be at least|weak/i.test(m)) return "A senha precisa ter pelo menos 6 caracteres.";
+  if(/rate limit|too many/i.test(m)) return "Muitas tentativas. Aguarde alguns minutos e tente de novo.";
+  if(/valid email|invalid.*email/i.test(m)) return "E-mail inválido.";
+  if(/Failed to fetch|NetworkError|Load failed/i.test(m)) return "Sem conexão com o servidor.";
+  return m; };
+function telaAuth(modo){
+  const voltar=location.origin+location.pathname;
+  const email=h("input",{type:"email",id:"aEmail",autocomplete:"email",placeholder:"seu e-mail"}), senha=h("input",{type:"password",id:"aSenha",autocomplete:modo==="cadastro"?"new-password":"current-password",placeholder:"senha"});
+  const senha2=h("input",{type:"password",id:"aSenha2",autocomplete:"new-password",placeholder:"repita a senha"});
+  const msg=h("p",{class:"msg",role:"status"});
+  const ok=t=>{ msg.className="msg ok"; msg.textContent=t; }, err=t=>{ msg.className="msg err"; msg.textContent=traduz(t); };
+  const go=async e=>{ e.preventDefault(); const b=form.querySelector("button[type=submit]"); b.disabled=true; msg.textContent="";
+    try{
+      if(modo==="entrar"){ const {error}=await sb.auth.signInWithPassword({email:email.value.trim(),password:senha.value}); if(error) err(error.message); }
+      else if(modo==="cadastro"){
+        if(senha.value!==senha2.value){ err("As senhas não são iguais."); return; }
+        const {data,error}=await sb.auth.signUp({email:email.value.trim(),password:senha.value,options:{emailRedirectTo:voltar}});
+        if(error) err(error.message); else if(!data.session) ok("Conta criada. Abra o e-mail que enviamos para "+email.value.trim()+" e toque no link de confirmação; depois entre aqui.");
+      }
+      else if(modo==="esqueci"){ const {error}=await sb.auth.resetPasswordForEmail(email.value.trim(),{redirectTo:voltar}); if(error) err(error.message); else ok("Se houver conta com este e-mail, enviamos um link para criar uma nova senha."); }
+      else if(modo==="nova"){
+        if(senha.value!==senha2.value){ err("As senhas não são iguais."); return; }
+        const {error}=await sb.auth.updateUser({password:senha.value}); if(error) err(error.message); else { ST.recuperar=false; toast("Senha alterada."); render(); carregar(); }
+      }
+    }catch(x){ err(x.message); } finally{ b.disabled=false; } };
+  const T={entrar:["Entrar","Entre com o e-mail cadastrado pelo coordenador do projeto para ver as suas tarefas."],
+    cadastro:["Criar conta","Use o mesmo e-mail que o coordenador cadastrou na equipe do projeto. Você vai receber um e-mail para confirmar."],
+    esqueci:["Esqueci a senha","Informe seu e-mail: enviamos um link para criar uma nova senha."],
+    nova:["Nova senha","Escolha a nova senha da sua conta."]}[modo];
+  const form=h("form",{onsubmit:go},
+    modo!=="nova"?h("div",{class:"field"},h("label",{for:"aEmail"},"E-mail"),email):null,
+    modo!=="esqueci"?h("div",{class:"field"},h("label",{for:"aSenha"},modo==="nova"?"Nova senha":"Senha"),senha):null,
+    modo==="cadastro"||modo==="nova"?h("div",{class:"field"},h("label",{for:"aSenha2"},"Repita a senha"),senha2):null,
+    h("button",{class:"btn primary",type:"submit",style:"width:100%;justify-content:center;margin-top:4px"},{entrar:"Entrar",cadastro:"Criar conta",esqueci:"Enviar link",nova:"Salvar nova senha"}[modo]),msg,
+    modo==="nova"?null:h("div",{class:"links"},
+      modo!=="entrar"?h("button",{class:"link",type:"button",onclick:()=>telaAuth("entrar")},"Já tenho conta: entrar"):h("button",{class:"link",type:"button",onclick:()=>telaAuth("cadastro")},"Criar conta"),
+      modo==="entrar"?h("button",{class:"link",type:"button",onclick:()=>telaAuth("esqueci")},"Esqueci a senha"):null));
+  app.replaceChildren(h("div",{class:"card auth"},h("img",{class:"logo",src:"icons/icon-192.png?v=7",alt:"",style:"margin-bottom:10px"}),h("h1",{},T[0]),h("p",{},T[1]),form));
+  setTimeout(()=>{ const i=form.querySelector("input"); if(i) i.focus(); },30);
+}
+
+/* ---------- tarefas ---------- */
+function render(){
+  if(ST.recuperar){ telaAuth("nova"); return; }
+  if(!ST.user){ telaAuth("entrar"); return; }
+  const top=h("div",{class:"top"},h("img",{class:"logo",src:"icons/icon-192.png?v=7",alt:""}),
+    h("div",{},h("h1",{},"Minhas tarefas"),h("div",{class:"who"},(ST.nome?ST.nome+" · ":"")+ST.user.email)),h("span",{class:"sp"}),
+    h("button",{class:"btn small",onclick:carregar,disabled:ST.carregando},ST.carregando?"Atualizando…":"Atualizar"),
+    h("button",{class:"btn small",onclick:async()=>{ await sb.auth.signOut(); }},"Sair"));
+  const out=[top];
+  if(ST.erro) out.push(h("div",{class:"empty",style:"color:var(--danger)"},ST.erro));
+  else if(!ST.tarefas) out.push(h("div",{class:"empty"},"Carregando…"));
+  else {
+    const ab=ST.tarefas.filter(t=>!t.done), co=ST.tarefas.filter(t=>t.done);
+    out.push(h("div",{class:"seg",role:"tablist"},[["abertas",`Abertas (${ab.length})`],["concluidas",`Concluídas (${co.length})`]].map(([k,l])=>h("button",{class:ST.ver===k?"on":"",onclick:()=>{ ST.ver=k; render(); }},l))));
+    const lista=(ST.ver==="abertas"?ab:co).slice().sort((a,b)=>ST.ver==="abertas"?(a.due||"9999").localeCompare(b.due||"9999"):(b.doneAt||"").localeCompare(a.doneAt||""));
+    if(!ST.tarefas.length) out.push(h("div",{class:"empty"},"Nenhuma tarefa atribuída a você ainda. Quando o coordenador atribuir uma tarefa ao seu e-mail ("+ST.user.email+"), ela aparece aqui."));
+    else if(!lista.length) out.push(h("div",{class:"empty"},ST.ver==="abertas"?"Nenhuma tarefa aberta. 🎉":"Nenhuma tarefa concluída."));
+    const projs=[...new Set(lista.map(t=>t.projetoTitulo))];
+    for(const p of projs) out.push(h("section",{class:"proj"},h("h2",{},p),lista.filter(t=>t.projetoTitulo===p).map(cartao)));
+  }
+  app.replaceChildren(...out);
+}
+const chave=t=>t.dono+"/"+t.id;
+async function salvar(t,mudancas,msgOk){
+  try{ const j=await chamar({acao:"alterar",dono:t.dono,tarefa:t.id,mudancas}); const n=j.tarefa;
+    Object.assign(t,{title:n.title,due:n.due,done:n.done,doneAt:n.doneAt,notes:n.notes,steps:n.steps,repete:n.repete}); toast(msgOk); render(); return true; }
+  catch(e){ toast("Não foi salvo: "+e.message); return false; }
+}
+function cartao(t){
+  const td=today(), aberta=ST.aberta===chave(t);
+  const meta=[];
+  if(t.done&&t.doneAt) meta.push(h("span",{},"concluída em "+fmtQuando(t.doneAt).slice(0,5)));
+  else if(t.due) meta.push(h("span",{class:t.due<td?"late":t.due===td?"today":null},t.due<td?"atrasada · "+fmtDue(t.due):t.due===td?"hoje":fmtDue(t.due)));
+  if(t.repete) meta.push(h("span",{},"repete: "+t.repete));
+  if(t.steps.length) meta.push(h("span",{},`etapas ${t.steps.filter(s=>s.done).length}/${t.steps.length}`));
+  if(t.responsaveis.length>1) meta.push(h("span",{},"com "+t.responsaveis.filter(n=>n!==ST.nome).join(", ")));
+  if(t.comentarios.length) meta.push(h("span",{},`${t.comentarios.length} comentário${t.comentarios.length===1?"":"s"}`));
+  const chk=h("button",{class:"chk",title:t.done?"Marcar como pendente":"Concluir","aria-label":t.done?"Marcar como pendente":"Concluir",onclick:e=>{ e.stopPropagation(); chk.disabled=true;
+    salvar(t,{done:!t.done},t.done?"Tarefa reaberta":t.repete?"Concluída nesta data":"Tarefa concluída").finally(()=>{ chk.disabled=false; }); }},ic(CHECK));
+  const box=h("div",{class:"task"+(t.done?" done":"")+(aberta?" open":"")},
+    h("div",{class:"t-row",onclick:()=>{ ST.aberta=aberta?null:chave(t); render(); }},chk,
+      h("div",{class:"t-main"},h("div",{class:"t-title"},t.title),meta.length?h("div",{class:"t-meta"},meta):null)));
+  if(aberta) box.append(detalhe(t));
+  return box;
+}
+function detalhe(t){
+  const titulo=h("input",{type:"text",id:"eTit",maxlength:"500"}); titulo.value=t.title;
+  const prazo=h("input",{type:"date",id:"ePrazo",max:"2099-12-31"}); prazo.value=t.due||""; if(!t.due||t.due>=today()) prazo.min=today();
+  const notas=h("textarea",{id:"eNotas",placeholder:"Anotações, links…"}); notas.value=t.notes;
+  // etapas (rascunho local até salvar)
+  const etapas=t.steps.map(s=>({...s}));
+  const stepsBox=h("div",{class:"steps"});
+  const nova=h("input",{type:"text",placeholder:"Adicionar etapa (Enter)",maxlength:"500"});
+  const pintar=()=>{ stepsBox.replaceChildren(...etapas.map((s,i)=>{
+    const cb=h("input",{type:"checkbox","aria-label":"Etapa feita"}); cb.checked=s.done; cb.addEventListener("change",()=>{ s.done=cb.checked; pintar(); });
+    const tx=h("input",{type:"text",maxlength:"500","aria-label":"Etapa"}); tx.value=s.title; tx.addEventListener("input",()=>{ s.title=tx.value; });
+    return h("div",{class:"step"+(s.done?" feita":"")},cb,tx,h("button",{class:"x",type:"button",title:"Remover etapa","aria-label":"Remover etapa",onclick:()=>{ etapas.splice(i,1); pintar(); }},"×")); })); };
+  const addEtapa=()=>{ const v=nova.value.trim(); if(!v) return; etapas.push({id:"s"+Date.now().toString(36),title:v,done:false}); nova.value=""; pintar(); nova.focus(); };
+  nova.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addEtapa(); } });
+  pintar();
+  const gravar=h("button",{class:"btn primary",onclick:async()=>{
+    if(nova.value.trim()) addEtapa();
+    const m={}, tit=titulo.value.replace(/\s+/g," ").trim();
+    if(!tit){ toast("O nome da tarefa não pode ficar vazio."); titulo.focus(); return; }
+    if(tit!==t.title) m.title=tit;
+    if((prazo.value||null)!==(t.due||null)){ if(prazo.value&&prazo.value<today()){ toast("Escolha um prazo de hoje em diante."); return; } m.due=prazo.value||null; }
+    if(notas.value!==t.notes) m.notes=notas.value;
+    const limpas=etapas.filter(s=>s.title.trim()).map(s=>({id:s.id,title:s.title.trim(),done:!!s.done}));
+    if(JSON.stringify(limpas)!==JSON.stringify(t.steps.map(s=>({id:s.id,title:s.title,done:!!s.done})))) m.steps=limpas;
+    if(!Object.keys(m).length){ toast("Nada a salvar."); return; }
+    if("due" in m&&m.due===null&&t.repete&&!confirm("Sem prazo, a tarefa deixa de se repetir. Continuar?")) return;
+    gravar.disabled=true; await salvar(t,m,"Alterações salvas"); gravar.disabled=false; }},"Salvar alterações");
+  // comentários
+  const coms=h("div",{class:"coms"},t.comentarios.length?t.comentarios.map(c=>h("div",{class:"com"},h("div",{class:"com-h"},h("b",{},c.autor||c.email),h("span",{},fmtQuando(c.criado_em))),h("div",{class:"com-t"},c.texto))):h("div",{class:"hint"},"Nenhum comentário ainda."));
+  const com=h("textarea",{id:"eCom",placeholder:"Escreva um comentário para o coordenador e a equipe…",maxlength:"2000",style:"min-height:64px"});
+  const enviar=h("button",{class:"btn",onclick:async()=>{ const tx=com.value.trim(); if(!tx){ com.focus(); return; } enviar.disabled=true;
+    try{ const j=await chamar({acao:"comentar",dono:t.dono,tarefa:t.id,texto:tx}); if(j.comentario) t.comentarios.push(j.comentario); toast("Comentário enviado"); render(); }
+    catch(e){ toast("Comentário não enviado: "+e.message); enviar.disabled=false; } }},"Comentar");
+  com.addEventListener("keydown",e=>{ if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){ e.preventDefault(); enviar.click(); } });
+  return h("div",{class:"t-body"},
+    h("div",{class:"row2"},h("div",{class:"field"},h("label",{for:"eTit"},"Nome da tarefa"),titulo),h("div",{class:"field"},h("label",{for:"ePrazo"},"Prazo"),prazo)),
+    h("div",{class:"field"},h("span",{class:"lbl"},"Etapas"),stepsBox,nova),
+    h("div",{class:"field"},h("label",{for:"eNotas"},"Anotações"),notas),
+    h("div",{class:"hint"},"Projeto "+t.projetoTitulo+" · responsáveis: "+t.responsaveis.join(", ")),
+    h("div",{class:"acts"},h("button",{class:"btn",onclick:()=>{ ST.aberta=null; render(); }},"Fechar"),gravar),
+    h("div",{class:"sep"}),
+    h("div",{class:"field",style:"margin:0"},h("span",{class:"lbl"},"Comentários"),coms,com),
+    h("div",{class:"acts"},enviar));
+}
+
+sb.auth.onAuthStateChange((ev,session)=>{
+  const antes=ST.user&&ST.user.id; ST.user=session?session.user:null;
+  if(ev==="PASSWORD_RECOVERY") ST.recuperar=true;
+  if(!ST.user){ ST.tarefas=null; ST.erro=""; ST.aberta=null; }
+  setTimeout(()=>{ render(); if(ST.user&&!ST.recuperar&&ST.user.id!==antes) carregar(); },0);
+});
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&ST.user&&!ST.recuperar&&!ST.aberta&&!ST.carregando) carregar(); });
+})();
+</script>
+</body>
+</html>
