@@ -572,8 +572,9 @@ body.has-bulk .content{padding-bottom:110px}
 .crono .passou .data,.crono .passou .corpo{opacity:.6}
 .crono .cr-vazio{margin:1.5rem 0 1rem;color:var(--suave);font-style:italic}
 /* v30: seções por membro/função, tarefas sem prazo e link da área da equipe */
-.crono .cr-secao{margin-top:.5rem;padding-top:1.4rem;border-top:1px solid var(--linha)}
-.crono .cr-sec-titulo{margin:0 0 1.2rem;font-family:var(--display);font-weight:700;font-size:1.35rem}
+.crono .cr-grp+.cr-grp,.crono .corpo ul+.cr-grp,.crono .cr-sp ul+.cr-grp{margin-top:.2rem}
+.crono .cr-grp-titulo{margin:0 0 .35rem;font-family:var(--display);font-weight:600;font-size:.82rem;letter-spacing:.04em;color:var(--suave)}
+.crono .cr-sp .cr-grp ul{margin-bottom:.4rem}
 .crono .cr-sp{--c:var(--cinza);margin:0 0 2rem}
 .crono .cr-sp-titulo{margin:0 0 .7rem;font-family:var(--display);font-weight:600;font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;color:var(--suave)}
 .crono .cr-sp ul{list-style:none;margin:0;padding:0;max-width:38rem}
@@ -642,8 +643,7 @@ body.has-bulk .content{padding-bottom:110px}
   .crono.cr-print .proximo{display:none}
   .crono.cr-print .cr-equipe{padding-top:1rem}
   .crono.cr-print .cr-eq-titulo{font-size:1.2rem;margin-bottom:.5rem}
-  .crono.cr-print .cr-secao{padding-top:1rem}
-  .crono.cr-print .cr-sec-titulo{font-size:1.2rem;margin-bottom:.8rem}
+  .crono.cr-print .cr-grp-titulo{margin-bottom:.25rem}
   .crono.cr-print .cr-sp{margin-bottom:1.3rem}
   .crono.cr-print .cr-sp li{margin-bottom:.5rem}
 }
@@ -2423,7 +2423,24 @@ function crFaixa(ev){
   return h("figure",{class:"faixa",style:"margin-inline:0"},esc);
 }
 /* chk: cartão da tela — cada tarefa do cronograma ganha um círculo para concluí-la ali mesmo (concluída sai do cronograma) */
-function crLista(ev,chk){
+/* v31: Por membro / Por função — dentro de cada data (e no “Sem prazo”) as tarefas ficam sob o nome de cada membro ou
+   função (grupos de gruposVis, na ordem das abas; sem “(você)”); atividades digitadas vêm antes, sem grupo.
+   Por tarefa (ou sem p): lista única, como até a v29. */
+function crGrupos(p,itens){
+  if(!p||(p.visao!=="membro"&&p.visao!=="funcao")) return null;
+  return gruposVis(p,itens,p.visao,false).map(g=>({titulo:(typeof g.titulo==="string"?g.titulo:g.titulo.textContent).replace(" (você)",""),itens:g.list}));
+}
+const crItem=(a,chk)=>typeof a==="string"?h("li",{},a):h("li",{class:chk&&a.id?"cr-tk":null},
+  chk&&a.id?h("button",{class:"cr-chk",title:"Concluir tarefa","aria-label":"Concluir “"+a.t+"”",onclick:ev=>{ ev.stopPropagation(); toggleDone(a.id); }},svg(ICON.check,12,'stroke-width="3"')):null,
+  a.t,a.info?h("small",{class:"info"},a.info):null);
+/* lista de itens; com grupos: as soltas (texto digitado) e depois cada grupo com o seu título */
+function crItens(lista,chk,p){
+  const gs=crGrupos(p,lista.filter(a=>typeof a!=="string"&&a.id));
+  if(!gs) return [h("ul",{},lista.map(a=>crItem(a,chk)))];
+  const soltas=lista.filter(a=>typeof a==="string"||!a.id);
+  return [soltas.length?h("ul",{},soltas.map(a=>crItem(a,chk))):null,...gs.map(g=>h("div",{class:"cr-grp"},h("p",{class:"cr-grp-titulo"},g.titulo),h("ul",{},g.itens.map(a=>crItem(a,chk)))))].filter(Boolean);
+}
+function crLista(ev,chk,p){
   const d=new Date(), hoje=Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()); let achou=false;
   return h("ol",{class:"linha"},ev.map(e=>{
     const dia=crUtc(e);
@@ -2433,9 +2450,7 @@ function crLista(ev,chk){
     if(dia>=hoje&&!achou&&!e.sem){ achou=true; data.append(h("span",{class:"proximo"},dia===hoje?"Hoje":"Próximo encontro")); }
     const corpo=h("div",{class:"corpo"});
     if(e.sem){ let f=[e.contexto,...e.atividades.map(a=>typeof a==="string"?a:a.t)].filter(Boolean); if(!f.length) f=["Não haverá encontro."]; f.forEach(x=>corpo.append(h("p",{class:"contexto"},x))); }
-    else { if(e.contexto) corpo.append(h("p",{class:"contexto"},e.contexto)); if(e.atividades.length) corpo.append(h("ul",{},e.atividades.map(a=>typeof a==="string"?h("li",{},a):h("li",{class:chk&&a.id?"cr-tk":null},
-      chk&&a.id?h("button",{class:"cr-chk",title:"Concluir tarefa","aria-label":"Concluir “"+a.t+"”",onclick:ev=>{ ev.stopPropagation(); toggleDone(a.id); }},svg(ICON.check,12,'stroke-width="3"')):null,
-      a.t,a.info?h("small",{class:"info"},a.info):null)))); }
+    else { if(e.contexto) corpo.append(h("p",{class:"contexto"},e.contexto)); if(e.atividades.length) corpo.append(...crItens(e.atividades,chk,p)); }
     li.append(data,h("span",{class:"trilho","aria-hidden":"true"}),corpo);
     return li;
   }));
@@ -2451,10 +2466,10 @@ function cronoView(p,kind){
     full&&p.logo?h("img",{class:"cr-logo",src:p.logo,alt:"Logotipo"}):null);
   const box=h("div",{class:"crono cr-"+kind},head);
   const sp=full&&p.tag?cronoSemPrazo(p):[];   // v30: tarefas do cronograma ainda sem prazo
-  if(!ev.length){ if(full) box.append(h("p",{class:"cr-vazio"},"Ainda não há datas. Toque em + numa tarefa geral com prazo para levá-la ao cronograma, ou use “Editar cronograma”."),...crPartesDom(p,ev,sp,kind==="card"),crEquipe(p)||"",crAcesso(p)||""); return box; }
+  if(!ev.length){ if(full) box.append(h("p",{class:"cr-vazio"},"Ainda não há datas. Toque em + numa tarefa geral com prazo para levá-la ao cronograma, ou use “Editar cronograma”."),sp.length?crSemPrazo(sp,kind==="card",p):"",crEquipe(p)||"",crAcesso(p)||""); return box; }
   crCores(ev);
   box.append(crFaixa(ev));
-  if(full){ box.append(...crPartesDom(p,ev,sp,kind==="card")); const eq=crEquipe(p); if(eq) box.append(eq); const ac=crAcesso(p); if(ac) box.append(ac); }
+  if(full){ box.append(crLista(ev,kind==="card",p)); if(sp.length) box.append(crSemPrazo(sp,kind==="card",p)); const eq=crEquipe(p); if(eq) box.append(eq); const ac=crAcesso(p); if(ac) box.append(ac); }
   return box;
 }
 /* v30: tarefas do cronograma (crono) abertas e sem prazo: aparecem no fim da lista, em “Sem prazo” */
@@ -2463,35 +2478,9 @@ function cronoSemPrazo(p){
   return sortTasks(tasksArr().filter(t=>inCrono(t)&&!t.due&&!t.done&&(t.tags||[]).includes(p.tag)),"manual")
     .map(t=>({t:t.title,id:t.id,info:extraInfo((p.extras||{})[t.id],mb(t.id).map(membroNome))}));
 }
-/* v30: partes da lista do cronograma conforme a visualização do projeto (visao):
-   por tarefa = uma parte só (todas as datas + sem prazo); por membro / por função = “Geral” (datas com contexto,
-   atividades digitadas ou sem encontro) e depois uma parte por grupo (gruposVis), só com as tarefas do grupo.
-   As cores das datas são as da lista inteira (crCores antes de chamar), iguais às da faixa. */
-function crPartes(p,ev,sp){
-  if(p.visao!=="membro"&&p.visao!=="funcao") return [{titulo:"",ev,sp}];
-  const prox=l=>{ l.forEach((e,j)=>{ e.corProx=l[j+1]?l[j+1].cor:e.cor; }); return l; };
-  const ger=prox(ev.map(e=>({...e,atividades:e.atividades.filter(a=>typeof a==="string")})).filter(e=>e.sem||e.contexto||e.atividades.length));
-  const out=ger.length?[{titulo:"Geral",ev:ger,sp:[]}]:[];
-  const vistos=new Set(), itens=[];
-  for(const a of [...ev.flatMap(e=>e.atividades),...sp]) if(a&&typeof a!=="string"&&a.id&&!vistos.has(a.id)){ vistos.add(a.id); itens.push({id:a.id}); }
-  for(const g of gruposVis(p,itens,p.visao,false)){
-    const ids=new Set(g.list.map(x=>x.id)), so=a=>typeof a!=="string"&&ids.has(a.id);
-    const titulo=(typeof g.titulo==="string"?g.titulo:g.titulo.textContent).replace(" (você)","");
-    out.push({titulo,ev:prox(ev.map(e=>({...e,contexto:"",sem:false,atividades:e.atividades.filter(so)})).filter(e=>e.atividades.length)),sp:sp.filter(so)});
-  }
-  return out;
-}
-function crPartesDom(p,ev,sp,chk){
-  return crPartes(p,ev,sp).map(x=>{
-    const nodes=[x.ev.length?crLista(x.ev,chk):null,x.sp.length?crSemPrazo(x.sp,chk):null].filter(Boolean);
-    return x.titulo?h("section",{class:"cr-secao"},h("h3",{class:"cr-sec-titulo"},x.titulo),...nodes):nodes;
-  }).flat();
-}
 /* “Sem prazo”: tarefas do cronograma ainda sem data (no cartão, com o círculo de concluir) */
-function crSemPrazo(sp,chk){
-  return h("div",{class:"cr-sp"},h("h4",{class:"cr-sp-titulo"},"Sem prazo"),h("ul",{},sp.map(a=>h("li",{class:chk?"cr-tk":null},
-    chk?h("button",{class:"cr-chk",title:"Concluir tarefa","aria-label":"Concluir “"+a.t+"”",onclick:ev=>{ ev.stopPropagation(); toggleDone(a.id); }},svg(ICON.check,12,'stroke-width="3"')):null,
-    a.t,a.info?h("small",{class:"info"},a.info):null))));
+function crSemPrazo(sp,chk,p){
+  return h("div",{class:"cr-sp"},h("h4",{class:"cr-sp-titulo"},"Sem prazo"),...crItens(sp,chk,p));
 }
 /* v30: link da página da equipe (área pessoal de cada membro) no fim do cronograma; só com servidor e membros com e-mail */
 function crAcesso(p){
@@ -2960,9 +2949,9 @@ async function makeCronoPDF(tag,extra){
     const rt=root.getBoundingClientRect(), total=rt.height;
     // equipe em duas colunas: só corta onde nenhum tópico/pessoa da outra coluna fica partido
     const atoms=[...root.querySelectorAll(".cr-eq-cols .cr-eq-grupo,.cr-eq-cols li")].map(e=>{ const r=e.getBoundingClientRect(); return [r.top-rt.top,r.bottom-rt.top]; });
-    // v30: também entre as seções por membro/função, em “Sem prazo” e antes do link da equipe (o título de uma seção não fica sozinho no fim da página)
-    const presos=new Set([...root.querySelectorAll(".cr-secao>.linha:nth-child(2)>.evento:first-child,.cr-secao>.cr-sp:nth-child(2),.cr-sp li:first-child")]);
-    const cuts=[...root.querySelectorAll(".evento,.cr-equipe,.cr-eq-grupo,.cr-eq-cols li,.cr-secao,.cr-sp,.cr-sp li,.cr-acesso")].filter(e=>!presos.has(e)).map(e=>e.getBoundingClientRect().top-rt.top).filter(v=>!atoms.some(([a,b])=>v>a+1&&v<b-1));
+    // v30/v31: também em “Sem prazo” (entre os grupos e as tarefas) e antes do link da equipe; o título não fica sozinho no fim da página
+    const presos=new Set([...root.querySelectorAll(".cr-sp li:first-child,.cr-sp>.cr-grp:nth-child(2)")]);
+    const cuts=[...root.querySelectorAll(".evento,.cr-equipe,.cr-eq-grupo,.cr-eq-cols li,.cr-sp,.cr-sp .cr-grp,.cr-sp li,.cr-acesso")].filter(e=>!presos.has(e)).map(e=>e.getBoundingClientRect().top-rt.top).filter(v=>!atoms.some(([a,b])=>v>a+1&&v<b-1));
     // logotipo em cima à direita também nas páginas seguintes (mesmo tamanho e posição do cabeçalho)
     const LTOP=Math.round(W*13/210), LDIR=Math.round(W*16/210);
     const logo=p.logo?await new Promise(ok=>{ const im=new Image();
@@ -3029,6 +3018,18 @@ function cronoEmailHTML(tag,mensagem,extra){
   // lista de datas: data | trilho (ponto + linha até a próxima data) | atividades. O trilho são três células na mesma linha
   // da tabela (17px · 2px da linha · 17px): a do meio estica até a próxima data; o ponto (inline-block, desenhado por cima
   // da linha) fica na primeira e passa por cima da do meio (table-layout:fixed)
+  // itens com traço da cor (v31: Por membro / Por função — texto digitado primeiro e, depois, cada grupo com o seu título, como crItens)
+  const itemTr=(a,cor,pt,dash)=>{ const t=typeof a==="string"?a:a.t, info=typeof a==="string"?"":a.info;
+    return `<tr><td valign="top" width="24" style="width:24px;padding-top:${dash}px"><div style="width:12px;height:2px;background:${cor};font-size:0;line-height:0">&nbsp;</div></td>`+
+      `<td valign="top" style="padding:${pt}px 0 8px">${esc(t)}${info?`<span style="display:block;color:${C.suave};font-size:13px;line-height:1.4">${esc(info)}</span>`:""}</td></tr>`; };
+  const itensHTML=(lista,cor,pt)=>{
+    const gs=crGrupos(p,lista.filter(a=>typeof a!=="string"&&a.id));
+    if(!gs) return `<table ${T} width="100%">`+lista.map(a=>itemTr(a,cor,pt,11)).join("")+`</table>`;   // como até a v29
+    const soltas=lista.filter(a=>typeof a==="string"||!a.id); let primeiro=true;
+    const tit=x=>{ const r=`<p style="margin:${primeiro?pt:2}px 0 5px;font-family:${C.display};font-weight:600;font-size:12.5px;letter-spacing:.04em;color:${C.suave}">${esc(x)}</p>`; primeiro=false; return r; };
+    return (soltas.length?(primeiro=false,`<table ${T} width="100%">`+soltas.map(a=>itemTr(a,cor,pt,11)).join("")+`</table>`):"")+
+      gs.map(g=>tit(g.titulo)+`<table ${T} width="100%">`+g.itens.map(a=>itemTr(a,cor,0,7)).join("")+`</table>`).join("");
+  };
   const linhasDe=L=>L.map((e,j)=>{
     const dia=new Date(crUtc(e)), ult=j===L.length-1, prox=L[j+1]?L[j+1].cor:e.cor;
     const data=`<span style="display:block;font-family:${C.display};font-weight:700;font-size:27px;line-height:1.1;letter-spacing:-.01em;color:${C.texto}">${pad(e.d)}/${pad(e.m)}</span>`+
@@ -3043,9 +3044,7 @@ function cronoEmailHTML(tag,mensagem,extra){
       corpo=f.map((x,k)=>`<p style="margin:${k?6:4}px 0 0;color:${C.suave};font-style:italic">${esc(x)}</p>`).join(""); }
     else {
       if(e.contexto) corpo+=`<p style="margin:4px 0 8px;color:${C.suave};font-style:italic">${esc(e.contexto)}</p>`;
-      if(e.atividades.length) corpo+=`<table ${T} width="100%">`+e.atividades.map(a=>{ const t=typeof a==="string"?a:a.t, info=typeof a==="string"?"":a.info;
-        return `<tr><td valign="top" width="24" style="width:24px;padding-top:11px"><div style="width:12px;height:2px;background:${e.cor};font-size:0;line-height:0">&nbsp;</div></td>`+
-          `<td valign="top" style="padding:${e.contexto?0:4}px 0 8px">${esc(t)}${info?`<span style="display:block;color:${C.suave};font-size:13px;line-height:1.4">${esc(info)}</span>`:""}</td></tr>`; }).join("")+`</table>`;
+      if(e.atividades.length) corpo+=itensHTML(e.atividades,e.cor,e.contexto?0:4);
     }
     return `<tr><td valign="top" width="124" style="width:124px;padding:0 0 ${ult?4:20}px">${data}</td>`+
       `<td valign="top" width="17" style="width:17px;padding:0;white-space:nowrap;font-size:0;line-height:0">${ponto}</td>`+
@@ -3055,14 +3054,10 @@ function cronoEmailHTML(tag,mensagem,extra){
   }).join("");
   const tabela=L=>`<table ${T} width="100%" style="table-layout:fixed;font-family:${C.corpo};font-size:15px;line-height:1.45;color:${C.texto}"><colgroup><col width="124"><col width="17"><col width="2"><col width="17"><col></colgroup>${linhasDe(L)}</table>`;
   // v30: “Sem prazo” (tarefas do cronograma ainda sem data), com traço cinza como no PDF
-  const semPrazo=L=>`<p style="margin:0 0 9px;font-family:${C.display};font-weight:600;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:${C.suave}">Sem prazo</p><table ${T} width="100%" style="font-family:${C.corpo};font-size:15px;line-height:1.45;color:${C.texto}">`+
-    L.map(a=>`<tr><td valign="top" width="24" style="width:24px;padding-top:11px"><div style="width:12px;height:2px;background:${C.cinza};font-size:0;line-height:0">&nbsp;</div></td>`+
-      `<td valign="top" style="padding:0 0 8px">${esc(a.t)}${a.info?`<span style="display:block;color:${C.suave};font-size:13px;line-height:1.4">${esc(a.info)}</span>`:""}</td></tr>`).join("")+`</table>`;
-  // v30: partes conforme a visualização do projeto (crPartes): por tarefa, uma só; por membro/função, “Geral” e uma por grupo
+  const semPrazo=L=>`<p style="margin:0 0 9px;font-family:${C.display};font-weight:600;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:${C.suave}">Sem prazo</p><div style="font-family:${C.corpo};font-size:15px;line-height:1.45;color:${C.texto}">${itensHTML(L,C.cinza,0)}</div>`;
   const sp=cronoSemPrazo(p);
-  const lista=(ev.length?"":`<tr><td style="padding:20px 0 12px;color:${C.suave};font-style:italic">Ainda não há datas.</td></tr>`)+crPartes(p,ev,sp).map(x=>
-    `<tr><td style="${x.titulo?`padding:18px 0 0;border-top:1px solid ${C.linha}`:"padding:0"}">`+(x.titulo?`<h3 style="margin:0 0 16px;font-family:${C.display};font-weight:700;font-size:19px;color:${C.texto}">${esc(x.titulo)}</h3>`:"")+
-    (x.ev.length?tabela(x.ev):"")+(x.sp.length?`<div style="padding:${x.ev.length?12:0}px 0 18px">${semPrazo(x.sp)}</div>`:"")+`</td></tr>`).join("");
+  const lista=(ev.length?`<tr><td>${tabela(ev)}</td></tr>`:`<tr><td style="padding:20px 0 12px;color:${C.suave};font-style:italic">Ainda não há datas.</td></tr>`)+
+    (sp.length?`<tr><td style="padding:${ev.length?12:0}px 0 18px">${semPrazo(sp)}</td></tr>`:"");
   // equipe: mesmas colunas e tópicos de crEquipe (lidos do desenho do cartão)
   let equipe=""; const eq=crEquipe(p);
   if(eq){
@@ -3547,7 +3542,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v30";
+const APP_VER="v31";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
