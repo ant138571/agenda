@@ -394,6 +394,14 @@ tr:last-child td{border-bottom:0}
 .proj-pane>.eq-envio{display:flex;flex-direction:column;gap:8px}
 .eq-envio .opt{display:inline-flex;align-items:center;gap:6px}
 .proj-crono{display:flex;flex-direction:column;gap:10px;margin-top:8px;border-top:1px solid var(--line);padding-top:16px}
+/* v29: cronograma em cima; tarefas (com o seletor Visualizar) abaixo dele */
+.proj-crono.acima{margin-top:0;border-top:0;padding-top:0}
+.proj-tarefas-abaixo{margin-top:24px;border-top:1px solid var(--line);padding-top:16px;min-width:0}
+/* concluídas das colunas do projeto: recolhíveis (fechadas por padrão) */
+.group-title.gt-toggle{border:0;background:none;padding:0;cursor:pointer;font:inherit;font-weight:700;font-size:14px;color:var(--muted);text-align:left;align-items:center;gap:6px;margin-bottom:0}
+.group-title.gt-toggle:hover{color:var(--ink)}
+.group-title.gt-toggle .pn-chev{margin-left:0;display:inline-flex}
+.group-title.gt-toggle[aria-expanded="false"] .pn-chev{transform:rotate(-90deg)}
 .proj-memb{display:flex;flex-direction:column;gap:10px;margin-top:8px;border-top:1px solid var(--line);padding-top:16px}
 .memb-list{display:flex;flex-direction:column;gap:6px}
 .memb{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--panel);min-width:0}
@@ -1060,7 +1068,7 @@ function applyOrder(ids){
 }
 
 /* ================= Estado de UI ================= */
-const UI=Object.assign({view:"home",imp:0,pri:0,sort:"due",showDone:false,sel:null,q:"",rep:{from:null,to:null,tags:[]},panels:{}},lsGet(UI_KEY,{}),{sel:null,detailHidden:false,q:"",homeDay:null,tlLeft:null,multi:new Set(),multiOn:false,projTab:"tarefas",projVis:"tarefa"});
+const UI=Object.assign({view:"home",imp:0,pri:0,sort:"due",showDone:false,sel:null,q:"",rep:{from:null,to:null,tags:[]},panels:{}},lsGet(UI_KEY,{}),{sel:null,detailHidden:false,q:"",homeDay:null,tlLeft:null,multi:new Set(),multiOn:false,projTab:"tarefas",crDone:{}});
 function saveUI(){ lsSet(UI_KEY,{view:UI.view,imp:UI.imp,pri:UI.pri,sort:UI.sort,showDone:UI.showDone,panels:UI.panels}); }
 /* grupo que virou projeto: a tela do grupo dá lugar à do projeto (aba Tarefas). tab: aba do projeto (tarefas | cronograma | equipe) */
 function go(view,tab){ if(view.startsWith("tag:")&&(VIEW.projects||{})[view.slice(4)]){ view="proj:"+view.slice(4); tab=tab||"tarefas"; }
@@ -2242,12 +2250,15 @@ function cleanEvent(e){
   const s=(v,n=300)=>typeof v==="string"?v.slice(0,n):"";
   return {y,m,d,horario:s(e.horario,80),contexto:s(e.contexto,500),atividades:Array.isArray(e.atividades)?e.atividades.filter(a=>typeof a==="string"&&a.trim()).map(a=>a.slice(0,1000)).slice(0,100):[],rotulo:s(e.rotulo,60),sem:e.sem===true,vinc:e.vinc===true};
 }
+/* visualização das tarefas do projeto (abas Tarefas e Cronograma): por tarefa, por membro ou por função; gravada no projeto */
+const VISOES=["tarefa","membro","funcao"];
 function cleanProject(p){
   p=p&&typeof p==="object"?p:{};
   return {titulo:typeof p.titulo==="string"?p.titulo.slice(0,200):"",subtitulo:typeof p.subtitulo==="string"?p.subtitulo.slice(0,200):"",
     eventos:(Array.isArray(p.eventos)?p.eventos:[]).map(cleanEvent).filter(Boolean).slice(0,300),createdAt:typeof p.createdAt==="string"?p.createdAt:null,
     extras:cleanExtras(p.extras),mig:p.mig===2?2:0,funcoes:cleanFuncoes(p.funcoes),membros:cleanMembros(p.membros,cleanFuncoes(p.funcoes)),atrib:cleanAtrib(p.atrib,p.membros),
-    departamento:typeof p.departamento==="string"?p.departamento.trim().slice(0,150):"",logo:cleanLogo(p.logo)};
+    departamento:typeof p.departamento==="string"?p.departamento.trim().slice(0,150):"",logo:cleanLogo(p.logo),
+    visao:VISOES.includes(p.visao)?p.visao:"tarefa"};   // visualização das tarefas nas abas do projeto (v29)
 }
 /* logotipo do cronograma: imagem já reduzida no aparelho, guardada como data URL (PNG/JPEG/WebP, até ~160 kB) */
 function cleanLogo(v){
@@ -2534,39 +2545,19 @@ function renderProject(wrap,tag){
   if(!p.membros.some(m=>m.id===EU)) setTimeout(()=>ensureEu(tag),0);
   if(p.membros.some(m=>m.funcao)) setTimeout(()=>migrateFuncoes(tag),0);
   if(tab==="tarefas"){ const box=h("div",{class:"proj-pane"}); wrap.append(box);
-    // visualização: por tarefa (a lista do grupo, como antes) ou por membro da equipe (tarefas abertas do projeto agrupadas por responsável)
-    const vis=UI.projVis==="membro"?"membro":"tarefa";
-    box.append(h("div",{class:"filters proj-vis",style:"margin-bottom:12px"},h("span",{},h("span",{class:"flabel"},"Visualizar"),h("span",{class:"seg"},
-      [["tarefa","Por tarefa"],["membro","Por membro"]].map(([k,l])=>h("button",{class:vis===k?"on":"","aria-pressed":vis===k?"true":"false",onclick:()=>{ if(UI.projVis===k) return; UI.projVis=k; render(); }},l))))));
-    if(vis==="membro") renderPorMembro(box,tag,p); else renderList(box,"tag:"+tag,{membros:membrosDe(p)});
+    // visualização: por tarefa (a lista do grupo, como antes), por membro da equipe (tarefas abertas do projeto agrupadas por
+    // responsável) ou por função (agrupadas pela função dos responsáveis); a escolha fica gravada no projeto (visao)
+    const vis=p.visao;
+    box.append(visaoSel(tag,p));
+    if(vis==="membro") renderPorMembro(box,tag,p); else if(vis==="funcao") renderPorFuncao(box,tag,p); else renderList(box,"tag:"+tag,{membros:membrosDe(p)});
     return; }
   if(tab==="equipe"){
     const all=tasksArr().filter(t=>(t.tags||[]).includes(tag));
     wrap.append(h("div",{class:"proj-pane"},equipeEnvio(tag,p),acessoEquipe(tag,p),membrosSection(tag,p,all)));
     return;
   }
-  // ----- tarefas: gerais (esquerda) e as que entram no cronograma (direita)
-  const all=tasksArr().filter(t=>(t.tags||[]).includes(tag));
-  const mb=membrosDe(p);
-  const col=(title,list,defaults,ids,emptyTxt,extra,cronoBtn,crono)=>{   // crono: ordem cronológica (prazo), sem arrastar
-    const open=sortTasks(list.filter(t=>!t.done),crono?"due":"manual"), done=list.filter(t=>t.done).sort((a,b)=>(b.doneAt||"").localeCompare(a.doneAt||""));
-    const sec=h("section",{class:"proj-tasks","aria-label":title},h("div",{class:"col-head"},h("h3",{},title),h("span",{class:"col-count"},`${open.length} aberta${open.length===1?"":"s"}`)));
-    sec.append(addBar(defaults,ids));
-    if(extra) sec.append(extra);
-    if(open.length){ sec.append(h("div",{class:"list"},open.map(t=>taskRow(t,{drag:!crono,membros:mb(t.id),cronoBtn}))),crono?"":gestureHint()); }
-    else sec.append(h("div",{class:"empty"},emptyTxt));
-    if(done.length) sec.append(h("div",{class:"group-title"},"Concluídas",h("span",{class:"n"},done.length)),h("div",{class:"list"},done.slice(0,20).map(t=>taskRow(t,{membros:mb(t.id)}))));
-    return sec;
-  };
-  const gen=all.filter(t=>!inCrono(t)), cr=all.filter(inCrono), noDue=cr.filter(t=>!t.done&&!t.due).length;
-  wrap.append(h("div",{class:"proj-cols2"},
-    col("Tarefas gerais",gen,{tags:[tag]},null,"Nenhuma tarefa geral aberta neste projeto.",
-      gen.some(t=>!t.done)?h("div",{class:"gest-hint",style:"text-align:left"},"Toque em + para levar a tarefa ao cronograma."):null,"incluir"),
-    col("Tarefas do cronograma",cr,{tags:[tag],crono:true},{input:"addInputCr",date:"addDateCr",ph:"Adicionar ao cronograma…"},
-      "Nenhuma tarefa no cronograma. Adicione aqui (com prazo) ou abra uma tarefa e escolha “Incluir” em Cronograma do projeto.",
-      h("div",{class:"gest-hint",style:"text-align:left"},"Título e prazo destas tarefas atualizam o cronograma automaticamente; concluídas saem dele. Toque em − para tirar uma tarefa do cronograma."+(noDue?` ${noDue} sem prazo: só aparece${noDue===1?"":"m"} no cronograma depois de ter prazo.`:"")),"tirar",true)));
-  // ----- cronograma (ou modo de edição)
-  const sec=h("section",{class:"proj-crono","aria-label":"Cronograma"},h("div",{class:"col-head"},h("h3",{},"Cronograma")));
+  // ----- cronograma (ou modo de edição): em cima (v29)
+  const sec=h("section",{class:"proj-crono acima","aria-label":"Cronograma"},h("div",{class:"col-head"},h("h3",{},"Cronograma")));
   if(!editing) sec.append(h("div",{class:"row-end",style:"justify-content:flex-start"},
     h("button",{class:"btn",onclick:()=>startCronoEdit(tag)},svg(ICON.edit,15),"Editar cronograma"),
     h("button",{class:"btn primary",onclick:()=>exportCronoPDF(tag)},svg(ICON.report,15),"Exportar PDF"),
@@ -2574,6 +2565,32 @@ function renderProject(wrap,tag){
     h("button",{class:"btn",title:"Remover projeto","aria-label":"Remover projeto",style:"margin-left:auto",onclick:()=>confirmRemoveProject(tag)},svg(ICON.trash,15))));
   sec.append(editing?cronoEditor(tag):cronoView(p,"card"));
   wrap.append(sec);
+  // ----- tarefas, abaixo do cronograma: gerais (esquerda) e as que entram no cronograma (direita)
+  const all=tasksArr().filter(t=>(t.tags||[]).includes(tag));
+  const mb=membrosDe(p), vis=p.visao;
+  const col=(title,list,defaults,ids,emptyTxt,extra,cronoBtn,crono)=>{   // crono: ordem cronológica (prazo), sem arrastar
+    const open=sortTasks(list.filter(t=>!t.done),crono?"due":"manual"), done=list.filter(t=>t.done).sort((a,b)=>(b.doneAt||"").localeCompare(a.doneAt||""));
+    const sec=h("section",{class:"proj-tasks","aria-label":title},h("div",{class:"col-head"},h("h3",{},title),h("span",{class:"col-count"},`${open.length} aberta${open.length===1?"":"s"}`)));
+    sec.append(addBar(defaults,ids));
+    if(extra) sec.append(extra);
+    if(!open.length) sec.append(h("div",{class:"empty"},emptyTxt));
+    else if(vis==="tarefa") sec.append(h("div",{class:"list"},open.map(t=>taskRow(t,{drag:!crono,membros:mb(t.id),cronoBtn}))),crono?"":gestureHint());
+    else for(const g of gruposVis(p,open,vis,false))   // por membro / por função: agrupadas, sem arrastar
+      sec.append(h("div",{class:"group-title"},g.titulo,h("span",{class:"n"},g.list.length)),h("div",{class:"list"},g.list.map(t=>taskRow(t,{membros:mb(t.id),cronoBtn}))));
+    // concluídas: recolhidas por padrão (v29); abrir vale só até sair do app
+    if(done.length){ const k=tag+"|"+(crono?"crono":"gerais"), aberto=!!UI.crDone[k];
+      sec.append(h("button",{class:"group-title gt-toggle","aria-expanded":aberto?"true":"false",onclick:()=>{ UI.crDone={...UI.crDone,[k]:!aberto}; render(); }},
+        h("span",{class:"pn-chev"},svg(ICON.chev,14)),"Concluídas",h("span",{class:"n"},done.length)));
+      if(aberto) sec.append(h("div",{class:"list"},done.slice(0,20).map(t=>taskRow(t,{membros:mb(t.id)})))); }
+    return sec;
+  };
+  const gen=all.filter(t=>!inCrono(t)), cr=all.filter(inCrono), noDue=cr.filter(t=>!t.done&&!t.due).length;
+  wrap.append(h("div",{class:"proj-tarefas-abaixo"},visaoSel(tag,p),h("div",{class:"proj-cols2"},
+    col("Tarefas gerais",gen,{tags:[tag]},null,"Nenhuma tarefa geral aberta neste projeto.",
+      gen.some(t=>!t.done)?h("div",{class:"gest-hint",style:"text-align:left"},"Toque em + para levar a tarefa ao cronograma."):null,"incluir"),
+    col("Tarefas do cronograma",cr,{tags:[tag],crono:true},{input:"addInputCr",date:"addDateCr",ph:"Adicionar ao cronograma…"},
+      "Nenhuma tarefa no cronograma. Adicione aqui (com prazo) ou abra uma tarefa e escolha “Incluir” em Cronograma do projeto.",
+      h("div",{class:"gest-hint",style:"text-align:left"},"Título e prazo destas tarefas atualizam o cronograma automaticamente; concluídas saem dele. Toque em − para tirar uma tarefa do cronograma."+(noDue?` ${noDue} sem prazo: só aparece${noDue===1?"":"m"} no cronograma depois de ter prazo.`:"")),"tirar",true))));
   if(!editing) crAjustarTudo();
 }
 /* aba Tarefas › Por membro: tarefas abertas do projeto (de toda a equipe) agrupadas por responsável; sem responsável no fim */
@@ -2586,6 +2603,45 @@ function renderPorMembro(out,tag,p){
     grupo(h("span",{},membroNome(m),m.id===EU?h("span",{class:"memb-func"}," (você)"):null,fs.length?h("span",{class:"memb-func"}," · "+fs.join(", ")):null),open.filter(t=>mb(t.id).some(x=>x.id===m.id)),"Nenhuma tarefa aberta."); }
   const sem=open.filter(t=>!mb(t.id).length);
   if(sem.length||!p.membros.length) grupo("Sem responsável",sem,"Nenhuma tarefa aberta.");
+  if(open.length) out.append(h("div",{class:"gest-hint",style:"text-align:left;margin-top:12px"},"Para mudar os responsáveis, clique na tarefa e escolha em “Responsáveis”."));
+}
+/* seletor “Visualizar” das abas Tarefas e Cronograma do projeto; a escolha é gravada no projeto (visao) e vale em todos os aparelhos */
+function visaoSel(tag,p){
+  const vis=p.visao;
+  return h("div",{class:"filters proj-vis",style:"margin-bottom:12px"},h("span",{},h("span",{class:"flabel"},"Visualizar"),h("span",{class:"seg"},
+    [["tarefa","Por tarefa"],["membro","Por membro"],["funcao","Por função"]].map(([k,l])=>h("button",{class:vis===k?"on":"","aria-pressed":vis===k?"true":"false",onclick:()=>setVisao(tag,k)},l)))));
+}
+function setVisao(tag,k){
+  const prev=VIEW.projects[tag]; if(!prev||!VISOES.includes(k)||cleanProject(prev).visao===k) return;
+  putProject(tag,{...cleanProject(prev),visao:k});
+}
+/* tarefas agrupadas por membro (ordem da equipe) ou por função (ordem do catálogo; só funções com membros); depois
+   “Responsáveis sem função” (só por função) e “Sem responsável”. Uma tarefa com vários responsáveis aparece em cada grupo.
+   todos=false: só os grupos com tarefas (colunas da aba Cronograma) */
+function gruposVis(p,list,vis,todos){
+  const mb=membrosDe(p), out=[];
+  if(vis==="membro"){
+    for(const m of membrosOrdem(p)){ const fs=funcNomes(p,m);
+      out.push({titulo:h("span",{},membroNome(m),m.id===EU?h("span",{class:"memb-func"}," (você)"):null,fs.length?h("span",{class:"memb-func"}," · "+fs.join(", ")):null),list:list.filter(t=>mb(t.id).some(x=>x.id===m.id))}); }
+  } else {
+    for(const f of p.funcoes){ const ms=membrosOrdem(p).filter(m=>m.funcoes.includes(f.id)); if(!ms.length) continue;
+      out.push({titulo:h("span",{},f.nome,h("span",{class:"memb-func"}," · "+ms.map(membroNome).join(", "))),list:list.filter(t=>mb(t.id).some(x=>x.funcoes.includes(f.id)))}); }
+    const semF=list.filter(t=>{ const l=mb(t.id); return l.length&&l.every(x=>!x.funcoes.length); });
+    if(semF.length) out.push({titulo:"Responsáveis sem função",list:semF});
+  }
+  const sem=list.filter(t=>!mb(t.id).length);
+  if(sem.length||(todos&&!p.membros.length)) out.push({titulo:"Sem responsável",list:sem});
+  return todos?out:out.filter(g=>g.list.length);
+}
+/* aba Tarefas › Por função: tarefas abertas do projeto (de toda a equipe) agrupadas pela função dos responsáveis */
+function renderPorFuncao(out,tag,p){
+  const mb=membrosDe(p), open=sortTasks(tasksArr().filter(t=>!t.done&&(t.tags||[]).includes(tag)),"due");
+  if(!p.membros.length) out.append(h("div",{class:"gest-hint",style:"text-align:left;margin-bottom:10px"},"Cadastre a equipe na aba “Equipe” para ver as tarefas de cada função."));
+  else if(!p.funcoes.some(f=>p.membros.some(m=>m.funcoes.includes(f.id)))) out.append(h("div",{class:"gest-hint",style:"text-align:left;margin-bottom:10px"},"Nenhum membro tem função ainda: escolha as funções de cada um na aba “Equipe”."));
+  for(const g of gruposVis(p,open,"funcao",true)){
+    out.append(h("div",{class:"group-title"},g.titulo,h("span",{class:"n"},g.list.length)));
+    out.append(g.list.length?h("div",{class:"list"},g.list.map(t=>taskRow(t,{membros:mb(t.id)}))):h("div",{class:"gest-hint",style:"text-align:left;margin:10px 0 4px"},"Nenhuma tarefa aberta."));
+  }
   if(open.length) out.append(h("div",{class:"gest-hint",style:"text-align:left;margin-top:12px"},"Para mudar os responsáveis, clique na tarefa e escolha em “Responsáveis”."));
 }
 /* e-mail do projeto: só pelo Gmail na web (navegador), já na conta de Configurações › Meus dados (authuser) */
@@ -2823,8 +2879,9 @@ function crFixColors(root){
   root.querySelectorAll("[style]").forEach(el=>{ for(const k of ["--c","--cn","background"]){ const v=el.style.getPropertyValue(k); if(v&&/color-mix|var\(/.test(v)) el.style.setProperty(k,fix(v)); } });
   probe.remove();
 }
-/* arquivo PDF (A4) do cronograma, no mesmo desenho do “Exportar PDF”; quebra de página entre as datas */
-async function makeCronoPDF(tag){
+/* arquivo PDF (A4) do cronograma, no mesmo desenho do “Exportar PDF”; quebra de página entre as datas.
+   extra (v29, opcional): recebe a faixa da linha do tempo (PNG) e o logotipo (PNG) da mesma folha, para o corpo do e-mail em HTML */
+async function makeCronoPDF(tag,extra){
   const p=getProject(tag); if(!p||!cronoEvents(p).length) throw new Error("Cronograma sem datas");
   await Promise.all([loadLib("html2canvas.js","html2canvas"),loadLib("jspdf.js","jspdf")]);
   const W=794, H=Math.round(W*297/210), TOP=Math.round(W*10/210);
@@ -2871,8 +2928,90 @@ async function makeCronoPDF(tag){
       c.width=c.height=shot.width=shot.height=0;   // libera a memória (celular)
     }
     pdf.setProperties({title:"Cronograma: "+(p.titulo||projTitle(tag))});
+    if(extra){   // corpo do e-mail: a faixa não se desenha em HTML de e-mail (posições absolutas, gradiente): vai como imagem
+      extra.logo=logo;
+      try{ const fx=root.querySelector(".faixa");
+        if(fx){ const r=fx.getBoundingClientRect(), shot=await window.html2canvas(fx,{scale:2,backgroundColor:"#f4f5f7",logging:false,useCORS:true,windowWidth:W,windowHeight:H});
+          extra.faixa={url:shot.toDataURL("image/png"),w:Math.round(r.width),h:Math.round(r.height)}; shot.width=shot.height=0; } }catch(e){ extra.faixa=null; }
+    }
     return pdf.output("blob");
   } finally { fr.remove(); }
+}
+/* ---- corpo do e-mail em HTML (v29): a mensagem e, abaixo, o cronograma no desenho da folha do PDF (regras de impressão).
+   Leitores de e-mail não aceitam CSS de página (grid, posições, variáveis, color-mix): tudo em tabelas com estilos em linha.
+   A faixa da linha do tempo e o logotipo vão como imagens embutidas (cid:faixa, cid:logo), desenhadas por makeCronoPDF. ---- */
+const CR_MAIL={fundo:"#f4f5f7",texto:"#16181d",suave:"#565c67",linha:"#c9cdd5",cinza:"#8b9099",pal:["#2f6fdb","#2a9d5c","#e0709a","#e3b400"],
+  display:"'Bricolage Grotesque','Helvetica Neue',Arial,sans-serif",corpo:"'Source Serif 4',Georgia,'Times New Roman',serif"};
+function crCorMail(t){   // mesma conta de crCor, com a cor já calculada
+  const P=CR_MAIL.pal, k=Math.min(Math.floor(t),2), f=Math.round((t-k)*100)/100; if(f<.001) return P[k]; if(f>.999) return P[k+1];
+  const a=P[k].match(/\w\w/g).map(x=>parseInt(x,16)), b=P[k+1].match(/\w\w/g).map(x=>parseInt(x,16));
+  return "#"+a.map((v,i)=>Math.round(v*(1-f)+b[i]*f).toString(16).padStart(2,"0")).join("");
+}
+function cronoEmailHTML(tag,mensagem,extra){
+  const p=getProject(tag); if(!p) return "";
+  const C=CR_MAIL, ev=cronoEvents(p), titulo=p.titulo||projTitle(tag)||"Cronograma do projeto", W=680;
+  const n=ev.filter(e=>!e.sem).length; let i=0;
+  ev.forEach(e=>{ e.cor=e.sem?C.cinza:crCorMail(n<=1?0:i++/(n-1)*3); });
+  const T='role="presentation" cellpadding="0" cellspacing="0" border="0"';
+  const msg=String(mensagem||"").trim()?`<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:${C.texto};padding:4px 0 20px;max-width:${W}px">${esc(mensagem.trim()).replace(/\r?\n/g,"<br>")}</div>`:"";
+  // cabeçalho: departamento, título, período e logotipo à direita
+  const logo=extra&&extra.logo?`<td valign="top" align="right" width="33%" style="padding-left:16px;width:33%"><img src="cid:logo" width="${extra.logo.w}" alt="Logotipo" style="display:block;border:0;margin-left:auto;width:100%;max-width:${extra.logo.w}px;height:auto"></td>`:"";
+  const head=`<table ${T} width="100%"><tr><td valign="top">`+
+    (p.departamento?`<p style="margin:0 0 7px;font-family:${C.display};font-weight:600;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:${C.suave}">${esc(p.departamento)}</p>`:"")+
+    `<h1 style="margin:0;font-family:${C.display};font-weight:700;font-size:31px;line-height:1.06;letter-spacing:-.02em;color:${C.texto}">${esc(titulo)}</h1>`+
+    `<p style="margin:9px 0 0;font-size:15.5px;color:${C.suave}">${esc(ev.length?(p.subtitulo||crPeriodo(ev)):"Cronograma sem datas.")}</p></td>${logo}</tr></table>`;
+  const faixa=ev.length&&extra&&extra.faixa?`<tr><td style="padding:24px 0 26px"><img src="cid:faixa" width="${Math.min(W,extra.faixa.w)}" alt="${esc("Linha do tempo: "+(p.subtitulo||crPeriodo(ev)))}" style="display:block;border:0;width:100%;max-width:${extra.faixa.w}px;height:auto"></td></tr>`:"";
+  // lista de datas: data | trilho (ponto + linha até a próxima data) | atividades. O trilho são três células na mesma linha
+  // da tabela (17px · 2px da linha · 17px): a do meio estica até a próxima data; o ponto (inline-block, desenhado por cima
+  // da linha) fica na primeira e passa por cima da do meio (table-layout:fixed)
+  const linhas=ev.map((e,j)=>{
+    const dia=new Date(crUtc(e)), ult=j===ev.length-1, prox=ev[j+1]?ev[j+1].cor:e.cor;
+    const data=`<span style="display:block;font-family:${C.display};font-weight:700;font-size:27px;line-height:1.1;letter-spacing:-.01em;color:${C.texto}">${pad(e.d)}/${pad(e.m)}</span>`+
+      `<span style="display:block;color:${C.suave}">${DIAS_LONGOS[dia.getUTCDay()]}</span>`+(e.horario?`<span style="display:block;font-weight:600">${esc(e.horario)}</span>`:"");
+    const ponto=e.sem?`<span style="display:inline-block;vertical-align:top;width:12px;height:12px;border-radius:50%;border:2px solid ${e.cor};background:${C.fundo};margin:7px 0 0 10px"></span>`
+      :`<span style="display:inline-block;vertical-align:top;width:16px;height:16px;border-radius:50%;background:${e.cor};margin:7px 0 0 10px"></span>`;
+    // linha: da 1ª data só a partir do ponto (borda da cor do fundo por cima); na última, só até o ponto
+    const linha=ev.length<2?"":ult?`<div style="width:2px;height:8px;background:${e.cor};font-size:0;line-height:0"></div>`:"";
+    const linhaTd=ev.length<2||ult?"":`background-color:${e.cor};background-image:linear-gradient(${e.cor},${prox});`+(j===0?`border-top:15px solid ${C.fundo};`:"");
+    let corpo="";
+    if(e.sem){ let f=[e.contexto,...e.atividades.map(a=>typeof a==="string"?a:a.t)].filter(Boolean); if(!f.length) f=["Não haverá encontro."];
+      corpo=f.map((x,k)=>`<p style="margin:${k?6:4}px 0 0;color:${C.suave};font-style:italic">${esc(x)}</p>`).join(""); }
+    else {
+      if(e.contexto) corpo+=`<p style="margin:4px 0 8px;color:${C.suave};font-style:italic">${esc(e.contexto)}</p>`;
+      if(e.atividades.length) corpo+=`<table ${T} width="100%">`+e.atividades.map(a=>{ const t=typeof a==="string"?a:a.t, info=typeof a==="string"?"":a.info;
+        return `<tr><td valign="top" width="24" style="width:24px;padding-top:11px"><div style="width:12px;height:2px;background:${e.cor};font-size:0;line-height:0">&nbsp;</div></td>`+
+          `<td valign="top" style="padding:${e.contexto?0:4}px 0 8px">${esc(t)}${info?`<span style="display:block;color:${C.suave};font-size:13px;line-height:1.4">${esc(info)}</span>`:""}</td></tr>`; }).join("")+`</table>`;
+    }
+    return `<tr><td valign="top" width="124" style="width:124px;padding:0 0 ${ult?4:20}px">${data}</td>`+
+      `<td valign="top" width="17" style="width:17px;padding:0;white-space:nowrap;font-size:0;line-height:0">${ponto}</td>`+
+      `<td valign="top" width="2" style="width:2px;padding:0;font-size:0;line-height:0;${linhaTd}">${linha}</td>`+
+      `<td width="17" style="width:17px;padding:0;font-size:0;line-height:0">&nbsp;</td>`+
+      `<td valign="top" style="padding:0 0 ${ult?4:20}px">${corpo}</td></tr>`;
+  }).join("");
+  const lista=ev.length?`<tr><td><table ${T} width="100%" style="table-layout:fixed;font-family:${C.corpo};font-size:15px;line-height:1.45;color:${C.texto}"><colgroup><col width="124"><col width="17"><col width="2"><col width="17"><col></colgroup>${linhas}</table></td></tr>`
+    :`<tr><td style="padding:20px 0 12px;color:${C.suave};font-style:italic">Ainda não há datas.</td></tr>`;
+  // equipe: mesmas colunas e tópicos de crEquipe (lidos do desenho do cartão)
+  let equipe=""; const eq=crEquipe(p);
+  if(eq){
+    const pessoa=li=>{ const b=li.querySelector("b"), fu=li.querySelector(".cr-eq-func"), ma=li.querySelector(".cr-eq-mail");
+      return `<p style="margin:0 0 9px;line-height:1.35"><b style="display:block;font-family:${C.display};font-weight:700">${esc(b?b.textContent:"")}</b>`+
+        (fu?`<span style="display:block;color:${C.suave};font-size:13.5px">${esc(fu.textContent)}</span>`:"")+(ma?`<span style="display:block;color:${C.suave};font-size:13.5px">${esc(ma.textContent)}</span>`:"")+`</p>`; };
+    const cols=[...eq.querySelectorAll(".cr-eq-col")].map(col=>{
+      const gs=[...col.querySelectorAll(".cr-eq-grupo")];
+      return gs.length?gs.map(g=>{ const h4=g.querySelector("h4"), cont=h4&&h4.classList.contains("cr-eq-cont");
+        return `<div style="margin-bottom:14px"><p style="margin:0 0 7px;font-family:${C.display};font-weight:600;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:${C.suave}">${cont?"&nbsp;":esc(h4?h4.textContent:"")}</p>${[...g.querySelectorAll("li")].map(pessoa).join("")}</div>`; }).join("")
+        :[...col.querySelectorAll("li")].map(pessoa).join("");
+    });
+    const tds=cols.map((c,k)=>`<td valign="top" width="${cols.length>1?"50%":"100%"}" style="${k?"padding:0 0 0 20px;border-left:1px solid "+C.linha:cols.length>1?"padding:0 20px 0 0":""}">${c}</td>`).join("");
+    equipe=`<tr><td style="padding:16px 0 0;border-top:1px solid ${C.linha}"><h3 style="margin:0 0 9px;font-family:${C.display};font-weight:700;font-size:19px;color:${C.texto}">Equipe</h3>`+
+      `<table ${T} width="100%" style="font-family:${C.corpo};font-size:15px;color:${C.texto}"><tr>${tds}</tr></table></td></tr>`;
+  }
+  const fonts=[...document.querySelectorAll('link[rel=stylesheet][href*="fonts.googleapis"]')].map(l=>l.outerHTML).join("");
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">${fonts}<title>${esc(titulo)}</title></head>`+
+    `<body style="margin:0;padding:0;background:#ffffff">${msg?`<div style="padding:0 4px">${msg}</div>`:""}`+
+    `<table ${T} width="100%" style="background:${C.fundo}"><tr><td align="center" style="padding:28px 14px 22px">`+
+    `<table ${T} width="100%" style="max-width:${W}px;font-family:${C.corpo};font-size:15px;line-height:1.45;color:${C.texto};text-align:left">`+
+    `<tr><td>${head}</td></tr>${faixa}${lista}${equipe}</table></td></tr></table></body></html>`;
 }
 /* opt.anexo=false: “Enviar mensagem” (da seção Membros), sem o PDF do cronograma */
 function openMailCrono(tag,opt={}){
@@ -2911,7 +3050,8 @@ function openMailCrono(tag,opt={}){
   msg.addEventListener("input",()=>{ edited=true; });
   const status=h("p",{class:"mail-note",role:"status"},anexo?"Preparando o PDF do cronograma…":"");
   let blob=null, falhou=false;
-  if(anexo) makeCronoPDF(tag).then(b=>{ blob=b; status.textContent=`PDF pronto: ${fname} (${Math.max(1,Math.round(b.size/1024))} kB).`; })
+  const extra={};   // faixa e logotipo para o corpo do e-mail em HTML (Enviar agora)
+  if(anexo) makeCronoPDF(tag,extra).then(b=>{ blob=b; status.textContent=`PDF pronto: ${fname} (${Math.max(1,Math.round(b.size/1024))} kB).`; })
     .catch(()=>{ falhou=true; status.textContent="Não foi possível gerar o PDF aqui. O e-mail abre sem anexo: use “Exportar PDF” e anexe o arquivo."; });
   // ação comum: confere destinatários e o PDF; devolve false para manter a janela aberta
   const preparar=()=>{
@@ -2927,6 +3067,36 @@ function openMailCrono(tag,opt={}){
   const acoes=[
     {label:"Abrir no Gmail",cls:"primary",run:()=>{ const x=preparar(); if(!x) return false;
       baixar(); abrirGmail(x.to,x.sub,x.body); }}];
+  /* envio direto pelo servidor (v29, reabilitado; era o “Enviar agora” da v17–v24): função "cronograma-email" do Supabase,
+     que envia pelo Gmail do script do Google (ou pelo Brevo), já com os destinatários, o PDF anexado e — no cronograma —
+     o cronograma em HTML no corpo do e-mail. Respostas e cópia vão para a conta de Configurações › Meus dados. Só com login. */
+  const servidor=!!(S.sb&&S.user), conta=contaGmail()||(S.user&&S.user.email)||"";
+  const copiaChk=h("input",{type:"checkbox",id:"mailCopia"}); copiaChk.checked=true;
+  let enviando=false;
+  const blobB64=b=>new Promise((ok,no)=>{ const r=new FileReader(); r.onload=()=>ok(String(r.result).split(",")[1]||""); r.onerror=()=>no(r.error); r.readAsDataURL(b); });
+  const dataB64=u=>u&&/^data:image\/png;base64,/.test(u)?u.split(",")[1]:"";
+  if(servidor){
+    acoes.forEach(a=>delete a.cls);
+    acoes.unshift({label:"Enviar agora",cls:"primary",run:()=>{
+      const x=preparar(); if(!x) return false;
+      if(anexo&&!blob){ toast("Sem o PDF não dá para enviar daqui: use “Abrir no Gmail”."); return false; }
+      if(enviando) return false;
+      if(!navigator.onLine){ toast("Sem internet: o envio direto precisa de conexão."); return false; }
+      enviando=true; status.textContent=`Enviando para ${x.to.length} destinatário${x.to.length===1?"":"s"}…`;
+      const html=anexo?cronoEmailHTML(tag,x.body,extra):"", imagens={};
+      if(html){ const fx=dataB64(extra.faixa&&extra.faixa.url), lg=dataB64(extra.logo&&extra.logo.url); if(fx) imagens.faixa=fx; if(lg) imagens.logo=lg; }
+      (anexo?blobB64(blob):Promise.resolve("")).then(pdf=>fnCall({method:"POST",body:JSON.stringify({to:x.to,subject:x.sub,text:x.body,...(pdf?{filename:fname,pdf}:{}),
+          ...(html?{html,imagens}:{}),copia:copiaChk.checked,conta,nome:euBase().nome||""})},fnMailURL()))
+        .then(j=>{ if(status.isConnected) $("#modalRoot").replaceChildren(); toast(`${anexo?"Cronograma enviado":"Mensagem enviada"} para ${j.enviados} destinatário${j.enviados===1?"":"s"}`+(j.copia?" (com cópia para você).":".")); })
+        .catch(e=>{
+          const m=String(e&&e.message||e);
+          const txt=/^HTTP 404|not found/i.test(m)?"a função “cronograma-email” não está publicada no Supabase (veja o guia ENVIO-EMAIL).":/Failed to fetch|NetworkError|Load failed/i.test(m)?"sem conexão com o servidor.":!anexo&&/PDF ausente/i.test(m)?"atualize a função “cronograma-email” e o script do Google (guia ENVIO-EMAIL) para enviar mensagens sem anexo.":m;
+          status.textContent="Não foi enviado: "+txt; toast("Não foi enviado: "+txt);
+        })
+        .finally(()=>{ enviando=false; });
+      return false;   // a janela só fecha quando o envio der certo
+    }});
+  }
   paintGrupos();
   openModal(anexo?"Enviar cronograma por e-mail":"Enviar mensagem à equipe",h("div",{style:"display:flex;flex-direction:column;gap:10px"},
     h("div",{class:"field"},h("span",{class:"lbl"},"Destinatários"),h("div",{class:"opts"},h("button",{class:"opt",onclick:()=>todos(true)},"Toda a equipe"),...gBtns.map(([,b])=>b),h("button",{class:"opt",onclick:()=>todos(false)},"Nenhum")),
@@ -2934,7 +3104,10 @@ function openMailCrono(tag,opt={}){
     h("div",{class:"field"},h("label",{for:"mailSub"},"Assunto"),assunto),
     h("div",{class:"field"},h("label",{for:"mailBody"},"Mensagem"),msg),
     status,
-    h("p",{class:"mail-note"},"Abre o Gmail no navegador, na conta "+(contaGmail()||"informada em Configurações › Meus dados")+", com destinatários, assunto e mensagem preenchidos."+(anexo?" O Gmail não aceita anexo pelo link: o PDF é baixado ao mesmo tempo para você anexá-lo (se o download não acontecer, use “Exportar PDF”).":""))),
+    servidor?h("label",{class:"pick",style:"padding:2px 0"},copiaChk,h("span",{},"Enviar cópia para mim"+(conta?" ("+conta+")":""))):null,
+    servidor?h("p",{class:"mail-note"},(anexo?"“Enviar agora” envia daqui mesmo, pelo servidor, com o cronograma no corpo do e-mail, o PDF anexado e os destinatários marcados.":"“Enviar agora” envia daqui mesmo, pelo servidor, para os destinatários marcados.")+(conta?" Respostas vão para "+conta+".":""))
+      :(CFG.url?h("p",{class:"mail-note"},"Para enviar direto daqui"+(anexo?", já com o cronograma no corpo do e-mail e o PDF anexado,":"")+" entre na sua conta (Configurações › Sincronização e backup)."):null),
+    h("p",{class:"mail-note"},(servidor?"“Abrir no Gmail” abre":"Abre")+" o Gmail no navegador, na conta "+(contaGmail()||"informada em Configurações › Meus dados")+", com destinatários, assunto e mensagem preenchidos."+(anexo?" O Gmail não aceita anexo pelo link: o PDF é baixado ao mesmo tempo para você anexá-lo (se o download não acontecer, use “Exportar PDF”).":""))),
     acoes);
 }
 
@@ -2997,7 +3170,7 @@ function cronoEditor(tag){
     // linhas criadas só para as tarefas do cronograma: guardadas apenas se receberam algum dado
     const keep=D.eventos.filter(e=>!e.virt||e.horario.trim()||e.contexto.trim()||e.rotulo.trim()||e.atividades.length||e.sem);
     const cur=getProject(tag)||{};   // membros e atribuições são editados fora do rascunho: grava os atuais
-    putProject(tag,{titulo:D.titulo.trim(),subtitulo:D.subtitulo.trim(),departamento:(D.departamento||"").trim(),logo:D.logo||"",createdAt:D.createdAt,mig:D.mig,extras:D.extras,membros:cur.membros,atrib:cur.atrib,funcoes:cur.funcoes,eventos:keep.map(({k,virt,...e})=>({...e,horario:e.horario.trim(),contexto:e.contexto.trim(),rotulo:e.rotulo.trim()})).sort((a,b)=>crUtc(a)-crUtc(b))});
+    putProject(tag,{titulo:D.titulo.trim(),subtitulo:D.subtitulo.trim(),departamento:(D.departamento||"").trim(),logo:D.logo||"",createdAt:D.createdAt,mig:D.mig,extras:D.extras,membros:cur.membros,atrib:cur.atrib,funcoes:cur.funcoes,visao:cur.visao,eventos:keep.map(({k,virt,...e})=>({...e,horario:e.horario.trim(),contexto:e.contexto.trim(),rotulo:e.rotulo.trim()})).sort((a,b)=>crUtc(a)-crUtc(b))});
     UI.cronEdit=null; UI.cronDraft=null; render(true); toast("Cronograma salvo");
   };
   const ordered=D.eventos.filter(e=>cleanEvent(e)).map(e=>({...e})).sort((a,b)=>crUtc(a)-crUtc(b)); crCores(ordered);
@@ -3299,7 +3472,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v28";
+const APP_VER="v29";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
