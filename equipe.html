@@ -173,6 +173,12 @@ input:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(--accent) 40%
 .crono .corpo li::before{content:"";position:absolute;left:0;top:.82em;width:.75rem;height:2px;background:var(--c)}
 .crono .passou .data,.crono .passou .corpo{opacity:.6}
 .crono .cr-vazio{margin:1.5rem 0 1rem;color:var(--suave);font-style:italic}
+.crono .cr-sp{--c:var(--cinza);margin:0 0 2rem}
+.crono .cr-sp-titulo{margin:0 0 .7rem;font-family:var(--display);font-weight:600;font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;color:var(--suave)}
+.crono .cr-sp ul{list-style:none;margin:0;padding:0;max-width:38rem}
+.crono .cr-sp li{position:relative;padding-left:1.5rem;margin:0 0 .85rem}
+.crono .cr-sp li::before{content:"";position:absolute;left:0;top:.82em;width:.75rem;height:2px;background:var(--c)}
+.crono .cr-sp li .info{display:block;color:var(--suave);font-size:.88em;line-height:1.4}
 .crono header.cr-com-logo{position:relative;padding-right:min(34%,13rem);min-height:4.5rem}
 .crono .cr-logo{position:absolute;top:0;right:0;max-width:min(32%,12rem);max-height:5.5rem;object-fit:contain}
 .crono .cr-depto{margin:0 0 .5rem;font-family:var(--display);font-weight:600;font-size:.95rem;letter-spacing:.06em;text-transform:uppercase;color:var(--suave)}
@@ -468,10 +474,17 @@ function cronoView(p){
     h("h2",{class:"cr-titulo"},titulo),h("p",{class:"periodo"},ev.length?(p.subtitulo||p.periodo):"Cronograma sem datas."),
     p.logo?h("img",{class:"cr-logo",src:p.logo,alt:"Logotipo"}):null);
   const box=h("div",{class:"crono cr-card"},head);
-  if(!ev.length){ box.append(h("p",{class:"cr-vazio"},"O cronograma ainda não tem datas."),crEquipe(p.equipe)||""); return box; }
+  const sp=crSemPrazo(p);   // v30 do app: tarefas do cronograma ainda sem prazo
+  if(!ev.length){ box.append(h("p",{class:"cr-vazio"},"O cronograma ainda não tem datas."),sp||"",crEquipe(p.equipe)||""); return box; }
   crCores(ev);
-  box.append(crFaixa(ev),crLista(ev)); const eq=crEquipe(p.equipe); if(eq) box.append(eq);
+  box.append(crFaixa(ev),crLista(ev)); if(sp) box.append(sp); const eq=crEquipe(p.equipe); if(eq) box.append(eq);
   return box;
+}
+/* “Sem prazo” (v30 do app): tarefas do projeto marcadas para o cronograma, abertas e ainda sem prazo — mesmo desenho do app */
+function crSemPrazo(p){
+  const l=(ST.tarefas||[]).filter(t=>t.dono===p.dono&&t.projeto===p.tag&&t.crono&&!t.due&&!t.done); if(!l.length) return null;
+  return h("div",{class:"cr-sp"},h("h4",{class:"cr-sp-titulo"},"Sem prazo"),h("ul",{},l.map(t=>h("li",{},t.title,
+    (t.responsaveis||[]).length?h("small",{class:"info"},"Resp.: "+t.responsaveis.join(", ")):null))));
 }
 /* evita rótulos sobrepostos na faixa: primeiro some a legenda, depois a própria data (igual ao app) */
 function crAjustar(root){

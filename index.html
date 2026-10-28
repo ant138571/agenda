@@ -247,6 +247,8 @@ button{cursor:pointer}
 .coment-t{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px;margin-top:1px}
 .crono .corpo li.cr-tk{padding-left:1.9rem}
 .crono .corpo li.cr-tk::before{display:none}
+.crono .cr-sp li.cr-tk{padding-left:1.9rem}
+.crono .cr-sp li.cr-tk::before{display:none}
 .cr-chk{position:absolute;left:0;top:.12em;width:1.3rem;height:1.3rem;border-radius:50%;border:2px solid var(--c);background:transparent;color:transparent;padding:0;display:grid;place-items:center;cursor:pointer}
 .cr-chk:hover,.cr-chk:focus-visible{background:color-mix(in srgb,var(--c) 18%,transparent);color:var(--c)}
 .cr-btn.tirar:hover{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line));background:var(--panel)}
@@ -569,6 +571,18 @@ body.has-bulk .content{padding-bottom:110px}
 .crono .corpo li::before{content:"";position:absolute;left:0;top:.82em;width:.75rem;height:2px;background:var(--c)}
 .crono .passou .data,.crono .passou .corpo{opacity:.6}
 .crono .cr-vazio{margin:1.5rem 0 1rem;color:var(--suave);font-style:italic}
+/* v30: seções por membro/função, tarefas sem prazo e link da área da equipe */
+.crono .cr-secao{margin-top:.5rem;padding-top:1.4rem;border-top:1px solid var(--linha)}
+.crono .cr-sec-titulo{margin:0 0 1.2rem;font-family:var(--display);font-weight:700;font-size:1.35rem}
+.crono .cr-sp{--c:var(--cinza);margin:0 0 2rem}
+.crono .cr-sp-titulo{margin:0 0 .7rem;font-family:var(--display);font-weight:600;font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;color:var(--suave)}
+.crono .cr-sp ul{list-style:none;margin:0;padding:0;max-width:38rem}
+.crono .cr-sp li{position:relative;padding-left:1.5rem;margin:0 0 .85rem}
+.crono .cr-sp li::before{content:"";position:absolute;left:0;top:.82em;width:.75rem;height:2px;background:var(--c)}
+.crono .cr-sp li .info{display:block;color:var(--suave);font-size:.88em;line-height:1.4}
+.crono .cr-acesso{margin:1.2rem 0 0;padding-top:1rem;border-top:1px solid var(--linha);color:var(--suave);font-size:.95em}
+.crono .cr-acesso b{font-family:var(--display);color:var(--texto)}
+.crono .cr-acesso a{color:var(--azul);font-weight:600}
 .crono header.cr-com-logo{position:relative;padding-right:min(34%,13rem);min-height:4.5rem}
 .crono .cr-logo{position:absolute;top:0;right:0;max-width:min(32%,12rem);max-height:5.5rem;object-fit:contain}
 .crono .cr-depto{margin:0 0 .5rem;font-family:var(--display);font-weight:600;font-size:.95rem;letter-spacing:.06em;text-transform:uppercase;color:var(--suave)}
@@ -628,6 +642,10 @@ body.has-bulk .content{padding-bottom:110px}
   .crono.cr-print .proximo{display:none}
   .crono.cr-print .cr-equipe{padding-top:1rem}
   .crono.cr-print .cr-eq-titulo{font-size:1.2rem;margin-bottom:.5rem}
+  .crono.cr-print .cr-secao{padding-top:1rem}
+  .crono.cr-print .cr-sec-titulo{font-size:1.2rem;margin-bottom:.8rem}
+  .crono.cr-print .cr-sp{margin-bottom:1.3rem}
+  .crono.cr-print .cr-sp li{margin-bottom:.5rem}
 }
 </style>
 </head>
@@ -1992,7 +2010,7 @@ function renderDetail(){
       myDayRow(id),
       projTags.length?h("div",{class:"field"},h("div",{class:"toggle-row"},h("span",{style:"display:inline-flex;gap:8px;align-items:center"},svg(ICON.folder,17),(inCrono(t)?"No cronograma de ":"Fora do cronograma de ")+projTags.map(g=>"#"+g).join(", ")),
           h("button",{class:"btn small"+(inCrono(t)?"":" primary"),onclick:()=>setCrono([id],!inCrono(t))},inCrono(t)?"Tirar":"Incluir")),
-        inCrono(t)&&!t.due?h("div",{class:"gest-hint",style:"text-align:left"},"Defina um prazo para a tarefa aparecer no cronograma."):null):null,
+        inCrono(t)&&!t.due?h("div",{class:"gest-hint",style:"text-align:left"},"Sem prazo, a tarefa aparece em “Sem prazo”, no fim do cronograma; com prazo, vai para a data."):null):null,
       ...projTags.map(g=>{ const pj=getProject(g); if(!pj) return null; const sel=(pj.atrib||{})[id]||[];
         return h("div",{class:"field d-resp"},h("span",{class:"lbl"},"Responsáveis"+(projTags.length>1?" · #"+g:"")),
           pj.membros.length?h("div",{class:"opts"},pj.membros.map(m=>h("button",{class:"opt"+(sel.includes(m.id)?" on":""),"aria-pressed":sel.includes(m.id)?"true":"false",title:funcNomes(pj,m).join(", "),onclick:()=>toggleResp(g,id,m.id)},svg(ICON.user,13),membroNome(m))))
@@ -2318,7 +2336,7 @@ function setCrono(ids,on){
 /* + / − na tela do projeto: leva a tarefa para o cronograma ou a tira dele (com Desfazer) */
 function cronoToggle(id,on){
   const t=VIEW.tasks[id]; if(!t||setCrono([id],on)===0) return;
-  const msg=on?(t.due?"Incluída no cronograma":"Incluída no cronograma (aparece quando tiver prazo)"):"Tirada do cronograma";
+  const msg=on?(t.due?"Incluída no cronograma":"Incluída no cronograma (em “Sem prazo”, até ter prazo)"):"Tirada do cronograma";
   toast(msg,()=>setCrono([id],!on));
 }
 /* datas exibidas no cronograma: o que foi editado no cronograma + as tarefas do cronograma (título e prazo sempre atuais) */
@@ -2432,11 +2450,54 @@ function cronoView(p,kind){
     h(kind==="mini"?"h3":kind==="print"?"h1":"h2",{class:"cr-titulo"},titulo),h("p",{class:"periodo"},ev.length?(p.subtitulo||crPeriodo(ev)):"Cronograma sem datas."),
     full&&p.logo?h("img",{class:"cr-logo",src:p.logo,alt:"Logotipo"}):null);
   const box=h("div",{class:"crono cr-"+kind},head);
-  if(!ev.length){ if(full) box.append(h("p",{class:"cr-vazio"},"Ainda não há datas. Adicione tarefas com prazo na coluna “Tarefas do cronograma” ou use “Editar cronograma”."),crEquipe(p)||""); return box; }
+  const sp=full&&p.tag?cronoSemPrazo(p):[];   // v30: tarefas do cronograma ainda sem prazo
+  if(!ev.length){ if(full) box.append(h("p",{class:"cr-vazio"},"Ainda não há datas. Toque em + numa tarefa geral com prazo para levá-la ao cronograma, ou use “Editar cronograma”."),...crPartesDom(p,ev,sp,kind==="card"),crEquipe(p)||"",crAcesso(p)||""); return box; }
   crCores(ev);
   box.append(crFaixa(ev));
-  if(full){ box.append(crLista(ev,kind==="card")); const eq=crEquipe(p); if(eq) box.append(eq); }
+  if(full){ box.append(...crPartesDom(p,ev,sp,kind==="card")); const eq=crEquipe(p); if(eq) box.append(eq); const ac=crAcesso(p); if(ac) box.append(ac); }
   return box;
+}
+/* v30: tarefas do cronograma (crono) abertas e sem prazo: aparecem no fim da lista, em “Sem prazo” */
+function cronoSemPrazo(p){
+  const mb=membrosDe(p);
+  return sortTasks(tasksArr().filter(t=>inCrono(t)&&!t.due&&!t.done&&(t.tags||[]).includes(p.tag)),"manual")
+    .map(t=>({t:t.title,id:t.id,info:extraInfo((p.extras||{})[t.id],mb(t.id).map(membroNome))}));
+}
+/* v30: partes da lista do cronograma conforme a visualização do projeto (visao):
+   por tarefa = uma parte só (todas as datas + sem prazo); por membro / por função = “Geral” (datas com contexto,
+   atividades digitadas ou sem encontro) e depois uma parte por grupo (gruposVis), só com as tarefas do grupo.
+   As cores das datas são as da lista inteira (crCores antes de chamar), iguais às da faixa. */
+function crPartes(p,ev,sp){
+  if(p.visao!=="membro"&&p.visao!=="funcao") return [{titulo:"",ev,sp}];
+  const prox=l=>{ l.forEach((e,j)=>{ e.corProx=l[j+1]?l[j+1].cor:e.cor; }); return l; };
+  const ger=prox(ev.map(e=>({...e,atividades:e.atividades.filter(a=>typeof a==="string")})).filter(e=>e.sem||e.contexto||e.atividades.length));
+  const out=ger.length?[{titulo:"Geral",ev:ger,sp:[]}]:[];
+  const vistos=new Set(), itens=[];
+  for(const a of [...ev.flatMap(e=>e.atividades),...sp]) if(a&&typeof a!=="string"&&a.id&&!vistos.has(a.id)){ vistos.add(a.id); itens.push({id:a.id}); }
+  for(const g of gruposVis(p,itens,p.visao,false)){
+    const ids=new Set(g.list.map(x=>x.id)), so=a=>typeof a!=="string"&&ids.has(a.id);
+    const titulo=(typeof g.titulo==="string"?g.titulo:g.titulo.textContent).replace(" (você)","");
+    out.push({titulo,ev:prox(ev.map(e=>({...e,contexto:"",sem:false,atividades:e.atividades.filter(so)})).filter(e=>e.atividades.length)),sp:sp.filter(so)});
+  }
+  return out;
+}
+function crPartesDom(p,ev,sp,chk){
+  return crPartes(p,ev,sp).map(x=>{
+    const nodes=[x.ev.length?crLista(x.ev,chk):null,x.sp.length?crSemPrazo(x.sp,chk):null].filter(Boolean);
+    return x.titulo?h("section",{class:"cr-secao"},h("h3",{class:"cr-sec-titulo"},x.titulo),...nodes):nodes;
+  }).flat();
+}
+/* “Sem prazo”: tarefas do cronograma ainda sem data (no cartão, com o círculo de concluir) */
+function crSemPrazo(sp,chk){
+  return h("div",{class:"cr-sp"},h("h4",{class:"cr-sp-titulo"},"Sem prazo"),h("ul",{},sp.map(a=>h("li",{class:chk?"cr-tk":null},
+    chk?h("button",{class:"cr-chk",title:"Concluir tarefa","aria-label":"Concluir “"+a.t+"”",onclick:ev=>{ ev.stopPropagation(); toggleDone(a.id); }},svg(ICON.check,12,'stroke-width="3"')):null,
+    a.t,a.info?h("small",{class:"info"},a.info):null))));
+}
+/* v30: link da página da equipe (área pessoal de cada membro) no fim do cronograma; só com servidor e membros com e-mail */
+function crAcesso(p){
+  const l=linkEquipe(); if(!l||!(p.membros||[]).some(m=>m.id!==EU&&m.email)) return null;
+  return h("p",{class:"cr-acesso"},h("b",{},"Área da equipe: "),h("a",{href:l,target:"_blank",rel:"noopener"},"acesse suas tarefas"),
+    " — veja, atualize e conclua as tarefas atribuídas a você (entre com o e-mail cadastrado na equipe).");
 }
 /* lista da equipe no final do cronograma: nome, função e e-mail de cada membro */
 function crEquipe(p){
@@ -2571,7 +2632,7 @@ function renderProject(wrap,tag){
   const col=(title,list,defaults,ids,emptyTxt,extra,cronoBtn,crono)=>{   // crono: ordem cronológica (prazo), sem arrastar
     const open=sortTasks(list.filter(t=>!t.done),crono?"due":"manual"), done=list.filter(t=>t.done).sort((a,b)=>(b.doneAt||"").localeCompare(a.doneAt||""));
     const sec=h("section",{class:"proj-tasks","aria-label":title},h("div",{class:"col-head"},h("h3",{},title),h("span",{class:"col-count"},`${open.length} aberta${open.length===1?"":"s"}`)));
-    sec.append(addBar(defaults,ids));
+    if(defaults) sec.append(addBar(defaults,ids));   // v30: a coluna do cronograma não tem Adicionar (a tarefa nasce em Tarefas gerais e vai pelo +)
     if(extra) sec.append(extra);
     if(!open.length) sec.append(h("div",{class:"empty"},emptyTxt));
     else if(vis==="tarefa") sec.append(h("div",{class:"list"},open.map(t=>taskRow(t,{drag:!crono,membros:mb(t.id),cronoBtn}))),crono?"":gestureHint());
@@ -2588,9 +2649,9 @@ function renderProject(wrap,tag){
   wrap.append(h("div",{class:"proj-tarefas-abaixo"},visaoSel(tag,p),h("div",{class:"proj-cols2"},
     col("Tarefas gerais",gen,{tags:[tag]},null,"Nenhuma tarefa geral aberta neste projeto.",
       gen.some(t=>!t.done)?h("div",{class:"gest-hint",style:"text-align:left"},"Toque em + para levar a tarefa ao cronograma."):null,"incluir"),
-    col("Tarefas do cronograma",cr,{tags:[tag],crono:true},{input:"addInputCr",date:"addDateCr",ph:"Adicionar ao cronograma…"},
-      "Nenhuma tarefa no cronograma. Adicione aqui (com prazo) ou abra uma tarefa e escolha “Incluir” em Cronograma do projeto.",
-      h("div",{class:"gest-hint",style:"text-align:left"},"Título e prazo destas tarefas atualizam o cronograma automaticamente; concluídas saem dele. Toque em − para tirar uma tarefa do cronograma."+(noDue?` ${noDue} sem prazo: só aparece${noDue===1?"":"m"} no cronograma depois de ter prazo.`:"")),"tirar",true))));
+    col("Tarefas do cronograma",cr,null,null,
+      "Nenhuma tarefa no cronograma. Toque em + numa tarefa geral (ou abra uma tarefa e escolha “Incluir” em Cronograma do projeto).",
+      h("div",{class:"gest-hint",style:"text-align:left"},"Título e prazo destas tarefas atualizam o cronograma automaticamente; concluídas saem dele. Toque em − para tirar uma tarefa do cronograma."+(noDue?` ${noDue} sem prazo: aparece${noDue===1?"":"m"} em “Sem prazo”, no fim do cronograma, até ter prazo.`:"")),"tirar",true))));
   if(!editing) crAjustarTudo();
 }
 /* aba Tarefas › Por membro: tarefas abertas do projeto (de toda a equipe) agrupadas por responsável; sem responsável no fim */
@@ -2899,7 +2960,9 @@ async function makeCronoPDF(tag,extra){
     const rt=root.getBoundingClientRect(), total=rt.height;
     // equipe em duas colunas: só corta onde nenhum tópico/pessoa da outra coluna fica partido
     const atoms=[...root.querySelectorAll(".cr-eq-cols .cr-eq-grupo,.cr-eq-cols li")].map(e=>{ const r=e.getBoundingClientRect(); return [r.top-rt.top,r.bottom-rt.top]; });
-    const cuts=[...root.querySelectorAll(".evento,.cr-equipe,.cr-eq-grupo,.cr-eq-cols li")].map(e=>e.getBoundingClientRect().top-rt.top).filter(v=>!atoms.some(([a,b])=>v>a+1&&v<b-1));
+    // v30: também entre as seções por membro/função, em “Sem prazo” e antes do link da equipe (o título de uma seção não fica sozinho no fim da página)
+    const presos=new Set([...root.querySelectorAll(".cr-secao>.linha:nth-child(2)>.evento:first-child,.cr-secao>.cr-sp:nth-child(2),.cr-sp li:first-child")]);
+    const cuts=[...root.querySelectorAll(".evento,.cr-equipe,.cr-eq-grupo,.cr-eq-cols li,.cr-secao,.cr-sp,.cr-sp li,.cr-acesso")].filter(e=>!presos.has(e)).map(e=>e.getBoundingClientRect().top-rt.top).filter(v=>!atoms.some(([a,b])=>v>a+1&&v<b-1));
     // logotipo em cima à direita também nas páginas seguintes (mesmo tamanho e posição do cabeçalho)
     const LTOP=Math.round(W*13/210), LDIR=Math.round(W*16/210);
     const logo=p.logo?await new Promise(ok=>{ const im=new Image();
@@ -2913,6 +2976,7 @@ async function makeCronoPDF(tag,extra){
       if(lim<total){ const c=cuts.filter(v=>v>y+40&&v<=lim); end=c.length?Math.max(...c):lim; }
       pages.push([y,end,off]); y=end;
     }
+    const lkA=root.querySelector(".cr-acesso a"), lk=lkA?{r:lkA.getBoundingClientRect(),url:lkA.href}:null;
     const pdf=new window.jspdf.jsPDF({unit:"pt",format:"a4",compress:true});
     const PW=pdf.internal.pageSize.getWidth(), PH=pdf.internal.pageSize.getHeight(), pt=PW/W;
     // cada página é desenhada à parte (uma imagem só do cronograma inteiro passaria do limite do iPhone)
@@ -2925,6 +2989,7 @@ async function makeCronoPDF(tag,extra){
       pdf.setFillColor(244,245,247); pdf.rect(0,0,PW,PH,"F");
       pdf.addImage(c.toDataURL("image/jpeg",.92),"JPEG",0,off*pt,PW,hh*pt);
       if(i&&logo) pdf.addImage(logo.url,"PNG",(W-LDIR-logo.w)*pt,LTOP*pt,logo.w*pt,logo.h*pt);
+      if(lk){ const top=lk.r.top-rt.top; if(top>=a&&top<b) pdf.link(lk.r.left*pt-rt.left*pt,(off+top-a)*pt,lk.r.width*pt,lk.r.height*pt,{url:lk.url}); }   // v30: link da área da equipe clicável
       c.width=c.height=shot.width=shot.height=0;   // libera a memória (celular)
     }
     pdf.setProperties({title:"Cronograma: "+(p.titulo||projTitle(tag))});
@@ -2964,15 +3029,15 @@ function cronoEmailHTML(tag,mensagem,extra){
   // lista de datas: data | trilho (ponto + linha até a próxima data) | atividades. O trilho são três células na mesma linha
   // da tabela (17px · 2px da linha · 17px): a do meio estica até a próxima data; o ponto (inline-block, desenhado por cima
   // da linha) fica na primeira e passa por cima da do meio (table-layout:fixed)
-  const linhas=ev.map((e,j)=>{
-    const dia=new Date(crUtc(e)), ult=j===ev.length-1, prox=ev[j+1]?ev[j+1].cor:e.cor;
+  const linhasDe=L=>L.map((e,j)=>{
+    const dia=new Date(crUtc(e)), ult=j===L.length-1, prox=L[j+1]?L[j+1].cor:e.cor;
     const data=`<span style="display:block;font-family:${C.display};font-weight:700;font-size:27px;line-height:1.1;letter-spacing:-.01em;color:${C.texto}">${pad(e.d)}/${pad(e.m)}</span>`+
       `<span style="display:block;color:${C.suave}">${DIAS_LONGOS[dia.getUTCDay()]}</span>`+(e.horario?`<span style="display:block;font-weight:600">${esc(e.horario)}</span>`:"");
     const ponto=e.sem?`<span style="display:inline-block;vertical-align:top;width:12px;height:12px;border-radius:50%;border:2px solid ${e.cor};background:${C.fundo};margin:7px 0 0 10px"></span>`
       :`<span style="display:inline-block;vertical-align:top;width:16px;height:16px;border-radius:50%;background:${e.cor};margin:7px 0 0 10px"></span>`;
     // linha: da 1ª data só a partir do ponto (borda da cor do fundo por cima); na última, só até o ponto
-    const linha=ev.length<2?"":ult?`<div style="width:2px;height:8px;background:${e.cor};font-size:0;line-height:0"></div>`:"";
-    const linhaTd=ev.length<2||ult?"":`background-color:${e.cor};background-image:linear-gradient(${e.cor},${prox});`+(j===0?`border-top:15px solid ${C.fundo};`:"");
+    const linha=L.length<2?"":ult?`<div style="width:2px;height:8px;background:${e.cor};font-size:0;line-height:0"></div>`:"";
+    const linhaTd=L.length<2||ult?"":`background-color:${e.cor};background-image:linear-gradient(${e.cor},${prox});`+(j===0?`border-top:15px solid ${C.fundo};`:"");
     let corpo="";
     if(e.sem){ let f=[e.contexto,...e.atividades.map(a=>typeof a==="string"?a:a.t)].filter(Boolean); if(!f.length) f=["Não haverá encontro."];
       corpo=f.map((x,k)=>`<p style="margin:${k?6:4}px 0 0;color:${C.suave};font-style:italic">${esc(x)}</p>`).join(""); }
@@ -2988,8 +3053,16 @@ function cronoEmailHTML(tag,mensagem,extra){
       `<td width="17" style="width:17px;padding:0;font-size:0;line-height:0">&nbsp;</td>`+
       `<td valign="top" style="padding:0 0 ${ult?4:20}px">${corpo}</td></tr>`;
   }).join("");
-  const lista=ev.length?`<tr><td><table ${T} width="100%" style="table-layout:fixed;font-family:${C.corpo};font-size:15px;line-height:1.45;color:${C.texto}"><colgroup><col width="124"><col width="17"><col width="2"><col width="17"><col></colgroup>${linhas}</table></td></tr>`
-    :`<tr><td style="padding:20px 0 12px;color:${C.suave};font-style:italic">Ainda não há datas.</td></tr>`;
+  const tabela=L=>`<table ${T} width="100%" style="table-layout:fixed;font-family:${C.corpo};font-size:15px;line-height:1.45;color:${C.texto}"><colgroup><col width="124"><col width="17"><col width="2"><col width="17"><col></colgroup>${linhasDe(L)}</table>`;
+  // v30: “Sem prazo” (tarefas do cronograma ainda sem data), com traço cinza como no PDF
+  const semPrazo=L=>`<p style="margin:0 0 9px;font-family:${C.display};font-weight:600;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:${C.suave}">Sem prazo</p><table ${T} width="100%" style="font-family:${C.corpo};font-size:15px;line-height:1.45;color:${C.texto}">`+
+    L.map(a=>`<tr><td valign="top" width="24" style="width:24px;padding-top:11px"><div style="width:12px;height:2px;background:${C.cinza};font-size:0;line-height:0">&nbsp;</div></td>`+
+      `<td valign="top" style="padding:0 0 8px">${esc(a.t)}${a.info?`<span style="display:block;color:${C.suave};font-size:13px;line-height:1.4">${esc(a.info)}</span>`:""}</td></tr>`).join("")+`</table>`;
+  // v30: partes conforme a visualização do projeto (crPartes): por tarefa, uma só; por membro/função, “Geral” e uma por grupo
+  const sp=cronoSemPrazo(p);
+  const lista=(ev.length?"":`<tr><td style="padding:20px 0 12px;color:${C.suave};font-style:italic">Ainda não há datas.</td></tr>`)+crPartes(p,ev,sp).map(x=>
+    `<tr><td style="${x.titulo?`padding:18px 0 0;border-top:1px solid ${C.linha}`:"padding:0"}">`+(x.titulo?`<h3 style="margin:0 0 16px;font-family:${C.display};font-weight:700;font-size:19px;color:${C.texto}">${esc(x.titulo)}</h3>`:"")+
+    (x.ev.length?tabela(x.ev):"")+(x.sp.length?`<div style="padding:${x.ev.length?12:0}px 0 18px">${semPrazo(x.sp)}</div>`:"")+`</td></tr>`).join("");
   // equipe: mesmas colunas e tópicos de crEquipe (lidos do desenho do cartão)
   let equipe=""; const eq=crEquipe(p);
   if(eq){
@@ -3006,12 +3079,14 @@ function cronoEmailHTML(tag,mensagem,extra){
     equipe=`<tr><td style="padding:16px 0 0;border-top:1px solid ${C.linha}"><h3 style="margin:0 0 9px;font-family:${C.display};font-weight:700;font-size:19px;color:${C.texto}">Equipe</h3>`+
       `<table ${T} width="100%" style="font-family:${C.corpo};font-size:15px;color:${C.texto}"><tr>${tds}</tr></table></td></tr>`;
   }
+  // v30: link da área da equipe (crAcesso)
+  const ac=crAcesso(p), acesso=ac?`<tr><td style="padding:16px 0 0;border-top:1px solid ${C.linha};color:${C.suave};font-size:14.5px"><b style="font-family:${C.display};color:${C.texto}">Área da equipe: </b><a href="${esc(ac.querySelector("a").href)}" style="color:${C.pal[0]};font-weight:600">acesse suas tarefas</a> — veja, atualize e conclua as tarefas atribuídas a você (entre com o e-mail cadastrado na equipe).</td></tr>`:"";
   const fonts=[...document.querySelectorAll('link[rel=stylesheet][href*="fonts.googleapis"]')].map(l=>l.outerHTML).join("");
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">${fonts}<title>${esc(titulo)}</title></head>`+
     `<body style="margin:0;padding:0;background:#ffffff">${msg?`<div style="padding:0 4px">${msg}</div>`:""}`+
     `<table ${T} width="100%" style="background:${C.fundo}"><tr><td align="center" style="padding:28px 14px 22px">`+
     `<table ${T} width="100%" style="max-width:${W}px;font-family:${C.corpo};font-size:15px;line-height:1.45;color:${C.texto};text-align:left">`+
-    `<tr><td>${head}</td></tr>${faixa}${lista}${equipe}</table></td></tr></table></body></html>`;
+    `<tr><td>${head}</td></tr>${faixa}${lista}${equipe}${acesso}</table></td></tr></table></body></html>`;
 }
 /* opt.anexo=false: “Enviar mensagem” (da seção Membros), sem o PDF do cronograma */
 function openMailCrono(tag,opt={}){
@@ -3472,7 +3547,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v29";
+const APP_VER="v30";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
