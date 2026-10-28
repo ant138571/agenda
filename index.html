@@ -240,6 +240,10 @@ button{cursor:pointer}
 .cr-btn{border:1px solid var(--line);background:var(--panel);color:var(--accent-text);border-radius:999px;width:30px;height:30px;display:inline-grid;place-items:center;flex:none;margin-right:2px;padding:0}
 .cr-btn:hover{background:var(--accent-soft);border-color:var(--accent)}
 .cr-btn.tirar{color:var(--muted)}
+.crono .corpo li.cr-tk{padding-left:1.9rem}
+.crono .corpo li.cr-tk::before{display:none}
+.cr-chk{position:absolute;left:0;top:.12em;width:1.3rem;height:1.3rem;border-radius:50%;border:2px solid var(--c);background:transparent;color:transparent;padding:0;display:grid;place-items:center;cursor:pointer}
+.cr-chk:hover,.cr-chk:focus-visible{background:color-mix(in srgb,var(--c) 18%,transparent);color:var(--c)}
 .cr-btn.tirar:hover{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line));background:var(--panel)}
 .m-rem{display:inline-flex;align-items:center;gap:3px;color:var(--accent-text);font-weight:700}
 .m-rem.past{color:var(--muted)}
@@ -748,7 +752,7 @@ const CACHE_KEY="agenda-cache-v1", QUEUE_KEY="agenda-queue-v1", UI_KEY="agenda-u
 const cache=lsGet(CACHE_KEY,{tasks:{},tags:{}});
 let CFG=lsGet(CFG_KEY,{url:"",key:""});
 const S={
-  server:{tasks:cache.tasks||{},tags:cache.tags||{},projects:cache.projects||{},perfil:cache.perfil||{}},  // último estado confirmado (cópia local)
+  server:{tasks:cache.tasks||{},tags:cache.tags||{},projects:cache.projects||{},perfil:cache.perfil||{},trash:cache.trash||{}},  // último estado confirmado (cópia local)
   queue:lsGet(QUEUE_KEY,[]),                            // alterações ainda não enviadas
   lastPull:lsGet(PULL_KEY,0),
   sb:null, user:null, mode:"local", busy:false, again:false, lastError:""
@@ -762,6 +766,7 @@ function applyToServer(op){
   else if(op.path==="meta/tags"){ S.server.tags=(op.op==="delete"||!op.data)?{}:(op.data.map||{}); }
   else if(op.path.startsWith("projects/")){ const id=op.path.slice(9); S.server.projects=S.server.projects||{}; if(op.op==="delete"||!op.data) delete S.server.projects[id]; else S.server.projects[id]=op.data; }
   else if(op.path==="meta/perfil"){ S.server.perfil=(op.op==="delete"||!op.data)?{}:cleanPerfil(op.data); }
+  else if(op.path.startsWith("trash/")){ const id=op.path.slice(6); S.server.trash=S.server.trash||{}; if(op.op==="delete"||!op.data) delete S.server.trash[id]; else S.server.trash[id]=op.data; }   // lixeira
 }
 /* meus dados (Configurações): nome e e-mail do dono do app; viram o membro "eu" de todos os projetos */
 function cleanPerfil(d){
@@ -769,11 +774,11 @@ function cleanPerfil(d){
   return {nome:typeof d.nome==="string"?d.nome.trim().slice(0,120):"",email:typeof d.email==="string"?d.email.trim().slice(0,200):""};
 }
 function applyQueue(base){
-  const saved=S.server; S.server={tasks:{...base.tasks},tags:{...base.tags},projects:{...(base.projects||{})},perfil:{...(base.perfil||{})}};
+  const saved=S.server; S.server={tasks:{...base.tasks},tags:{...base.tags},projects:{...(base.projects||{})},perfil:{...(base.perfil||{})},trash:{...(base.trash||{})}};
   for(const op of S.queue) applyToServer(op);
   const out=S.server; S.server=saved; return out;
 }
-let VIEW={tasks:{},tags:{},projects:{},perfil:{}};
+let VIEW={tasks:{},tags:{},projects:{},perfil:{},trash:{}};
 function recompute(){ VIEW=applyQueue(S.server); }
 function saveCache(){ lsSet(CACHE_KEY,S.server); lsSet(QUEUE_KEY,S.queue); lsSet(PULL_KEY,S.lastPull); }
 function enqueueMany(ops){
@@ -861,7 +866,7 @@ function ownerCheck(uid){
   const prev=lsGet(OWNER_KEY,null);
   if(prev&&prev!==uid){
     const n=S.queue.length;
-    S.server={tasks:{},tags:{},projects:{},perfil:{}}; S.queue=[]; S.lastPull=0; saveCache(); recompute();
+    S.server={tasks:{},tags:{},projects:{},perfil:{},trash:{}}; S.queue=[]; S.lastPull=0; saveCache(); recompute();
     setTimeout(()=>{ render(); toast("Outra conta: os dados deste aparelho foram trocados pelos da nova conta"+(n?` (${n} alteração(ões) não enviada(s) descartada(s))`:"")+"."); },0);
   }
   if(prev!==uid) lsSet(OWNER_KEY,uid);
@@ -901,7 +906,15 @@ function ensureTags(list){
 }
 function putTask(id,data){ const clean={...data}; delete clean.id; clean.updatedAt=new Date().toISOString(); enqueue({op:"set",path:"tasks/"+id,data:clean}); }
 function patchTask(id,patch){ const cur=VIEW.tasks[id]; if(!cur) return; putTask(id,{...cur,...patch}); }
-function deleteTask(id){ if(UI.sel===id){UI.sel=null;} enqueue({op:"delete",path:"tasks/"+id}); }
+function deleteTask(id){ if(UI.sel===id){UI.sel=null;} enqueueMany(trashOps(id)); }
+/* lixeira: a tarefa apagada vai para trash/<id> (com deletedAt) e é apagada de vez depois de TRASH_DIAS dias */
+const TRASH_DIAS=10;
+function trashOps(id){ const cur=VIEW.tasks[id], ops=[{op:"delete",path:"tasks/"+id}]; if(cur){ const now=new Date().toISOString(); ops.push({op:"set",path:"trash/"+id,data:{...cur,deletedAt:now,updatedAt:now}}); } return ops; }
+const trashArr=()=>Object.entries(VIEW.trash||{}).map(([id,t])=>({id,...t})).filter(t=>t&&typeof t.title==="string").sort((a,b)=>String(b.deletedAt||"").localeCompare(String(a.deletedAt||"")));
+const trashFim=t=>{ const d=Date.parse(t.deletedAt||""); return isNaN(d)?0:d+TRASH_DIAS*864e5; };   // quando é apagada de vez
+function purgeTrash(){ const now=Date.now(), ops=Object.entries(VIEW.trash||{}).filter(([,t])=>!t||trashFim(t)<=now).map(([id])=>({op:"delete",path:"trash/"+id})); if(ops.length) enqueueMany(ops); }
+function restoreFromTrash(id){ const t=(VIEW.trash||{})[id]; if(!t) return; const {deletedAt,...d}=t;
+  enqueueMany([{op:"set",path:"tasks/"+id,data:{...d,updatedAt:new Date().toISOString()}},{op:"delete",path:"trash/"+id}]); toast("Tarefa restaurada",()=>enqueueMany(trashOps(id))); }
 /* valida uma tarefa vinda de arquivo de backup: só campos conhecidos e com o tipo certo */
 function cleanTask(t){
   if(!t||typeof t!=="object"||typeof t.title!=="string"||!t.title.trim()) return null;
@@ -1004,7 +1017,7 @@ const tiradaDoDia=(t,td)=>{ const m=t.myDay; if(m==="no:"+td) return true;
 const inMyDay=t=>{const td=today(); return !t.done&&!tiradaDoDia(t,td)&&(t.myDay===td||dueNoDia(t,td));};
 function toggleMyDay(t){ const td=today(); if(inMyDay(t)){ patchTask(t.id,{myDay:"no:"+td}); toast("Tirada do Meu Dia"); } else { patchTask(t.id,{myDay:td}); toast("Adicionada ao Meu Dia"); } }
 /* restaura uma tarefa exatamente como estava (usado no “Desfazer”) */
-function restoreTask(id,data){ enqueue({op:"set",path:"tasks/"+id,data:{...data,updatedAt:new Date().toISOString()}}); }
+function restoreTask(id,data){ const ops=[{op:"set",path:"tasks/"+id,data:{...data,updatedAt:new Date().toISOString()}}]; if((VIEW.trash||{})[id]) ops.push({op:"delete",path:"trash/"+id}); enqueueMany(ops); }   // desfazer “apagar”: sai também da lixeira
 function removeTask(id){
   const prev=VIEW.tasks[id]; if(!prev) return;
   deleteTask(id); toast("Tarefa apagada",()=>restoreTask(id,prev));
@@ -1030,7 +1043,7 @@ function applyOrder(ids){
 }
 
 /* ================= Estado de UI ================= */
-const UI=Object.assign({view:"home",imp:0,pri:0,sort:"due",showDone:false,sel:null,q:"",rep:{from:null,to:null,tags:[]},panels:{}},lsGet(UI_KEY,{}),{sel:null,detailHidden:false,q:"",homeDay:null,tlLeft:null,multi:new Set(),multiOn:false,projTab:"tarefas"});
+const UI=Object.assign({view:"home",imp:0,pri:0,sort:"due",showDone:false,sel:null,q:"",rep:{from:null,to:null,tags:[]},panels:{}},lsGet(UI_KEY,{}),{sel:null,detailHidden:false,q:"",homeDay:null,tlLeft:null,multi:new Set(),multiOn:false,projTab:"tarefas",projVis:"tarefa"});
 function saveUI(){ lsSet(UI_KEY,{view:UI.view,imp:UI.imp,pri:UI.pri,sort:UI.sort,showDone:UI.showDone,panels:UI.panels}); }
 /* grupo que virou projeto: a tela do grupo dá lugar à do projeto (aba Tarefas). tab: aba do projeto (tarefas | cronograma | equipe) */
 function go(view,tab){ if(view.startsWith("tag:")&&(VIEW.projects||{})[view.slice(4)]){ view="proj:"+view.slice(4); tab=tab||"tarefas"; }
@@ -1068,6 +1081,7 @@ function render(force){
   const v=UI.q?"search":UI.view;
   if(v==="home") renderHome(wrap);
   else if(v==="report") renderReport(wrap);
+  else if(v==="trash") renderTrash(wrap);
   else if(v==="projects") renderProjects(wrap);
   else if(v.startsWith("proj:")) renderProject(wrap,v.slice(5));
   else renderList(wrap,v);
@@ -1080,7 +1094,7 @@ function render(force){
   renderDetail();
   placeTimeline();
   const mb=$("#mselBtn");
-  mb.hidden=v==="report"||v==="projects"||!!(v.startsWith("proj:")&&UI.cronEdit&&UI.projTab==="cronograma");
+  mb.hidden=v==="report"||v==="projects"||v==="trash"||!!(v.startsWith("proj:")&&UI.cronEdit&&UI.projTab==="cronograma");
   mb.classList.toggle("on",UI.multiOn); mb.classList.toggle("home-v",v==="home"); mb.replaceChildren(svg(ICON.select,15),h("span",{class:"msel-lbl"},UI.multiOn?"Cancelar seleção":"Selecionar")); mb.setAttribute("aria-label",UI.multiOn?"Cancelar seleção":"Selecionar várias tarefas");
   renderBulk();
 }
@@ -1101,7 +1115,8 @@ function renderNav(){
     ["all","Tarefas",ICON.list,open.length],
     ["done","Concluídas",ICON.check,all.filter(t=>t.done).length],
     ["projects","Projetos",ICON.folder,Object.keys(VIEW.projects||{}).length],
-    ["report","Relatório",ICON.report,null]
+    ["report","Relatório",ICON.report,null],
+    ["trash","Lixeira",ICON.trash,trashArr().length]
   ];
   nav.replaceChildren();
   for(const [id,label,ic,n] of items){
@@ -1139,7 +1154,7 @@ function renderNav(){
 function setHeader(title,sub){ $("#viewTitle").textContent=title; $("#viewSub").textContent=sub||""; }
 const cap=x=>x.replace(/^./,c=>c.toUpperCase());
 function clockText(){ const d=new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
-setInterval(()=>{ const c=$("#clock"); if(c) c.textContent=clockText(); const now=today(); if(now!==renderedDay){ renderedDay=now; UI.tlLeft=null; bgRender(); requestRollOver(); } },15000);
+setInterval(()=>{ const c=$("#clock"); if(c) c.textContent=clockText(); const now=today(); if(now!==renderedDay){ renderedDay=now; UI.tlLeft=null; bgRender(); requestRollOver(); purgeTrash(); } },15000);
 let renderedDay=today();
 
 /* ---------- Início ---------- */
@@ -1541,7 +1556,7 @@ document.addEventListener("pointerdown",e=>{
     const g=G;
     g.lp=setTimeout(()=>{ if(G!==g||g.type!=="pending") return; G=null; LP_FIRED=true;
       try{ if(navigator.vibrate) navigator.vibrate(12); }catch(err){}
-      toggleMulti(g.row.dataset.id); },LP_MS);
+      toggleMulti(g.row.dataset.id,false,true); },LP_MS);
   }
 });
 // no celular, o toque longo não abre o menu do sistema nem o do clique direito
@@ -1709,9 +1724,10 @@ window.addEventListener("keydown",e=>{ if(e.key==="Escape"&&WH){ closeWheel(fals
 
 /* ================= Seleção múltipla ================= */
 let multiLast=null;
-function setMulti(on){ UI.multiOn=on; UI.multi=new Set(); multiLast=null; if(on) UI.sel=null; render(); }
-function toggleMulti(id,range){
-  if(!UI.multiOn){ UI.multiOn=true; UI.sel=null; }
+function setMulti(on){ UI.multiOn=on; UI.multi=new Set(); UI.multiLP=false; multiLast=null; if(on) UI.sel=null; render(); }
+/* lp: seleção aberta pelo toque longo (celular) — a barra fecha sozinha depois de mudar um atributo (bulkRun) */
+function toggleMulti(id,range,lp){
+  if(!UI.multiOn){ UI.multiOn=true; UI.sel=null; UI.multiLP=!!lp; }
   if(range&&multiLast){
     const ids=[...new Set([...document.querySelectorAll("#wrap .task[data-id]")].map(r=>r.dataset.id))], a=ids.indexOf(multiLast), b=ids.indexOf(id);
     if(a>=0&&b>=0){ ids.slice(Math.min(a,b),Math.max(a,b)+1).forEach(x=>UI.multi.add(x)); multiLast=id; render(); return; }
@@ -1726,13 +1742,16 @@ function bulkRun(fn,msg,exit){
     const t=VIEW.tasks[id]; if(!t) continue;
     const p=fn({...t,id}); if(p==null) continue;
     prev[id]=t;
-    ops.push(p==="delete"?{op:"delete",path:"tasks/"+id}:{op:"set",path:"tasks/"+id,data:{...t,...p,updatedAt:now}});
+    if(p==="delete") ops.push(...trashOps(id));   // apagar: vai para a lixeira
+    else ops.push({op:"set",path:"tasks/"+id,data:{...t,...p,updatedAt:now}});
   }
   if(!ops.length){ toast("Nada a alterar nas tarefas selecionadas."); return; }
-  if(exit){ UI.multiOn=false; UI.multi=new Set(); }
+  const n=Object.keys(prev).length;
+  // seleção aberta pelo toque longo (celular): fecha sozinha depois de mudar um atributo
+  if(exit||UI.multiLP){ UI.multiOn=false; UI.multi=new Set(); UI.multiLP=false; }
   if(UI.sel&&prev[UI.sel]&&ops.some(o=>o.op==="delete"&&o.path==="tasks/"+UI.sel)) UI.sel=null;
   enqueueMany(ops);
-  toast(msg(ops.length),()=>enqueueMany(Object.entries(prev).map(([id,d])=>({op:"set",path:"tasks/"+id,data:{...d,updatedAt:new Date().toISOString()}}))));
+  toast(msg(n),()=>enqueueMany(Object.entries(prev).flatMap(([id,d])=>[{op:"set",path:"tasks/"+id,data:{...d,updatedAt:new Date().toISOString()}},...((VIEW.trash||{})[id]?[{op:"delete",path:"trash/"+id}]:[])])));
 }
 const nTxt=(n,s,p)=>`${n} ${n===1?s:p}`;
 function bulkDue(due,label){ bulkRun(t=>t.due===due?null:(due?{due}:(t.repeat?{due:null,repeat:null}:{due:null})),n=>nTxt(n,"tarefa","tarefas")+" · "+label); }
@@ -1781,6 +1800,24 @@ function renderBulk(){
     B("Apagar",ICON.trash,()=>bulkRun(()=>"delete",c=>nTxt(c,"tarefa apagada","tarefas apagadas"),true),"b-del"),
     h("span",{class:"bulk-sep"}),
     h("button",{"aria-label":"Sair da seleção",title:"Sair da seleção (Esc)",onclick:()=>setMulti(false)},svg(ICON.x,16)));
+}
+
+/* ---------- Lixeira: tarefas apagadas ficam TRASH_DIAS dias; depois são apagadas de vez (purgeTrash) ---------- */
+function renderTrash(wrap){
+  const list=trashArr().filter(t=>trashFim(t)>Date.now());
+  setHeader("Lixeira",`Tarefas apagadas ficam aqui por ${TRASH_DIAS} dias e depois são apagadas de vez`);
+  if(list.length) $("#bandActions").append(h("button",{class:"btn small",onclick:()=>openModal("Esvaziar lixeira",h("p",{style:"margin:0;color:var(--muted)"},`${nTxt(list.length,"tarefa será apagada","tarefas serão apagadas")} de vez. Isso não pode ser desfeito.`),[
+    {label:"Esvaziar lixeira",cls:"danger",run:()=>{ enqueueMany(Object.keys(VIEW.trash||{}).map(id=>({op:"delete",path:"trash/"+id}))); toast("Lixeira esvaziada"); }}])},svg(ICON.trash,15),"Esvaziar lixeira"));
+  if(!list.length){ wrap.append(h("div",{class:"empty"},"A lixeira está vazia.")); return; }
+  wrap.append(h("div",{class:"memb-list"},list.map(t=>{
+    const dias=Math.max(1,Math.ceil((trashFim(t)-Date.now())/864e5));
+    return h("div",{class:"memb"},
+      h("div",{class:"memb-main"},h("div",{class:"memb-name",title:t.title},t.title),
+        h("div",{class:"memb-sub"},["apagada em "+fmtBR(ymd(new Date(t.deletedAt))).slice(0,5),`apaga de vez em ${nTxt(dias,"dia","dias")}`,...(t.tags||[]).map(g=>"#"+g)].join(" · "))),
+      h("button",{class:"btn",title:"Restaurar tarefa",onclick:()=>restoreFromTrash(t.id)},"Restaurar"),
+      h("button",{class:"btn",title:"Apagar de vez","aria-label":"Apagar de vez",onclick:()=>openModal("Apagar de vez",h("p",{style:"margin:0;color:var(--muted)"},`“${t.title}” será apagada de vez. Isso não pode ser desfeito.`),[
+        {label:"Apagar de vez",cls:"danger",run:()=>{ enqueue({op:"delete",path:"trash/"+t.id}); toast("Tarefa apagada de vez"); }}])},svg(ICON.trash,15)));
+  })));
 }
 
 /* ---------- Detalhe ---------- */
@@ -2227,7 +2264,7 @@ function cronoEvents(p){
     let e=ev.find(x=>x.y===y&&x.m===m&&x.d===d);
     if(!e){ e={y,m,d,horario:"",contexto:"",atividades:[],rotulo:"",sem:false}; ev.push(e); }
     const i=e.atividades.indexOf(t.title); if(i>=0) e.atividades.splice(i,1);   // não repete a mesma atividade
-    (e._links=e._links||[]).push({t:t.title,info:extraInfo((p.extras||{})[t.id],membrosDe(p)(t.id).map(membroNome))});
+    (e._links=e._links||[]).push({t:t.title,id:t.id,info:extraInfo((p.extras||{})[t.id],membrosDe(p)(t.id).map(membroNome))});
   }
   // dados complementares de uma data cujas tarefas saíram dela não aparecem sozinhos
   return ev.filter(e=>!(e.vinc&&!e._links&&!e.atividades.length)).map(e=>{ const {_links,...r}=e; if(_links) r.atividades=[...r.atividades,..._links]; return r; }).sort((a,b)=>crUtc(a)-crUtc(b));
@@ -2302,7 +2339,8 @@ function crFaixa(ev){
   });
   return h("figure",{class:"faixa",style:"margin-inline:0"},esc);
 }
-function crLista(ev){
+/* chk: cartão da tela — cada tarefa do cronograma ganha um círculo para concluí-la ali mesmo (concluída sai do cronograma) */
+function crLista(ev,chk){
   const d=new Date(), hoje=Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()); let achou=false;
   return h("ol",{class:"linha"},ev.map(e=>{
     const dia=crUtc(e);
@@ -2312,7 +2350,9 @@ function crLista(ev){
     if(dia>=hoje&&!achou&&!e.sem){ achou=true; data.append(h("span",{class:"proximo"},dia===hoje?"Hoje":"Próximo encontro")); }
     const corpo=h("div",{class:"corpo"});
     if(e.sem){ let f=[e.contexto,...e.atividades.map(a=>typeof a==="string"?a:a.t)].filter(Boolean); if(!f.length) f=["Não haverá encontro."]; f.forEach(x=>corpo.append(h("p",{class:"contexto"},x))); }
-    else { if(e.contexto) corpo.append(h("p",{class:"contexto"},e.contexto)); if(e.atividades.length) corpo.append(h("ul",{},e.atividades.map(a=>typeof a==="string"?h("li",{},a):h("li",{},a.t,a.info?h("small",{class:"info"},a.info):null)))); }
+    else { if(e.contexto) corpo.append(h("p",{class:"contexto"},e.contexto)); if(e.atividades.length) corpo.append(h("ul",{},e.atividades.map(a=>typeof a==="string"?h("li",{},a):h("li",{class:chk&&a.id?"cr-tk":null},
+      chk&&a.id?h("button",{class:"cr-chk",title:"Concluir tarefa","aria-label":"Concluir “"+a.t+"”",onclick:ev=>{ ev.stopPropagation(); toggleDone(a.id); }},svg(ICON.check,12,'stroke-width="3"')):null,
+      a.t,a.info?h("small",{class:"info"},a.info):null)))); }
     li.append(data,h("span",{class:"trilho","aria-hidden":"true"}),corpo);
     return li;
   }));
@@ -2330,7 +2370,7 @@ function cronoView(p,kind){
   if(!ev.length){ if(full) box.append(h("p",{class:"cr-vazio"},"Ainda não há datas. Adicione tarefas com prazo na coluna “Tarefas do cronograma” ou use “Editar cronograma”."),crEquipe(p)||""); return box; }
   crCores(ev);
   box.append(crFaixa(ev));
-  if(full){ box.append(crLista(ev)); const eq=crEquipe(p); if(eq) box.append(eq); }
+  if(full){ box.append(crLista(ev,kind==="card")); const eq=crEquipe(p); if(eq) box.append(eq); }
   return box;
 }
 /* lista da equipe no final do cronograma: nome, função e e-mail de cada membro */
@@ -2439,7 +2479,13 @@ function renderProject(wrap,tag){
       h("button",{class:"proj-tab"+(tab===k?" on":""),role:"tab","aria-selected":tab===k?"true":"false",onclick:()=>{ if(UI.projTab===k) return; UI.projTab=k; render(); $("#content").scrollTop=0; }},svg(ic,16),l))));
   if(!p.membros.some(m=>m.id===EU)) setTimeout(()=>ensureEu(tag),0);
   if(p.membros.some(m=>m.funcao)) setTimeout(()=>migrateFuncoes(tag),0);
-  if(tab==="tarefas"){ const box=h("div",{class:"proj-pane"}); wrap.append(box); renderList(box,"tag:"+tag,{membros:membrosDe(p)}); return; }
+  if(tab==="tarefas"){ const box=h("div",{class:"proj-pane"}); wrap.append(box);
+    // visualização: por tarefa (a lista do grupo, como antes) ou por membro da equipe (tarefas abertas do projeto agrupadas por responsável)
+    const vis=UI.projVis==="membro"?"membro":"tarefa";
+    box.append(h("div",{class:"filters proj-vis",style:"margin-bottom:12px"},h("span",{},h("span",{class:"flabel"},"Visualizar"),h("span",{class:"seg"},
+      [["tarefa","Por tarefa"],["membro","Por membro"]].map(([k,l])=>h("button",{class:vis===k?"on":"","aria-pressed":vis===k?"true":"false",onclick:()=>{ if(UI.projVis===k) return; UI.projVis=k; render(); }},l))))));
+    if(vis==="membro") renderPorMembro(box,tag,p); else renderList(box,"tag:"+tag,{membros:membrosDe(p)});
+    return; }
   if(tab==="equipe"){
     const all=tasksArr().filter(t=>(t.tags||[]).includes(tag));
     wrap.append(h("div",{class:"proj-pane"},equipeEnvio(tag,p),membrosSection(tag,p,all)));
@@ -2448,12 +2494,12 @@ function renderProject(wrap,tag){
   // ----- tarefas: gerais (esquerda) e as que entram no cronograma (direita)
   const all=tasksArr().filter(t=>(t.tags||[]).includes(tag));
   const mb=membrosDe(p);
-  const col=(title,list,defaults,ids,emptyTxt,extra,cronoBtn)=>{
-    const open=sortTasks(list.filter(t=>!t.done),"manual"), done=list.filter(t=>t.done).sort((a,b)=>(b.doneAt||"").localeCompare(a.doneAt||""));
+  const col=(title,list,defaults,ids,emptyTxt,extra,cronoBtn,crono)=>{   // crono: ordem cronológica (prazo), sem arrastar
+    const open=sortTasks(list.filter(t=>!t.done),crono?"due":"manual"), done=list.filter(t=>t.done).sort((a,b)=>(b.doneAt||"").localeCompare(a.doneAt||""));
     const sec=h("section",{class:"proj-tasks","aria-label":title},h("div",{class:"col-head"},h("h3",{},title),h("span",{class:"col-count"},`${open.length} aberta${open.length===1?"":"s"}`)));
     sec.append(addBar(defaults,ids));
     if(extra) sec.append(extra);
-    if(open.length){ sec.append(h("div",{class:"list"},open.map(t=>taskRow(t,{drag:true,membros:mb(t.id),cronoBtn}))),gestureHint()); }
+    if(open.length){ sec.append(h("div",{class:"list"},open.map(t=>taskRow(t,{drag:!crono,membros:mb(t.id),cronoBtn}))),crono?"":gestureHint()); }
     else sec.append(h("div",{class:"empty"},emptyTxt));
     if(done.length) sec.append(h("div",{class:"group-title"},"Concluídas",h("span",{class:"n"},done.length)),h("div",{class:"list"},done.slice(0,20).map(t=>taskRow(t,{membros:mb(t.id)}))));
     return sec;
@@ -2464,7 +2510,7 @@ function renderProject(wrap,tag){
       gen.some(t=>!t.done)?h("div",{class:"gest-hint",style:"text-align:left"},"Toque em + para levar a tarefa ao cronograma."):null,"incluir"),
     col("Tarefas do cronograma",cr,{tags:[tag],crono:true},{input:"addInputCr",date:"addDateCr",ph:"Adicionar ao cronograma…"},
       "Nenhuma tarefa no cronograma. Adicione aqui (com prazo) ou abra uma tarefa e escolha “Incluir” em Cronograma do projeto.",
-      h("div",{class:"gest-hint",style:"text-align:left"},"Título e prazo destas tarefas atualizam o cronograma automaticamente; concluídas saem dele. Toque em − para tirar uma tarefa do cronograma."+(noDue?` ${noDue} sem prazo: só aparece${noDue===1?"":"m"} no cronograma depois de ter prazo.`:"")),"tirar")));
+      h("div",{class:"gest-hint",style:"text-align:left"},"Título e prazo destas tarefas atualizam o cronograma automaticamente; concluídas saem dele. Toque em − para tirar uma tarefa do cronograma."+(noDue?` ${noDue} sem prazo: só aparece${noDue===1?"":"m"} no cronograma depois de ter prazo.`:"")),"tirar",true)));
   // ----- cronograma (ou modo de edição)
   const sec=h("section",{class:"proj-crono","aria-label":"Cronograma"},h("div",{class:"col-head"},h("h3",{},"Cronograma")));
   if(!editing) sec.append(h("div",{class:"row-end",style:"justify-content:flex-start"},
@@ -2476,6 +2522,26 @@ function renderProject(wrap,tag){
   wrap.append(sec);
   if(!editing) crAjustarTudo();
 }
+/* aba Tarefas › Por membro: tarefas abertas do projeto (de toda a equipe) agrupadas por responsável; sem responsável no fim */
+function renderPorMembro(out,tag,p){
+  const mb=membrosDe(p), open=sortTasks(tasksArr().filter(t=>!t.done&&(t.tags||[]).includes(tag)),"due");
+  if(!p.membros.length) out.append(h("div",{class:"gest-hint",style:"text-align:left;margin-bottom:10px"},"Cadastre a equipe na aba “Equipe” para ver as tarefas de cada membro."));
+  const grupo=(nome,list,vazio)=>{ out.append(h("div",{class:"group-title"},nome,h("span",{class:"n"},list.length)));
+    out.append(list.length?h("div",{class:"list"},list.map(t=>taskRow(t,{membros:mb(t.id)}))):h("div",{class:"gest-hint",style:"text-align:left;margin:10px 0 4px"},vazio)); };
+  for(const m of membrosOrdem(p)){ const fs=funcNomes(p,m);
+    grupo(h("span",{},membroNome(m),m.id===EU?h("span",{class:"memb-func"}," (você)"):null,fs.length?h("span",{class:"memb-func"}," · "+fs.join(", ")):null),open.filter(t=>mb(t.id).some(x=>x.id===m.id)),"Nenhuma tarefa aberta."); }
+  const sem=open.filter(t=>!mb(t.id).length);
+  if(sem.length||!p.membros.length) grupo("Sem responsável",sem,"Nenhuma tarefa aberta.");
+  if(open.length) out.append(h("div",{class:"gest-hint",style:"text-align:left;margin-top:12px"},"Para mudar os responsáveis, clique na tarefa e escolha em “Responsáveis”."));
+}
+/* e-mail do projeto: só pelo Gmail na web (navegador), já na conta de Configurações › Meus dados (authuser) */
+const contaGmail=()=>String((VIEW.perfil||{}).email||euBase().email||"").trim();
+function abrirGmail(to,su,body){
+  const conta=contaGmail(), enc=x=>encodeURIComponent(String(x).replace(/\r?\n/g,"\r\n"));
+  const url="https://mail.google.com/mail/?"+(conta?"authuser="+encodeURIComponent(conta)+"&":"")+"view=cm&fs=1&to="+encodeURIComponent(to.join(","))+"&su="+enc(su)+(body?"&body="+enc(body):"");
+  window.open(url,"_blank","noopener");
+  if(!conta) toast("Informe seu e-mail em Configurações › Meus dados para o Gmail abrir já nessa conta.");
+}
 /* aba Equipe: abre o Gmail já com destinatários (toda a equipe ou uma função) e assunto preenchidos; você ("eu") não entra */
 function equipeEnvio(tag,p){
   const comMail=ms=>ms.filter(m=>m.email&&m.id!==EU), todos=comMail(membrosOrdem(p)), titulo=p.titulo||projTitle(tag);
@@ -2483,13 +2549,13 @@ function equipeEnvio(tag,p){
   if(!todos.length){ sec.append(h("div",{class:"gest-hint",style:"text-align:left"},"Cadastre o e-mail dos membros (abaixo) para enviar e-mails à equipe.")); return sec; }
   const abrir=(ms,grupo)=>{
     const to=[...new Set(ms.map(m=>m.email))], su="Projeto "+titulo+(grupo?" — "+grupo:"");
-    window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to.join(","))}&su=${encodeURIComponent(su)}`,"_blank","noopener");
+    abrirGmail(to,su,"");
   };
   const grupos=p.funcoes.map(f=>({f,ms:comMail(membrosOrdem(p).filter(m=>m.funcoes.includes(f.id)))})).filter(g=>g.ms.length);
   sec.append(h("div",{class:"opts"},
       h("button",{class:"opt on",title:todos.map(m=>m.email).join(", "),onclick:()=>abrir(todos,"")},svg(ICON.mail,14),`Toda a equipe (${todos.length})`),
       ...grupos.map(g=>h("button",{class:"opt",title:g.ms.map(m=>m.email).join(", "),onclick:()=>abrir(g.ms,g.f.nome)},svg(ICON.mail,14),`${g.f.nome} (${g.ms.length})`))),
-    h("p",{class:"mail-note"},"Abre o Gmail com os destinatários e o assunto já preenchidos. Para escolher pessoa por pessoa ou incluir a mensagem com as tarefas de cada um, use “Enviar mensagem”."));
+    h("p",{class:"mail-note"},"Abre o Gmail no navegador (conta "+(contaGmail()||"de Configurações › Meus dados")+") com os destinatários e o assunto já preenchidos. Para escolher pessoa por pessoa ou incluir a mensagem com as tarefas de cada um, use “Enviar mensagem”."));
   return sec;
 }
 function confirmRemoveProject(tag){
@@ -2504,7 +2570,7 @@ const membroNome=m=>m.nome||m.email;
 const membrosDe=p=>id=>{ const l=(p.atrib||{})[id]||[]; return (p.membros||[]).filter(m=>l.includes(m.id)); };
 function saveMembros(tag,membros,atrib,msg,funcoes){
   const prev=VIEW.projects[tag]; if(!prev) return;
-  atrib=Object.fromEntries(Object.entries(atrib||{}).filter(([id])=>VIEW.tasks[id]));   // tarefas apagadas saem das atribuições
+  atrib=Object.fromEntries(Object.entries(atrib||{}).filter(([id])=>VIEW.tasks[id]||(VIEW.trash||{})[id]));   // tarefas apagadas saem das atribuições (as da lixeira ficam, para voltar com a tarefa)
   const c=cleanProject(prev); putProject(tag,{...c,membros,atrib,funcoes:funcoes||c.funcoes});
   toast(msg,()=>enqueue({op:"set",path:"projects/"+tag,data:prev}));
 }
@@ -2746,8 +2812,6 @@ function openMailCrono(tag,opt={}){
   if(anexo&&!cronoEvents(p).length){ toast("O cronograma ainda não tem datas."); return; }
   if(!p.membros.some(m=>m.email)){ toast("Cadastre membros com e-mail na aba “Equipe” para "+(anexo?"enviar o cronograma.":"enviar mensagens.")); return; }
   const titulo=p.titulo||projTitle(tag), fname=`cronograma-${tag}.pdf`;
-  const touch=window.matchMedia&&matchMedia("(hover:none)").matches;
-  let canShare=false; try{ canShare=!!(navigator.share&&navigator.canShare&&typeof File==="function"&&navigator.canShare({files:[new File(["x"],fname,{type:"application/pdf"})]})); }catch(e){}
   // destinatários
   const boxes=[];
   const lista=h("div",{class:"pick-list"},membrosOrdem(p).map(m=>{
@@ -2788,81 +2852,12 @@ function openMailCrono(tag,opt={}){
     if(anexo&&!blob&&!falhou){ toast("Aguarde: o PDF ainda está sendo preparado."); return null; }
     return {to,sub:assunto.value.trim(),body:msg.value};
   };
-  let salvo=false;   // PDF já salvo nesta janela (celular: passo 1)
-  const baixar=()=>{ if(salvo||!anexo) return; if(blob&&downloadFile(fname,blob,"application/pdf")) toast("PDF baixado: anexe-o ao e-mail."); };
-  const abrirMailto=x=>{ const a=h("a",{href:`mailto:${x.to.join(",")}?subject=${enc(x.sub)}&body=${enc(x.body)}`}); document.body.append(a); a.click(); a.remove(); };
-  const enc=s=>encodeURIComponent(s.replace(/\r?\n/g,"\r\n"));
+  /* envio só pelo Gmail na web, na conta de Configurações (abrirGmail). O endereço do Gmail não aceita anexo:
+     o PDF do cronograma é baixado ao mesmo tempo para ser anexado. */
+  const baixar=()=>{ if(!anexo) return; if(blob&&downloadFile(fname,blob,"application/pdf")) toast("PDF baixado: anexe-o ao e-mail."); };
   const acoes=[
     {label:"Abrir no Gmail",cls:"primary",run:()=>{ const x=preparar(); if(!x) return false;
-      const url=`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(x.to.join(","))}&su=${enc(x.sub)}&body=${enc(x.body)}`;
-      baixar(); window.open(url,"_blank","noopener"); }},
-    {label:"App de e-mail",run:()=>{ const x=preparar(); if(!x) return false;
-      baixar(); abrirMailto(x); }}];
-  if(canShare&&anexo) acoes.push({label:"Compartilhar PDF",run:()=>{ const x=preparar(); if(!x) return false;
-    if(!blob){ toast("Sem o PDF não há o que compartilhar: use “Abrir no Gmail” ou “App de e-mail”."); return false; }
-    try{ navigator.clipboard.writeText(x.to.join(", ")).catch(()=>{}); }catch(e){}
-    const f=new File([blob],fname,{type:"application/pdf"}), ok=()=>toast("E-mails copiados: cole em “Para”, se preciso.");
-    navigator.share({files:[f],title:x.sub,text:x.body}).then(ok,e=>{
-      if(e&&e.name==="AbortError") return;
-      navigator.share({files:[f],title:x.sub}).then(ok,e2=>{ if(!(e2&&e2.name==="AbortError")) toast("O compartilhamento não funcionou: use “Abrir no Gmail” ou “App de e-mail”."); });
-    });
-  }});
-  /* celular: o compartilhamento do sistema não leva destinatários (não existe campo "Para" nele).
-     Fluxo principal em dois toques: 1) salvar o PDF no aparelho; 2) abrir o e-mail já com destinatários,
-     assunto e mensagem (mailto) e anexar o PDF salvo. "Compartilhar PDF" fica como alternativa. */
-  if(canShare&&touch&&anexo){
-    const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
-    /* alguns apps de e-mail do Android não leem os destinatários do link mailto: os e-mails ficam copiados para colar em “Para” */
-    const copiarPara=x=>{
-      const txt=x.to.join(", ");
-      try{ navigator.clipboard.writeText(txt).then(()=>toast("E-mails copiados: se “Para” vier vazio, toque nele e cole."),()=>{}); }catch(e){}
-    };
-    const marcarSalvo=()=>{
-      salvo=true; status.textContent=`PDF salvo (${fname}). Agora toque em “2 · Abrir e-mail” e anexe o arquivo pelo clipe.`;
-      const bs=[...document.querySelectorAll("#modalRoot .row-end button")];
-      bs.forEach(b=>{ if(b.textContent==="1 · Salvar PDF"){ b.textContent="PDF salvo ✓"; b.classList.remove("primary"); } if(b.textContent==="2 · Abrir e-mail") b.classList.add("primary"); });
-    };
-    const compartilhar=acoes.pop(); compartilhar.label="Compartilhar PDF (sem destinatários)";
-    acoes.forEach(a=>delete a.cls);
-    const gmail=acoes[0];
-    acoes.length=0;
-    acoes.push(
-      {label:"1 · Salvar PDF",cls:"primary",run:()=>{
-        if(!blob){ toast(falhou?"Não foi possível gerar o PDF: use “Exportar PDF”.":"Aguarde: o PDF ainda está sendo preparado."); return false; }
-        // iPhone: “Salvar em Arquivos” pelo compartilhamento; Android: download direto (vai para Downloads)
-        if(!ios&&downloadFile(fname,blob,"application/pdf")){ marcarSalvo(); return false; }
-        navigator.share({files:[new File([blob],fname,{type:"application/pdf"})],title:fname}).then(marcarSalvo,e=>{ if(!(e&&e.name==="AbortError")) toast("Não foi possível salvar o PDF aqui: use “Exportar PDF”."); });
-        return false;   // a janela continua aberta para o passo 2
-      }},
-      {label:"2 · Abrir e-mail",run:()=>{ const x=preparar(); if(!x) return false; copiarPara(x); abrirMailto(x); if(!salvo&&blob) toast("Lembre-se de salvar o PDF (passo 1) para anexá-lo."); }},
-      {label:gmail.label,run:()=>{ const x=preparar(); if(!x) return false; copiarPara(x); return gmail.run(); }},
-      compartilhar);
-  }
-  /* envio direto pelo servidor (função "cronograma-email" do Supabase + Brevo): leva o PDF anexado e os
-     destinatários de uma vez, sem passar pelo app de e-mail. Só com login; as outras opções continuam como alternativa. */
-  const servidor=!!(S.sb&&S.user);
-  const copiaChk=h("input",{type:"checkbox",id:"mailCopia"}); copiaChk.checked=true;
-  let enviando=false;
-  const blobB64=b=>new Promise((ok,no)=>{ const r=new FileReader(); r.onload=()=>ok(String(r.result).split(",")[1]||""); r.onerror=()=>no(r.error); r.readAsDataURL(b); });
-  if(servidor){
-    acoes.forEach(a=>delete a.cls);
-    acoes.unshift({label:"Enviar agora",cls:"primary",run:()=>{
-      const x=preparar(); if(!x) return false;
-      if(anexo&&!blob){ toast("Sem o PDF não dá para enviar daqui: use as outras opções."); return false; }
-      if(enviando) return false;
-      if(!navigator.onLine){ toast("Sem internet: o envio direto precisa de conexão."); return false; }
-      enviando=true; status.textContent=`Enviando para ${x.to.length} destinatário${x.to.length===1?"":"s"}…`;
-      (anexo?blobB64(blob):Promise.resolve("")).then(pdf=>fnCall({method:"POST",body:JSON.stringify({to:x.to,subject:x.sub,text:x.body,...(pdf?{filename:fname,pdf}:{}),copia:copiaChk.checked})},fnMailURL()))
-        .then(j=>{ if(status.isConnected) $("#modalRoot").replaceChildren(); toast(`${anexo?"Cronograma enviado":"Mensagem enviada"} para ${j.enviados} destinatário${j.enviados===1?"":"s"}`+(j.copia?" (com cópia para você).":".")); })
-        .catch(e=>{
-          const m=String(e&&e.message||e);
-          const txt=/^HTTP 404|not found/i.test(m)?"a função “cronograma-email” não está publicada no Supabase (veja o guia ENVIO-EMAIL).":/Failed to fetch|NetworkError|Load failed/i.test(m)?"sem conexão com o servidor.":!anexo&&/PDF ausente/i.test(m)?"atualize a função “cronograma-email” e o script do Google (guia ENVIO-EMAIL) para enviar mensagens sem anexo.":m;
-          status.textContent="Não foi enviado: "+txt; toast("Não foi enviado: "+txt);
-        })
-        .finally(()=>{ enviando=false; });
-      return false;   // a janela só fecha quando o envio der certo
-    }});
-  }
+      baixar(); abrirGmail(x.to,x.sub,x.body); }}];
   paintGrupos();
   openModal(anexo?"Enviar cronograma por e-mail":"Enviar mensagem à equipe",h("div",{style:"display:flex;flex-direction:column;gap:10px"},
     h("div",{class:"field"},h("span",{class:"lbl"},"Destinatários"),h("div",{class:"opts"},h("button",{class:"opt",onclick:()=>todos(true)},"Toda a equipe"),...gBtns.map(([,b])=>b),h("button",{class:"opt",onclick:()=>todos(false)},"Nenhum")),
@@ -2870,12 +2865,7 @@ function openMailCrono(tag,opt={}){
     h("div",{class:"field"},h("label",{for:"mailSub"},"Assunto"),assunto),
     h("div",{class:"field"},h("label",{for:"mailBody"},"Mensagem"),msg),
     status,
-    servidor?h("label",{class:"pick",style:"padding:2px 0"},copiaChk,h("span",{},"Enviar cópia para mim"+(S.user.email?" ("+S.user.email+")":""))):null,
-    servidor?h("p",{class:"mail-note"},anexo?"“Enviar agora” envia daqui mesmo, pelo servidor, com o PDF anexado e os destinatários marcados.":"“Enviar agora” envia daqui mesmo, pelo servidor, para os destinatários marcados."):(CFG.url?h("p",{class:"mail-note"},"Para enviar direto daqui"+(anexo?", já com anexo e destinatários,":"")+" entre na sua conta (Configurações › Sincronização e backup)."):null),
-    !anexo?h("p",{class:"mail-note"},"“Abrir no Gmail” e “App de e-mail” abrem o rascunho com destinatários, assunto e mensagem preenchidos."):
-    (n=>servidor?h("details",{class:"mail-note"},h("summary",{style:"cursor:pointer"},"Como funcionam as outras opções"),n):n)(h("p",{class:"mail-note"},canShare&&touch
-      ?"Os destinatários só vão junto quando o e-mail é aberto por “2 · Abrir e-mail” (ou “Abrir no Gmail”), que não aceita anexo: por isso salve antes o PDF (passo 1) e anexe-o pelo clipe. Os e-mails também ficam copiados: se o app de e-mail abrir com “Para” vazio, cole-os ali. “Compartilhar PDF” já leva o anexo, mas o compartilhamento do celular não tem campo de destinatário: escolha-os no app (os e-mails ficam copiados)."
-      :"O Gmail e o app de e-mail abrem com destinatários, assunto e mensagem preenchidos, mas não aceitam anexo pelo link: o PDF é baixado ao mesmo tempo para você anexá-lo."+(canShare?" “Compartilhar PDF” leva o arquivo anexado, mas sem os destinatários (escolha-os no app; os e-mails ficam copiados).":"")+(touch&&!canShare?" No celular, se o download não acontecer, use “Exportar PDF”.":"")))),
+    h("p",{class:"mail-note"},"Abre o Gmail no navegador, na conta "+(contaGmail()||"informada em Configurações › Meus dados")+", com destinatários, assunto e mensagem preenchidos."+(anexo?" O Gmail não aceita anexo pelo link: o PDF é baixado ao mesmo tempo para você anexá-lo (se o download não acontecer, use “Exportar PDF”).":""))),
     acoes);
 }
 
@@ -3240,7 +3230,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v24";
+const APP_VER="v25";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
@@ -3441,6 +3431,7 @@ recompute();
 // aberto por uma notificação de lembrete (?t=id): já mostra a tarefa
 { const qt=new URLSearchParams(location.search).get("t"); if(qt){ if(VIEW.tasks[qt]) UI.sel=qt; try{ history.replaceState(null,"",location.pathname); }catch(e){} } }
 render(); updateSync(); initClient(); checkReminders();
+purgeTrash();   // lixeira: apaga de vez o que passou de 10 dias
 // ao abrir: com sincronização, espera o login ser lido e o primeiro download (ver onAuthStateChange e sync)
 if(S.sb) rollPending=true; else rollOver();
 })();
