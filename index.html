@@ -1356,7 +1356,7 @@ function searchTasks(list,q){
 }
 /* po (aba Tarefas do projeto): {membros} — mesma lista do grupo, sem trocar o cabeçalho */
 function renderList(wrap,v,po){
-  let list=myTasks(), title="", sub="", defaults={}, groupBy=null, showDoneDefault=UI.showDone;
+  let list=po?tasksArr():myTasks(), title="", sub="", defaults={}, groupBy=null, showDoneDefault=UI.showDone;   // tela do projeto (po): todas as tarefas do projeto, de qualquer responsável
   const td=today();
   if(v==="search"&&isTagQuery(UI.q)){   // #grupo na pesquisa: só as tarefas do grupo; Enter abre o grupo
     const tags=matchTags(UI.q); title="Pesquisa"; showDoneDefault=true;
@@ -1377,7 +1377,7 @@ function renderList(wrap,v,po){
   // grupo: lista à esquerda e, à direita, Urgentes e Importantes só deste grupo (como na home)
   let out=wrap;
   if(v.startsWith("tag:")){
-    const g=v.slice(4), gOpen=myTasks().filter(t=>!t.done&&(t.tags||[]).includes(g)), notToday=t=>!inMyDay(t);
+    const g=v.slice(4), gOpen=(po?tasksArr():myTasks()).filter(t=>!t.done&&(t.tags||[]).includes(g)), notToday=t=>!inMyDay(t);
     wrap.classList.add("wide");
     const main=h("section",{class:"grp-main"});
     const side=h("aside",{class:"col-week grp-side"},
@@ -2600,7 +2600,7 @@ function acessoEquipe(tag,p){
   const link=linkEquipe();
   if(!link){ sec.append(h("div",{class:"gest-hint",style:"text-align:left"},"Para a equipe entrar e atualizar as tarefas, configure o servidor em Configurações › Sincronização e backup.")); return sec; }
   const titulo=p.titulo||projTitle(tag), todos=membrosOrdem(p).filter(m=>m.email&&m.id!==EU);
-  sec.append(h("p",{class:"mail-note"},"Cada membro entra com login e senha na página da equipe e vê só as tarefas atribuídas a ele: pode atualizar (nome, prazo, etapas e anotações), concluir e comentar. Para entrar, ele cria a conta com o mesmo e-mail cadastrado aqui."),
+  sec.append(h("p",{class:"mail-note"},"Cada membro entra com login e senha na página da equipe. Ele vê o cronograma e todas as tarefas do projeto, pode pegar tarefas para si e criar novas; nas suas, atualiza (nome, prazo, etapas e anotações), conclui e comenta. Para entrar, ele cria a conta com o mesmo e-mail cadastrado aqui."),
     h("div",{class:"opts",style:"margin-top:8px"},
       h("button",{class:"opt",onclick:()=>{ try{ navigator.clipboard.writeText(link).then(()=>toast("Link copiado"),()=>toast("Não foi possível copiar o link.")); }catch(e){ toast("Não foi possível copiar o link."); } }},svg(ICON.list,14),"Copiar link de acesso"),
       todos.length?h("button",{class:"opt",onclick:()=>abrirGmail([...new Set(todos.map(m=>m.email))],"Acesso às tarefas — Projeto "+titulo,
@@ -3279,7 +3279,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v26";
+const APP_VER="v27";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";

@@ -99,6 +99,26 @@ input:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(--accent) 40%
 .hint{font-size:12.5px;color:var(--muted)}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;font-weight:600;z-index:10;max-width:calc(100% - 32px);box-shadow:var(--shadow)}
 .sep{height:1px;background:var(--line);margin:10px 0}
+.sec-t{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:22px 0 8px;font-weight:800;display:flex;gap:8px;align-items:baseline}
+.sec-t small{font-weight:600;text-transform:none;letter-spacing:0}
+.crono{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:6px 14px}
+.cr-per{font-size:13px;color:var(--muted);margin:2px 0 10px}
+.ev{display:grid;grid-template-columns:86px 1fr;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.ev:first-of-type{border-top:0}
+.ev.passou{opacity:.55}
+.ev-d b{display:block;font-size:19px;font-weight:800;line-height:1.1}
+.ev-d span{display:block;font-size:12px;color:var(--muted)}
+.ev-tag{display:inline-block;font-size:11px;font-weight:700;border:1px solid var(--accent);color:var(--accent-text);border-radius:999px;padding:0 7px;margin-top:4px}
+.ev-c p{margin:0 0 4px;font-style:italic;color:var(--muted);font-size:13.5px}
+.ev-c ul{margin:0;padding:0;list-style:none}
+.ev-c li{margin:0 0 4px;padding-left:14px;position:relative}
+.ev-c li::before{content:"";position:absolute;left:0;top:.7em;width:7px;height:2px;background:var(--accent)}
+.ev-c small{display:block;color:var(--muted);font-size:12.5px}
+.nova{display:grid;grid-template-columns:1fr 150px auto;gap:8px}
+@media (max-width:520px){ .nova{grid-template-columns:1fr auto} .nova input[type=text]{grid-column:1/-1} }
+.pt{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:6px}
+.pt .t-main{cursor:default}
+.mine{font-size:12px;font-weight:700;color:var(--ok);white-space:nowrap}
 </style>
 </head>
 <body>
@@ -138,7 +158,7 @@ if(!CFG.url||!CFG.key||!window.supabase){
 }
 const sb=window.supabase.createClient(CFG.url,CFG.key,{auth:{persistSession:true,autoRefreshToken:true,storageKey:"equipe-auth",detectSessionInUrl:true}});
 const FN=CFG.url+"/functions/v1/equipe";
-const ST={user:null,tarefas:null,erro:"",ver:"abertas",aberta:null,carregando:false,recuperar:false};
+const ST={user:null,tarefas:null,projetos:[],proj:null,erro:"",ver:"abertas",aberta:null,carregando:false,recuperar:false};
 
 async function chamar(body){
   const {data}=await sb.auth.getSession(); const tk=data&&data.session&&data.session.access_token;
@@ -152,7 +172,7 @@ async function chamar(body){
 }
 async function carregar(){
   ST.carregando=true; ST.erro=""; render();
-  try{ const j=await chamar({acao:"listar"}); ST.tarefas=j.tarefas||[]; ST.nome=(j.usuario&&j.usuario.nome)||""; }
+  try{ const j=await chamar({acao:"listar"}); ST.tarefas=j.tarefas||[]; ST.projetos=j.projetos||[]; ST.nome=(j.usuario&&j.usuario.nome)||""; }
   catch(e){ ST.erro=e.message; }
   ST.carregando=false; render();
 }
@@ -215,15 +235,66 @@ function render(){
   if(ST.erro) out.push(h("div",{class:"empty",style:"color:var(--danger)"},ST.erro));
   else if(!ST.tarefas) out.push(h("div",{class:"empty"},"Carregando…"));
   else {
-    const ab=ST.tarefas.filter(t=>!t.done), co=ST.tarefas.filter(t=>t.done);
-    out.push(h("div",{class:"seg",role:"tablist"},[["abertas",`Abertas (${ab.length})`],["concluidas",`Concluídas (${co.length})`]].map(([k,l])=>h("button",{class:ST.ver===k?"on":"",onclick:()=>{ ST.ver=k; render(); }},l))));
-    const lista=(ST.ver==="abertas"?ab:co).slice().sort((a,b)=>ST.ver==="abertas"?(a.due||"9999").localeCompare(b.due||"9999"):(b.doneAt||"").localeCompare(a.doneAt||""));
-    if(!ST.tarefas.length) out.push(h("div",{class:"empty"},"Nenhuma tarefa atribuída a você ainda. Quando o coordenador atribuir uma tarefa ao seu e-mail ("+ST.user.email+"), ela aparece aqui."));
-    else if(!lista.length) out.push(h("div",{class:"empty"},ST.ver==="abertas"?"Nenhuma tarefa aberta. 🎉":"Nenhuma tarefa concluída."));
-    const projs=[...new Set(lista.map(t=>t.projetoTitulo))];
-    for(const p of projs) out.push(h("section",{class:"proj"},h("h2",{},p),lista.filter(t=>t.projetoTitulo===p).map(cartao)));
+    const minhas=ST.tarefas.filter(t=>t.minha), ab=minhas.filter(t=>!t.done), co=minhas.filter(t=>t.done);
+    out.push(h("div",{class:"seg",role:"tablist"},[["abertas",`Minhas (${ab.length})`],["concluidas",`Concluídas (${co.length})`],["projeto",ST.projetos.length>1?"Projetos":"Projeto"]].map(([k,l])=>h("button",{class:ST.ver===k?"on":"",onclick:()=>{ ST.ver=k; ST.aberta=null; render(); }},l))));
+    if(ST.ver==="projeto") out.push(...telaProjeto());
+    else {
+      const lista=(ST.ver==="abertas"?ab:co).slice().sort((a,b)=>ST.ver==="abertas"?(a.due||"9999").localeCompare(b.due||"9999"):(b.doneAt||"").localeCompare(a.doneAt||""));
+      if(!ST.projetos.length) out.push(h("div",{class:"empty"},"Você ainda não está na equipe de nenhum projeto. Peça ao coordenador para cadastrar o seu e-mail ("+ST.user.email+") na equipe."));
+      else if(!minhas.length) out.push(h("div",{class:"empty"},"Nenhuma tarefa sua ainda. Veja as tarefas do projeto em “"+(ST.projetos.length>1?"Projetos":"Projeto")+"” e toque em “Pegar”, ou crie uma tarefa."));
+      else if(!lista.length) out.push(h("div",{class:"empty"},ST.ver==="abertas"?"Nenhuma tarefa aberta. Veja se há outras para pegar em “"+(ST.projetos.length>1?"Projetos":"Projeto")+"”.":"Nenhuma tarefa concluída."));
+      const projs=[...new Set(lista.map(t=>t.projetoTitulo))];
+      for(const p of projs) out.push(h("section",{class:"proj"},h("h2",{},p),lista.filter(t=>t.projetoTitulo===p).map(cartao)));
+    }
   }
   app.replaceChildren(...out);
+}
+/* aba Projeto: cronograma geral, nova tarefa e todas as tarefas do projeto (pegar as que não são suas) */
+function telaProjeto(){
+  const out=[], ps=ST.projetos;
+  if(!ps.length) return [h("div",{class:"empty"},"Você ainda não está na equipe de nenhum projeto.")];
+  const kp=p=>p.dono+"/"+p.tag;
+  if(!ST.proj||!ps.some(p=>kp(p)===ST.proj)) ST.proj=kp(ps[0]);
+  if(ps.length>1) out.push(h("div",{class:"seg",style:"flex-wrap:wrap"},ps.map(p=>h("button",{class:kp(p)===ST.proj?"on":"",onclick:()=>{ ST.proj=kp(p); render(); }},p.titulo))));
+  const p=ps.find(x=>kp(x)===ST.proj), td=today();
+  // cronograma
+  out.push(h("div",{class:"sec-t"},"Cronograma"));
+  if(!p.cronograma.length) out.push(h("div",{class:"empty",style:"margin-top:0"},"O cronograma ainda não tem datas."));
+  else { let achou=false;
+    out.push(h("div",{class:"crono"},h("p",{class:"cr-per"},p.subtitulo||p.periodo),p.cronograma.map(e=>{
+      const [y,m,d]=e.data.split("-"), prox=!achou&&!e.sem&&e.data>=td; if(prox) achou=true;
+      const ativ=e.sem?[]:e.atividades;
+      return h("div",{class:"ev"+(e.data<td?" passou":"")},
+        h("div",{class:"ev-d"},h("b",{},d+"/"+m),h("span",{},e.dia),e.horario?h("span",{},e.horario):null,prox?h("span",{class:"ev-tag"},e.data===td?"Hoje":"Próximo"):null),
+        h("div",{class:"ev-c"},e.rotulo?h("p",{style:"font-style:normal;font-weight:700;color:var(--ink)"},e.rotulo):null,
+          e.sem?h("p",{},e.contexto||"Sem encontro nesta data."):e.contexto?h("p",{},e.contexto):null,
+          ativ.length?h("ul",{},ativ.map(a=>h("li",{},a.t,a.info?h("small",{},a.info):null))):null)); }))); }
+  // nova tarefa
+  out.push(h("div",{class:"sec-t"},"Nova tarefa",h("small",{},"fica com você")));
+  const nome=h("input",{type:"text",id:"nNome",maxlength:"500",placeholder:"Nome da tarefa"}), dt=h("input",{type:"date",id:"nPrazo",min:td,max:"2099-12-31","aria-label":"Prazo"});
+  const criar=h("button",{class:"btn primary",type:"submit"},"Criar");
+  out.push(h("form",{class:"nova",onsubmit:async e=>{ e.preventDefault(); const t=nome.value.replace(/\s+/g," ").trim(); if(!t){ nome.focus(); return; }
+    if(dt.value&&dt.value<td){ toast("Escolha um prazo de hoje em diante."); return; }
+    criar.disabled=true;
+    try{ await chamar({acao:"criar",dono:p.dono,projeto:p.tag,title:t,due:dt.value||null}); toast("Tarefa criada (está em “Minhas”)"); await carregar(); }
+    catch(x){ toast("Não foi criada: "+x.message); criar.disabled=false; } }},nome,dt,criar));
+  // todas as tarefas do projeto
+  const todas=ST.tarefas.filter(t=>t.dono===p.dono&&t.projeto===p.tag), ab=todas.filter(t=>!t.done).sort((a,b)=>(a.due||"9999").localeCompare(b.due||"9999")), nd=todas.length-ab.length;
+  out.push(h("div",{class:"sec-t"},"Tarefas do projeto",h("small",{},`${ab.length} aberta${ab.length===1?"":"s"}`+(nd?` · ${nd} concluída${nd===1?"":"s"}`:""))));
+  if(!ab.length) out.push(h("div",{class:"empty",style:"margin-top:0"},"Nenhuma tarefa aberta no projeto."));
+  for(const t of ab){
+    const meta=[];
+    if(t.due) meta.push(h("span",{class:t.due<td?"late":t.due===td?"today":null},t.due<td?"atrasada · "+fmtDue(t.due):t.due===td?"hoje":fmtDue(t.due)));
+    else meta.push(h("span",{},"sem prazo"));
+    if(t.crono) meta.push(h("span",{},"no cronograma"));
+    meta.push(h("span",{},t.responsaveis.length?"resp.: "+t.responsaveis.join(", "):"sem responsável"));
+    const pegar=h("button",{class:"btn small",onclick:async()=>{ pegar.disabled=true;
+      try{ await chamar({acao:"pegar",dono:t.dono,projeto:t.projeto,tarefa:t.id}); toast("A tarefa agora é sua também"); await carregar(); }
+      catch(x){ toast("Não foi possível pegar: "+x.message); pegar.disabled=false; } }},"Pegar");
+    out.push(h("div",{class:"pt"},h("div",{class:"t-main"},h("div",{class:"t-title"},t.title),h("div",{class:"t-meta"},meta)),
+      t.minha?h("span",{class:"mine"},"✓ sua"):pegar));
+  }
+  return out;
 }
 const chave=t=>t.dono+"/"+t.id;
 async function salvar(t,mudancas,msgOk){
