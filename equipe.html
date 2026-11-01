@@ -216,6 +216,32 @@ input:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(--accent) 40%
 .pt{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:6px}
 .pt .t-main{cursor:default}
 .mine{font-size:12px;font-weight:700;color:var(--ok);white-space:nowrap}
+/* página logada no desenho do cronograma do projeto (fundo, fontes e cabeçalho do cartão do cronograma) */
+body.logado{background:#f4f5f7}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) body.logado{background:#14161a} }
+:root[data-theme="dark"] body.logado{background:#14161a}
+.crono.pg{background:none;padding:6px 0 0}
+.pg button,.pg input,.pg select,.pg textarea,.pg .t-meta,.pg .hint,.pg .empty,.pg .filters{font-family:var(--font)}
+.pg .pg-head{margin-bottom:14px}
+.pg .cr-titulo{font-size:clamp(1.7rem,6vw,2.6rem)}
+.pg .periodo{margin-top:.5rem}
+.pg .pg-quem{margin:.8rem 0 0;color:var(--suave);font-size:1rem}
+.pg .pg-quem b{color:var(--texto);font-family:var(--display)}
+.pg .pg-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--linha);margin-bottom:6px}
+.pg .pg-bar .sp{flex:1}
+.pg .pg-trocar{display:flex;flex-direction:column;gap:6px;margin:8px 0 6px}
+.pg .pg-proj{display:flex;flex-direction:column;align-items:flex-start;text-align:left;border:1px solid var(--linha);background:var(--panel);border-radius:12px;padding:10px 14px}
+.pg .pg-proj b{font-family:var(--display);font-size:1.1rem;font-weight:700}
+.pg .pg-proj small{color:var(--suave);font-size:.85rem}
+.pg .pg-proj.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.pg .pg-sec{margin:1.6rem 0 .7rem;padding-top:1.1rem;border-top:1px solid var(--linha);font-family:var(--display);font-weight:700;font-size:1.35rem;display:flex;flex-wrap:wrap;gap:.2rem .7rem;align-items:baseline}
+.pg .pg-sec small{font-family:var(--font);font-weight:600;font-size:.8rem;color:var(--suave)}
+.pg .filters{margin:12px 0 0}
+.pg .seg{margin:0}
+.pg .task,.pg .pt{border-color:var(--linha)}
+.pg .t-title{font-weight:600;font-size:1.02rem;line-height:1.35}
+.pg .pg-conc{border:0;background:none;padding:6px 0;font-weight:700;font-size:13.5px;color:var(--suave)}
+.pg .crono.cr-card{border:1px solid var(--linha);background:var(--fundo)}
 </style>
 </head>
 <body>
@@ -244,15 +270,15 @@ const STAR='<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" 
 const prazoTag=(t,td)=>t.due<td?h("span",{class:"m-late",title:"Prazo"},"atrasada · "+fmtDue(t.due).slice(-5)):h("span",{class:"m-due"+(t.due===td?" today":""),title:"Prazo"},t.due===td?"hoje":fmtDue(t.due));
 const classTags=t=>t.done?[]:[t.priority===1?h("span",{class:"m-p1",title:PRI[1]},"P1"):null,t.priority===3?h("span",{class:"m-p3",title:PRI[3]},"P3"):null,t.importance===1?h("span",{class:"m-low"},"baixa imp."):null].filter(Boolean);
 const estrela=t=>t.importance===3&&!t.done?h("span",{class:"star-ic",title:"Importância alta"},ic(STAR)):null;
-const ORDENS=[["due","Prazo"],["importance","Importância"],["priority","Prioridade"]];
+const ORDENS=[["due","Prazo"],["importance","Importância"],["priority","Urgência"]];
 function ordenar(l,by){
   const key={due:t=>(t.due||"9999")+(t.priority||2)+(4-(t.importance||2)),
     priority:t=>`${t.priority||2}${4-(t.importance||2)}${t.due||"9999"}`,
     importance:t=>`${4-(t.importance||2)}${t.priority||2}${t.due||"9999"}`}[by]||(t=>(t.due||"9999"));
   return [...l].sort((a,b)=>{ const x=key(a), y=key(b); return x<y?-1:x>y?1:0; });
 }
-const ordemBar=()=>h("div",{class:"filters"},h("span",{},h("span",{class:"flabel"},"Ordenar"),
-  h("select",{id:"ordem","aria-label":"Ordenar por",onchange:e=>{ ST.ordem=e.target.value; render(); }},ORDENS.map(([k,l])=>h("option",{value:k,selected:ST.ordem===k},l)))));
+const ordemBar=()=>h("div",{class:"filters"},h("span",{class:"flabel"},"Exibir por"),
+  h("span",{class:"seg",role:"group","aria-label":"Ordenar por"},ORDENS.map(([k,l])=>h("button",{class:ST.ordem===k?"on":"","aria-pressed":ST.ordem===k?"true":"false",onclick:()=>{ ST.ordem=k; render(); }},l))));
 let toastT;
 function toast(m){ let t=$("#toast"); if(!t){ t=h("div",{class:"toast",id:"toast",role:"status"}); document.body.append(t); } t.textContent=m; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,3000); }
 const lsGet=(k,f)=>{ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):f; }catch(e){ return f; } };
@@ -270,7 +296,7 @@ if(!CFG.url||!CFG.key||!window.supabase){
 }
 const sb=window.supabase.createClient(CFG.url,CFG.key,{auth:{persistSession:true,autoRefreshToken:true,storageKey:"equipe-auth",detectSessionInUrl:true}});
 const FN=CFG.url+"/functions/v1/equipe";
-const ST={user:null,tarefas:null,projetos:[],proj:null,erro:"",ver:"abertas",aberta:null,carregando:false,recuperar:false,ordem:"due"};
+const ST={user:null,tarefas:null,projetos:[],proj:null,erro:"",aberta:null,carregando:false,recuperar:false,ordem:"due",trocar:false,verConc:false};
 
 async function chamar(body){
   const {data}=await sb.auth.getSession(); const tk=data&&data.session&&data.session.access_token;
@@ -331,64 +357,69 @@ function telaAuth(modo){
     modo==="nova"?null:h("div",{class:"links"},
       modo!=="entrar"?h("button",{class:"link",type:"button",onclick:()=>telaAuth("entrar")},"Já tenho conta: entrar"):h("button",{class:"link",type:"button",onclick:()=>telaAuth("cadastro")},"Criar conta"),
       modo==="entrar"?h("button",{class:"link",type:"button",onclick:()=>telaAuth("esqueci")},"Esqueci a senha"):null));
+  document.body.classList.remove("logado");
   app.replaceChildren(h("div",{class:"card auth"},h("img",{class:"logo",src:"icons/icon-192.png?v=7",alt:"",style:"margin-bottom:10px"}),h("h1",{},T[0]),h("p",{},T[1]),form));
   setTimeout(()=>{ const i=form.querySelector("input"); if(i) i.focus(); },30);
 }
 
-/* ---------- tarefas ---------- */
+/* ---------- tarefas: página no desenho do cronograma do projeto ----------
+   Cabeçalho do projeto (departamento, nome, período e logotipo) com o responsável logado; ordenar por prazo, importância
+   ou urgência; suas tarefas (e concluídas); abaixo, as outras tarefas do projeto para pegar; nova tarefa; cronograma.
+   Em mais de um projeto, “Mudar de projeto” troca o projeto mostrado (a escolha fica guardada neste aparelho). */
+const PROJ_KEY="equipe-proj-v1";
+const kp=p=>p.dono+"/"+p.tag;
+const tituloProj=p=>p.titulo&&p.titulo!==p.tag?p.titulo:projTitle(p.tag||"");
+const nAb=(n,s1,sN)=>`${n} ${n===1?s1:sN}`;
 function render(){
   if(ST.recuperar){ telaAuth("nova"); return; }
   if(!ST.user){ telaAuth("entrar"); return; }
-  const top=h("div",{class:"top"},h("img",{class:"logo",src:"icons/icon-192.png?v=7",alt:""}),
-    h("div",{},h("h1",{},"Minhas tarefas"),h("div",{class:"who"},(ST.nome?ST.nome+" · ":"")+ST.user.email)),h("span",{class:"sp"}),
+  document.body.classList.add("logado");
+  const ps=ST.projetos||[];
+  if(ps.length&&(!ST.proj||!ps.some(p=>kp(p)===ST.proj))){ const g=lsGet(PROJ_KEY,""); ST.proj=ps.some(p=>kp(p)===g)?g:kp(ps[0]); }
+  const p=ST.tarefas?ps.find(x=>kp(x)===ST.proj):null;
+  // cabeçalho: mesmo desenho do cabeçalho do cronograma + o responsável logado
+  const quem=h("p",{class:"pg-quem"},"Responsável: ",h("b",{},ST.nome||ST.user.email),ST.nome?h("span",{class:"pg-mail"}," · "+ST.user.email):null);
+  const head=h("header",{class:"pg-head"+(p&&p.logo?" cr-com-logo":"")},
+    p&&p.departamento?h("p",{class:"cr-depto"},p.departamento):null,
+    h("h1",{class:"cr-titulo"},p?tituloProj(p):"Tarefas da equipe"),
+    p&&(p.subtitulo||p.periodo)?h("p",{class:"periodo"},p.subtitulo||p.periodo):null,
+    p&&p.logo?h("img",{class:"cr-logo",src:p.logo,alt:"Logotipo"}):null,
+    quem);
+  const barra=h("div",{class:"pg-bar"},
+    ps.length>1&&ST.tarefas?h("button",{class:"btn small"+(ST.trocar?" primary":""),"aria-expanded":ST.trocar?"true":"false",onclick:()=>{ ST.trocar=!ST.trocar; render(); }},`Mudar de projeto (${ps.length})`):null,
+    h("span",{class:"sp"}),
     h("button",{class:"btn small",onclick:carregar,disabled:ST.carregando},ST.carregando?"Atualizando…":"Atualizar"),
     h("button",{class:"btn small",onclick:async()=>{ await sb.auth.signOut(); }},"Sair"));
-  const out=[top];
+  const out=[head,barra];
+  if(ST.trocar&&ps.length>1&&ST.tarefas) out.push(h("div",{class:"pg-trocar"},ps.map(x=>{ const n=ST.tarefas.filter(t=>t.dono===x.dono&&t.projeto===x.tag&&t.minha&&!t.done).length;
+    return h("button",{class:"pg-proj"+(kp(x)===ST.proj?" on":""),onclick:()=>{ ST.proj=kp(x); lsSet(PROJ_KEY,ST.proj); ST.trocar=false; ST.aberta=null; ST.verConc=false; render(); window.scrollTo(0,0); }},
+      h("b",{},tituloProj(x)),h("small",{},nAb(n,"tarefa sua aberta","tarefas suas abertas"))); })));
   if(ST.erro) out.push(h("div",{class:"empty",style:"color:var(--danger)"},ST.erro));
   else if(!ST.tarefas) out.push(h("div",{class:"empty"},"Carregando…"));
-  else {
-    const minhas=ST.tarefas.filter(t=>t.minha), ab=minhas.filter(t=>!t.done), co=minhas.filter(t=>t.done);
-    out.push(h("div",{class:"seg",role:"tablist"},[["abertas",`Minhas (${ab.length})`],["concluidas",`Concluídas (${co.length})`],["projeto",ST.projetos.length>1?"Projetos":"Projeto"]].map(([k,l])=>h("button",{class:ST.ver===k?"on":"",onclick:()=>{ ST.ver=k; ST.aberta=null; render(); }},l))));
-    if(ST.ver==="projeto") out.push(...telaProjeto());
-    else {
-      const lista=ST.ver==="abertas"?ordenar(ab,ST.ordem):co.slice().sort((a,b)=>(b.doneAt||"").localeCompare(a.doneAt||""));
-      if(ST.ver==="abertas"&&lista.length) out.push(ordemBar());
-      if(!ST.projetos.length) out.push(h("div",{class:"empty"},"Você ainda não está na equipe de nenhum projeto. Peça ao coordenador para cadastrar o seu e-mail ("+ST.user.email+") na equipe."));
-      else if(!minhas.length) out.push(h("div",{class:"empty"},"Nenhuma tarefa sua ainda. Veja as tarefas do projeto em “"+(ST.projetos.length>1?"Projetos":"Projeto")+"” e toque em “Pegar”, ou crie uma tarefa."));
-      else if(!lista.length) out.push(h("div",{class:"empty"},ST.ver==="abertas"?"Nenhuma tarefa aberta. Veja se há outras para pegar em “"+(ST.projetos.length>1?"Projetos":"Projeto")+"”.":"Nenhuma tarefa concluída."));
-      const projs=[...new Set(lista.map(t=>t.projetoTitulo))];
-      for(const p of projs) out.push(h("section",{class:"proj"},h("h2",{},p),lista.filter(t=>t.projetoTitulo===p).map(cartao)));
-    }
-  }
-  app.replaceChildren(...out);
-  if(ST.ver==="projeto") crAjustarTudo();
+  else if(!p) out.push(h("div",{class:"empty"},"Você ainda não está na equipe de nenhum projeto. Peça ao coordenador para cadastrar o seu e-mail ("+ST.user.email+") na equipe."));
+  else out.push(...telaProjeto(p));
+  app.replaceChildren(h("div",{class:"crono pg"},out));
+  crAjustarTudo();
 }
-/* aba Projeto: cronograma geral, nova tarefa e todas as tarefas do projeto (pegar as que não são suas) */
-function telaProjeto(){
-  const out=[], ps=ST.projetos;
-  if(!ps.length) return [h("div",{class:"empty"},"Você ainda não está na equipe de nenhum projeto.")];
-  const kp=p=>p.dono+"/"+p.tag;
-  if(!ST.proj||!ps.some(p=>kp(p)===ST.proj)) ST.proj=kp(ps[0]);
-  if(ps.length>1) out.push(h("div",{class:"seg",style:"flex-wrap:wrap"},ps.map(p=>h("button",{class:kp(p)===ST.proj?"on":"",onclick:()=>{ ST.proj=kp(p); render(); }},p.titulo))));
-  const p=ps.find(x=>kp(x)===ST.proj), td=today();
-  // cronograma
-  out.push(h("div",{class:"sec-t"},"Cronograma"));
-  out.push(cronoView(p));
-  // nova tarefa
-  out.push(h("div",{class:"sec-t"},"Nova tarefa",h("small",{},"fica com você")));
-  const nome=h("input",{type:"text",id:"nNome",maxlength:"500",placeholder:"Nome da tarefa"}), dt=h("input",{type:"date",id:"nPrazo",min:td,max:"2099-12-31","aria-label":"Prazo"});
-  const criar=h("button",{class:"btn primary",type:"submit"},"Criar");
-  out.push(h("form",{class:"nova",onsubmit:async e=>{ e.preventDefault(); const t=nome.value.replace(/\s+/g," ").trim(); if(!t){ nome.focus(); return; }
-    if(dt.value&&dt.value<td){ toast("Escolha um prazo de hoje em diante."); return; }
-    criar.disabled=true;
-    try{ await chamar({acao:"criar",dono:p.dono,projeto:p.tag,title:t,due:dt.value||null}); toast("Tarefa criada (está em “Minhas”)"); await carregar(); }
-    catch(x){ toast("Não foi criada: "+x.message); criar.disabled=false; } }},nome,dt,criar));
-  // todas as tarefas do projeto
-  const todas=ST.tarefas.filter(t=>t.dono===p.dono&&t.projeto===p.tag), ab=ordenar(todas.filter(t=>!t.done),ST.ordem), nd=todas.length-ab.length;
-  out.push(h("div",{class:"sec-t"},"Tarefas do projeto",h("small",{},`${ab.length} aberta${ab.length===1?"":"s"}`+(nd?` · ${nd} concluída${nd===1?"":"s"}`:""))));
-  if(!ab.length) out.push(h("div",{class:"empty",style:"margin-top:0"},"Nenhuma tarefa aberta no projeto."));
-  else out.push(ordemBar());
-  for(const t of ab){
+const sec=(t,small)=>h("h2",{class:"pg-sec"},t,small?h("small",{},small):null);
+function telaProjeto(p){
+  const out=[], td=today();
+  const todas=ST.tarefas.filter(t=>t.dono===p.dono&&t.projeto===p.tag);
+  const minhas=todas.filter(t=>t.minha), ab=ordenar(minhas.filter(t=>!t.done),ST.ordem), co=minhas.filter(t=>t.done).sort((a,b)=>(b.doneAt||"").localeCompare(a.doneAt||""));
+  const outras=ordenar(todas.filter(t=>!t.minha&&!t.done),ST.ordem);
+  out.push(ordemBar());
+  // suas tarefas
+  out.push(sec("Suas tarefas",nAb(ab.length,"aberta","abertas")));
+  if(ab.length) out.push(...ab.map(cartao));
+  else out.push(h("div",{class:"empty",style:"margin-top:0"},minhas.length?"Nenhuma tarefa sua aberta. Veja abaixo se há outras para pegar.":"Nenhuma tarefa sua ainda. Toque em “Pegar” numa tarefa abaixo, ou crie uma."));
+  if(co.length){
+    out.push(h("button",{class:"pg-conc","aria-expanded":ST.verConc?"true":"false",onclick:()=>{ ST.verConc=!ST.verConc; render(); }},(ST.verConc?"▾ ":"▸ ")+`Concluídas (${co.length})`));
+    if(ST.verConc) out.push(...co.map(cartao));
+  }
+  // outras tarefas do projeto: pegar
+  out.push(sec("Outras tarefas do projeto",outras.length?nAb(outras.length,"aberta","abertas")+" · toque em “Pegar” para ficar com ela":""));
+  if(!outras.length) out.push(h("div",{class:"empty",style:"margin-top:0"},"Nenhuma outra tarefa aberta no projeto."));
+  for(const t of outras){
     const meta=[];
     if(t.due) meta.push(prazoTag(t,td));
     else meta.push(h("span",{},"sem prazo"));
@@ -398,9 +429,20 @@ function telaProjeto(){
     const pegar=h("button",{class:"btn small",onclick:async()=>{ pegar.disabled=true;
       try{ await chamar({acao:"pegar",dono:t.dono,projeto:t.projeto,tarefa:t.id}); toast("A tarefa agora é sua também"); await carregar(); }
       catch(x){ toast("Não foi possível pegar: "+x.message); pegar.disabled=false; } }},"Pegar");
-    out.push(h("div",{class:"pt"},h("div",{class:"t-main"},h("div",{class:"t-title"},t.title),h("div",{class:"t-meta"},meta)),estrela(t),
-      t.minha?h("span",{class:"mine"},"✓ sua"):pegar));
+    out.push(h("div",{class:"pt"},h("div",{class:"t-main"},h("div",{class:"t-title"},t.title),h("div",{class:"t-meta"},meta)),estrela(t),pegar));
   }
+  // nova tarefa
+  out.push(sec("Nova tarefa","fica com você"));
+  const nome=h("input",{type:"text",id:"nNome",maxlength:"500",placeholder:"Nome da tarefa"}), dt=h("input",{type:"date",id:"nPrazo",min:td,max:"2099-12-31","aria-label":"Prazo"});
+  const criar=h("button",{class:"btn primary",type:"submit"},"Criar");
+  out.push(h("form",{class:"nova",onsubmit:async e=>{ e.preventDefault(); const t=nome.value.replace(/\s+/g," ").trim(); if(!t){ nome.focus(); return; }
+    if(dt.value&&dt.value<td){ toast("Escolha um prazo de hoje em diante."); return; }
+    criar.disabled=true;
+    try{ await chamar({acao:"criar",dono:p.dono,projeto:p.tag,title:t,due:dt.value||null}); toast("Tarefa criada (está em “Suas tarefas”)"); await carregar(); }
+    catch(x){ toast("Não foi criada: "+x.message); criar.disabled=false; } }},nome,dt,criar));
+  // cronograma do projeto
+  out.push(sec("Cronograma"));
+  out.push(cronoView(p));
   return out;
 }
 /* ---------- cronograma: mesmo desenho do cartão do app (cronoView "card" com crCores, crFaixa, crLista,

@@ -534,6 +534,8 @@ details.mail-note p{margin-top:6px}
 body.has-bulk .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 body.has-bulk .content{padding-bottom:110px}
 #mselBtn.on{border-color:var(--accent);color:var(--accent-text);background:var(--accent-soft)}
+/* telas de grupo e de projeto: botão Início (tela inicial de Configurações) no lugar do botão Selecionar */
+@media (max-width:860px){ #homeTopBtn .msel-lbl{display:none} #homeTopBtn{width:44px;height:44px;border-radius:14px;justify-content:center;padding:0;order:2} }
 @media (max-width:860px){ .bulk{left:10px;right:10px;transform:none;max-width:none;flex-wrap:wrap;justify-content:center;overflow:visible} .bulk-n{flex-basis:100%;text-align:center;padding:4px 0 2px} .bulk-sep{display:none} #mselBtn{order:2} body.has-bulk .toast{bottom:calc(150px + env(safe-area-inset-bottom,0px))} body.has-bulk .content{padding-bottom:170px} }
 </style>
 <style id="cronoCss">
@@ -715,6 +717,7 @@ body.has-bulk .content{padding-bottom:110px}
       </div>
       <div class="band-actions" id="bandActions"></div>
       <button class="btn small" id="mselBtn" hidden title="Selecionar várias tarefas (ou Shift + clique)"></button>
+      <button class="btn small" id="homeTopBtn" hidden></button>
     </header>
     <div class="content" id="content"><div class="wrap" id="wrap"></div></div>
   </main>
@@ -1125,7 +1128,6 @@ const PROJ_TABS=["tarefas","cronograma","equipe"];
 const startView=()=>PREFS.inicio==="today"?"today":"home";
 const startLabel=()=>startView()==="today"?"Meu Dia":"Início";
 function goStart(){ if(startView()==="home"){ UI.homeDay=null; UI.tlLeft=null; } go(startView()); }
-function homeBtn(){ return h("button",{class:"btn small",title:"Voltar para "+startLabel(),"aria-label":"Voltar para "+startLabel(),onclick:goStart},svg(ICON.home,15),startLabel()); }
 function closeNav(){ $("#app").classList.remove("nav-open"); }
 
 /* ================= Render ================= */
@@ -1170,7 +1172,10 @@ function render(force){
   renderDetail();
   placeTimeline();
   const mb=$("#mselBtn");
-  mb.hidden=v==="report"||v==="projects"||v==="trash"||!!(v.startsWith("proj:")&&UI.cronEdit&&UI.projTab==="cronograma");
+  const homeTop=v.startsWith("tag:")||v.startsWith("proj:"), hb=$("#homeTopBtn");
+  hb.hidden=!homeTop;
+  if(homeTop){ hb.replaceChildren(svg(ICON.home,15),h("span",{class:"msel-lbl"},startLabel())); hb.title="Voltar para "+startLabel(); hb.setAttribute("aria-label",hb.title); }
+  mb.hidden=homeTop||v==="report"||v==="projects"||v==="trash"||!!(v.startsWith("proj:")&&UI.cronEdit&&UI.projTab==="cronograma");
   mb.classList.toggle("on",UI.multiOn); mb.classList.toggle("home-v",v==="home"); mb.replaceChildren(svg(ICON.select,15),h("span",{class:"msel-lbl"},UI.multiOn?"Cancelar seleção":"Selecionar")); mb.setAttribute("aria-label",UI.multiOn?"Cancelar seleção":"Selecionar várias tarefas");
   renderBulk();
 }
@@ -1489,7 +1494,6 @@ function renderList(wrap,v,po){
 }
 function tagActions(g){
   const ba=$("#bandActions");
-  ba.append(homeBtn());
   ba.append(h("button",{class:"btn small",onclick:()=>openTagModal(g)},svg(ICON.edit,15),"Renomear / excluir grupo"));
   ba.append((VIEW.projects||{})[g]?h("button",{class:"btn small",onclick:()=>go("proj:"+g)},svg(ICON.folder,15),"Abrir projeto"):h("button",{class:"btn small",onclick:()=>createProject(g)},svg(ICON.folder,15),"Transformar em projeto"));
 }
@@ -2109,7 +2113,17 @@ function renderReport(wrap){
   const to=h("input",{type:"date",id:"repTo",value:R.to,onchange:e=>{R.to=e.target.value;render();}});
   const preset=(label,a,b)=>h("button",{class:"opt",onclick:()=>{R.from=ymd(a);R.to=ymd(b);render();}},label);
   const wk=addDays(now,-((now.getDay()+6)%7));
+  const modo=repModo(), projs=projectsArr().sort((a,b)=>(a.titulo||projTitle(a.tag)).localeCompare(b.titulo||projTitle(b.tag),"pt-BR")), membs=repMembros();
+  if(modo==="projeto"&&!projs.some(p=>p.tag===R.proj)) R.proj=projs[0]?projs[0].tag:null;
+  if(modo==="membro"&&!membs.some(m=>m.key===R.membro)) R.membro=membs[0]?membs[0].key:null;
+  const pick=(on,label,fn,sw)=>h("button",{class:on?"on":"",onclick:fn},sw?h("span",{class:"tag-swatch",style:`background:${sw}`}):null,label);
   const card=h("div",{class:"card"},
+    h("div",{class:"field"},h("span",{class:"lbl"},"Relatório"),
+      h("div",{},h("span",{class:"seg"},[["geral","Minhas tarefas"],["projeto","Por projeto"],["membro","Por membro da equipe"]].map(([k,l])=>h("button",{class:modo===k?"on":"",onclick:()=>{R.modo=k;render();}},l))))),
+    modo==="projeto"?h("div",{class:"field"},h("span",{class:"lbl"},"Projeto"),projs.length?h("div",{class:"tagpick"},projs.map(pj=>pick(R.proj===pj.tag,pj.titulo||projTitle(pj.tag),()=>{R.proj=pj.tag;render();},tagColor(pj.tag))))
+      :h("div",{class:"gest-hint",style:"text-align:left"},"Nenhum projeto ainda.")):null,
+    modo==="membro"?h("div",{class:"field"},h("span",{class:"lbl"},"Membro da equipe (tarefas em que é responsável, em todos os projetos)"),membs.length?h("div",{class:"tagpick"},membs.map(m=>pick(R.membro===m.key,m.nome,()=>{R.membro=m.key;render();})))
+      :h("div",{class:"gest-hint",style:"text-align:left"},"Nenhum membro cadastrado nos projetos.")):null,
     h("div",{class:"rep-filters"},
       h("div",{class:"field"},h("label",{for:"repFrom"},"De"),from),
       h("div",{class:"field"},h("label",{for:"repTo"},"Até"),to),
@@ -2117,15 +2131,15 @@ function renderReport(wrap){
         preset("Mês passado",new Date(now.getFullYear(),now.getMonth()-1,1),new Date(now.getFullYear(),now.getMonth(),0)),
         preset("Este ano",new Date(now.getFullYear(),0,1),now),
         h("button",{class:"opt",onclick:()=>{ const ds=repDone().map(repDate).filter(Boolean).sort(); R.from=ds[0]&&ds[0]<ymd(now)?ds[0]:ymd(now); R.to=ymd(now); render(); }},"Todo o período"))),
-    h("div",{class:"field"},h("span",{class:"lbl"},"Grupos (nenhum selecionado = todos)"),
+    modo!=="geral"?null:h("div",{class:"field"},h("span",{class:"lbl"},"Grupos (nenhum selecionado = todos)"),
       h("div",{class:"tagpick"},names.map(n=>h("button",{class:R.tags.includes(n)?"on":"",onclick:()=>{R.tags=R.tags.includes(n)?R.tags.filter(x=>x!==n):[...R.tags,n];render();}},
         h("span",{class:"tag-swatch",style:`background:${tagColor(n)}`}),"#"+n)),
         R.tags.length?h("button",{onclick:()=>{R.tags=[];render();}},"Limpar"):null))
   );
   wrap.append(card);
   // tarefas concluídas sem data de conclusão (ex.: importadas do Microsoft To Do): usam o prazo; sem prazo, só entram se marcado abaixo
-  const byTags=t=>!R.tags.length||(t.tags||[]).some(g=>R.tags.includes(g));
-  const semData=myTasks().filter(t=>t.done&&!repDate(t)&&byTags(t)).length;
+  const byTags=t=>modo!=="geral"||!R.tags.length||(t.tags||[]).some(g=>R.tags.includes(g));
+  const semData=repSrc().filter(t=>t.done&&!repDate(t)&&byTags(t)).length;
   if(semData) card.append(h("label",{class:"check-lbl",for:"repUndated"},h("input",{type:"checkbox",id:"repUndated",checked:R.undated!==false,onchange:e=>{R.undated=e.target.checked;render();}}),
     `Incluir ${semData} tarefa${semData===1?"":"s"} concluída${semData===1?"":"s"} sem data (sem data de conclusão nem prazo, ex.: importadas)`));
   const rows=reportRows();
@@ -2142,17 +2156,50 @@ function renderReport(wrap){
     h("button",{class:"btn",onclick:()=>exportFile("html")},"Exportar relatório (.html)"),
     h("button",{class:"btn",onclick:exportReportPDF},"Exportar PDF"),
     h("button",{class:"btn",onclick:copyReport},"Copiar tabela")));
-  if(!rows.length){ wrap.append(h("div",{class:"empty"},"Nenhuma tarefa concluída neste período com esses grupos.")); return; }
+  if(!rows.length){ wrap.append(h("div",{class:"empty"},repVazio())); return; }
   if(rows.some(t=>!t.doneAt&&!t._occ)) wrap.append(h("div",{class:"gest-hint",style:"text-align:left"},"“(prazo)”: a tarefa não tem data de conclusão registrada (ex.: importada); o relatório usa a data do prazo."));
-  const tbl=h("table",{},h("thead",{},h("tr",{},["Concluída em","Tarefa","Grupos","Importância","Prioridade","Prazo"].map(x=>h("th",{},x)))),
-    h("tbody",{},rows.map(t=>h("tr",{},h("td",{class:"mono"},repCell(t)),h("td",{},t.title),h("td",{},(t.tags||[]).map(g=>"#"+g).join(" ")),
-      h("td",{},IMP[t.importance||2]),h("td",{class:"mono"},"P"+(t.priority||2)),h("td",{class:"mono",style:t.due&&t.doneAt&&repDate(t)>t.due?"color:var(--danger)":""},t.due?fmtBR(t.due):"—")))));
+  const cols=repCols();
+  const tbl=h("table",{},h("thead",{},h("tr",{},cols.map(c=>h("th",{},c[0])))),
+    h("tbody",{},rows.map(t=>h("tr",{},cols.map(c=>h("td",{class:c[2]?"mono":null,style:c[0]==="Prazo"&&t.due&&t.doneAt&&repDate(t)>t.due?"color:var(--danger)":null},c[1](t)))))));
   wrap.append(h("div",{class:"tbl-wrap"},tbl));
+}
+/* tipo de relatório: geral (minhas tarefas, filtradas por grupos) · projeto (todas as tarefas do projeto, de qualquer
+   responsável) · membro (tarefas em que o membro é responsável, em todos os projetos). Projeto e membro mostram os responsáveis. */
+const repModo=()=>UI.rep.modo==="projeto"||UI.rep.modo==="membro"?UI.rep.modo:"geral";
+// o mesmo membro em vários projetos: pelo e-mail (sem diferenciar maiúsculas); sem e-mail, pelo nome; você = "eu"
+const membroKey=m=>m.id===EU?EU:m.email?"e:"+m.email.trim().toLowerCase():"n:"+String(m.nome||"").trim().toLowerCase();
+function repMembros(){
+  const map=new Map();
+  for(const p of projectsArr()) for(const m of membrosOrdem(p)){ const k=membroKey(m); if(!map.has(k)) map.set(k,{key:k,nome:membroNome(m)+(m.id===EU?" (você)":"")}); }
+  return [...map.values()].sort((a,b)=>a.key===EU?-1:b.key===EU?1:a.nome.localeCompare(b.nome,"pt-BR"));
+}
+// responsáveis da tarefa em cada projeto dela: [{p, m}]
+function repResp(t,P){ const out=[];
+  for(const g of (t.tags||[])){ const p=P[g]; if(!p) continue; const ids=(p.atrib||{})[t.id]||[]; for(const m of membrosOrdem(p)) if(ids.includes(m.id)) out.push({p,m}); }
+  return out; }
+function repSrc(){
+  const R=UI.rep, modo=repModo();
+  if(modo==="projeto") return R.proj?tasksArr().filter(t=>(t.tags||[]).includes(R.proj)):[];
+  if(modo==="membro"){ if(!R.membro) return []; const P=Object.fromEntries(projectsArr().map(p=>[p.tag,p])); return tasksArr().filter(t=>repResp(t,P).some(x=>membroKey(x.m)===R.membro)); }
+  return myTasks();
+}
+function repNomeSel(){ const R=UI.rep, modo=repModo();
+  if(modo==="projeto"){ const p=R.proj&&getProject(R.proj); return p?(p.titulo||projTitle(p.tag)):""; }
+  if(modo==="membro"){ const m=repMembros().find(x=>x.key===R.membro); return m?m.nome:""; }
+  return ""; }
+const repVazio=()=>repModo()==="geral"?"Nenhuma tarefa concluída neste período com esses grupos.":"Nenhuma tarefa concluída neste período.";
+// colunas: [título, valor, monoespaçada]; projeto e membro ganham Responsáveis (e membro, Projeto)
+function repCols(){
+  const modo=repModo(), c=[["Concluída em",repCell,1],["Tarefa",t=>t.title]];
+  if(modo==="membro") c.push(["Projeto",t=>t._proj||"—"]);
+  if(modo!=="geral") c.push(["Responsáveis",t=>t._resp||"sem responsável"]);
+  c.push(["Grupos",t=>(t.tags||[]).map(g=>"#"+g).join(" ")],["Importância",t=>IMP[t.importance||2]],["Prioridade",t=>"P"+(t.priority||2),1],["Prazo",t=>t.due?fmtBR(t.due):"—",1]);
+  return c;
 }
 /* concluídas do relatório: tarefas concluídas + cada data concluída das recorrentes (doneDates), uma linha por data */
 function repDone(){
   const out=[];
-  for(const t of myTasks()){
+  for(const t of repSrc()){
     if(t.done) out.push(t);
     for(const k of (Array.isArray(t.doneDates)?t.doneDates:[])) out.push({...t,done:true,doneAt:null,due:k,_occ:k});
   }
@@ -2166,24 +2213,30 @@ function repDate(t){
 }
 const repCell=t=>{ const d=repDate(t); return d?fmtBR(d)+(t.doneAt||t._occ?"":" (prazo)"):"sem data"; };
 function reportRows(){
-  const R=UI.rep;
-  return repDone().filter(t=>{ const d=repDate(t); return d?((!R.from||d>=R.from)&&(!R.to||d<=R.to)):R.undated!==false; })
-    .filter(t=>!R.tags.length||(t.tags||[]).some(g=>R.tags.includes(g)))
-    .sort((a,b)=>{ const x=repDate(a)||"9999", y=repDate(b)||"9999"; return x<y?-1:x>y?1:(a.doneAt||"").localeCompare(b.doneAt||"")||a.title.localeCompare(b.title,"pt-BR"); });
+  const R=UI.rep, modo=repModo();
+  const rows=repDone().filter(t=>{ const d=repDate(t); return d?((!R.from||d>=R.from)&&(!R.to||d<=R.to)):R.undated!==false; })
+    .filter(t=>modo!=="geral"||!R.tags.length||(t.tags||[]).some(g=>R.tags.includes(g)));
+  if(modo!=="geral"){ const P=Object.fromEntries(projectsArr().map(p=>[p.tag,p]));
+    for(const t of rows){ const rs=repResp(t,P); t._resp=[...new Set(rs.map(x=>membroNome(x.m)))].join(", ");
+      t._proj=(t.tags||[]).filter(g=>P[g]).map(g=>P[g].titulo||projTitle(g)).join(", "); } }
+  return rows.sort((a,b)=>{ const x=repDate(a)||"9999", y=repDate(b)||"9999"; return x<y?-1:x>y?1:(a.doneAt||"").localeCompare(b.doneAt||"")||a.title.localeCompare(b.title,"pt-BR"); });
 }
 function reportCSV(){
   const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
-  const lines=[["Concluída em","Tarefa","Grupos","Importância","Prioridade","Prazo","No prazo","Anotações"].map(q).join(";")];
-  for(const t of reportRows()) lines.push([repCell(t),t.title,(t.tags||[]).map(g=>"#"+g).join(" "),IMP[t.importance||2],"P"+(t.priority||2),t.due?fmtBR(t.due):"",t.due&&t.doneAt?(repDate(t)<=t.due?"sim":"não"):"",t.notes||""].map(q).join(";"));
+  const cols=repCols();
+  const lines=[[...cols.map(c=>c[0]),"No prazo","Anotações"].map(q).join(";")];
+  for(const t of reportRows()) lines.push([...cols.map(c=>c[0]==="Prazo"&&!t.due?"":c[1](t)),t.due&&t.doneAt?(repDate(t)<=t.due?"sim":"não"):"",t.notes||""].map(q).join(";"));
   return "﻿"+lines.join("\r\n");
 }
 function reportHTML(){
-  const R=UI.rep, rows=reportRows();
-  const tr=rows.map(t=>`<tr><td>${esc(repCell(t))}</td><td>${esc(t.title)}</td><td>${esc((t.tags||[]).map(g=>"#"+g).join(" "))}</td><td>${esc(IMP[t.importance||2])}</td><td>P${esc(t.priority||2)}</td><td>${t.due?esc(fmtBR(t.due)):"—"}</td></tr>`).join("");
-  return `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Relatório de tarefas ${esc(fmtBR(R.from))} a ${esc(fmtBR(R.to))}</title>
+  const R=UI.rep, rows=reportRows(), cols=repCols(), modo=repModo(), nome=repNomeSel();
+  const tr=rows.map(t=>`<tr>${cols.map(c=>`<td>${esc(c[1](t))}</td>`).join("")}</tr>`).join("");
+  const titulo=modo==="projeto"?`Relatório do projeto ${nome}`:modo==="membro"?`Relatório de ${nome}`:"Relatório de tarefas concluídas";
+  const filtro=modo==="projeto"?`Projeto: ${esc(nome)}`:modo==="membro"?`Membro da equipe: ${esc(nome)}`:`Grupos: ${R.tags.length?esc(R.tags.map(g=>"#"+g).join(", ")):"todos"}`;
+  return `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>${esc(titulo)} ${esc(fmtBR(R.from))} a ${esc(fmtBR(R.to))}</title>
 <style>body{font-family:system-ui,sans-serif;max-width:900px;margin:32px auto;padding:0 16px;color:#1c1b1a}h1{font-size:22px}table{border-collapse:collapse;width:100%;font-size:14px}th,td{border-bottom:1px solid #ece9e4;padding:6px 10px;text-align:left}th{background:#faf9f7}</style>
-<h1>Relatório de tarefas concluídas</h1><p>Período: ${fmtBR(R.from)} a ${fmtBR(R.to)} · Grupos: ${R.tags.length?esc(R.tags.map(g=>"#"+g).join(", ")):"todos"} · Total: ${rows.length}</p>
-<table><thead><tr><th>Concluída em</th><th>Tarefa</th><th>Grupos</th><th>Importância</th><th>Prioridade</th><th>Prazo</th></tr></thead><tbody>${tr}</tbody></table></html>`;
+<h1>${esc(titulo)}</h1><p>Tarefas concluídas · Período: ${fmtBR(R.from)} a ${fmtBR(R.to)} · ${filtro} · Total: ${rows.length}</p>
+<table><thead><tr>${cols.map(c=>`<th>${esc(c[0])}</th>`).join("")}</tr></thead><tbody>${tr}</tbody></table></html>`;
 }
 function downloadFile(name,data,type){
   try{
@@ -2204,14 +2257,15 @@ async function shareOrDownload(name,data,type){
   return downloadFile(name,data,type)?"ok":"fail";
 }
 async function exportFile(kind){
-  const R=UI.rep; const name=`relatorio-tarefas_${R.from}_a_${R.to}.${kind}`;
+  const R=UI.rep, modo=repModo(), slug=fold(repNomeSel()).replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"sem-nome";
+  const name=`${modo==="projeto"?"relatorio-projeto-"+slug:modo==="membro"?"relatorio-membro-"+slug:"relatorio-tarefas"}_${R.from}_a_${R.to}.${kind}`;
   const r=kind==="csv"?await shareOrDownload(name,reportCSV(),"text/csv;charset=utf-8"):await shareOrDownload(name,reportHTML(),"text/html;charset=utf-8");
   if(r==="shared"||r==="cancel") return;
   if(r==="ok") toast("Relatório exportado"); else { copyText(reportPlain()); toast("Não foi possível baixar. O relatório foi copiado."); }
 }
 /* Exportar PDF: abre o relatório numa página própria e chama a impressão (“Salvar como PDF”), como no cronograma */
 function exportReportPDF(){
-  if(!reportRows().length){ toast("Nenhuma tarefa concluída neste período com esses grupos."); return; }
+  if(!reportRows().length){ toast(repVazio()); return; }
   const html=reportHTML().replace(/<\/html>$/,`<style>html{-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{@page{size:A4;margin:14mm}body{margin:0;max-width:none}tr{break-inside:avoid}}</style><script>(function(){function ir(){setTimeout(function(){window.focus();window.print();},250);}if(document.readyState==="complete")ir();else window.addEventListener("load",ir);})();<\/script></html>`);
   const w=window.open("","_blank");
   if(w){ w.document.open(); w.document.write(html); w.document.close(); toast("Escolha “Salvar como PDF” na janela de impressão."); return; }
@@ -2220,7 +2274,7 @@ function exportReportPDF(){
   document.body.append(fr); fr.contentDocument.open(); fr.contentDocument.write(html); fr.contentDocument.close();
   setTimeout(()=>fr.remove(),60000);
 }
-function reportPlain(){ return ["Concluída em\tTarefa\tGrupos\tImportância\tPrioridade\tPrazo",...reportRows().map(t=>[repCell(t),t.title,(t.tags||[]).map(g=>"#"+g).join(" "),IMP[t.importance||2],"P"+(t.priority||2),t.due?fmtBR(t.due):""].join("\t"))].join("\n"); }
+function reportPlain(){ const cols=repCols(); return [cols.map(c=>c[0]).join("\t"),...reportRows().map(t=>cols.map(c=>c[0]==="Prazo"&&!t.due?"":c[1](t)).join("\t"))].join("\n"); }
 function copyText(txt){
   try{ navigator.clipboard.writeText(txt).then(()=>{},()=>fallbackCopy(txt)); }catch(e){ fallbackCopy(txt); }
 }
@@ -2625,7 +2679,7 @@ function renderProject(wrap,tag){
   $("#viewEyebrow").append("Projeto");
   setHeader("#"+tag,"");
   // o grupo do projeto não aparece mais sozinho: renomear/excluir o grupo fica aqui
-  $("#bandActions").append(homeBtn(),h("button",{class:"btn small band-row",onclick:()=>openTagModal(tag)},svg(ICON.edit,15),"Renomear / excluir grupo"));
+  $("#bandActions").append(h("button",{class:"btn small band-row",onclick:()=>openTagModal(tag)},svg(ICON.edit,15),"Renomear / excluir grupo"));
   const editing=UI.cronEdit===tag;
   // abas: Tarefas (como na tela do grupo) · Cronograma (montagem e cronograma) · Equipe (membros e envio)
   const tab=PROJ_TABS.includes(UI.projTab)?UI.projTab:"tarefas";
@@ -3617,7 +3671,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v32";
+const APP_VER="v33";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
@@ -3725,6 +3779,7 @@ document.addEventListener("pointerdown",e=>{ if(GQ&&!GQ.el.contains(e.target)) g
 $("#menuBtn").addEventListener("click",()=>$("#app").classList.add("nav-open"));
 $("#scrim").addEventListener("click",closeNav);
 $("#mselBtn").addEventListener("click",()=>setMulti(!UI.multiOn));
+$("#homeTopBtn").addEventListener("click",goStart);
 $("#configBtn").addEventListener("click",()=>{closeNav();openConfig();});
 document.addEventListener("keydown",e=>{
   if(e.key==="/"&&!e.target.matches("input,textarea,select")){e.preventDefault();$("#app").classList.add("nav-open");$("#q").focus();}
