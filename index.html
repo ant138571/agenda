@@ -318,6 +318,14 @@ button{cursor:pointer}
 .detail .field.d-inl>.pn-more{flex-basis:100%}
 .detail .gest-hint{padding:0 2px}
 .detail .d-foot{padding:6px 14px}
+/* v41: estrela clicável nas linhas; fechar no topo da janela */
+.star-btn{border:0;background:none;cursor:pointer;min-width:34px;min-height:34px;place-items:center;border-radius:8px;color:var(--faint)}
+.star-btn.on{color:var(--imp)}
+.star-btn:not(.on){opacity:.55}
+.star-btn:hover{opacity:1;background:var(--hover)}
+.modal-top{display:flex;align-items:center;justify-content:space-between;gap:8px;position:sticky;top:-20px;z-index:2;background:var(--panel);margin:-20px -20px 0;padding:14px 20px 8px}
+.modal-top h3{margin:0}
+.modal-top .icon-btn{margin:-6px -8px -6px 0}
 /* v39: estrela no retângulo da tarefa; prazo numa linha com a urgência */
 .d-star{flex:none;align-self:center;width:40px;height:40px;margin:-6px -6px -6px 0;border:0;background:none;border-radius:10px;display:grid;place-items:center;color:var(--faint);cursor:pointer}
 .d-star:hover{background:var(--hover)}
@@ -1683,7 +1691,7 @@ function taskRow(t,opt={}){
   else if(t.due&&t.due!==opt.dayKey&&!occ) meta.push(h("span",{class:"m-due"+(t.due===td?" today":"")},t.due===td?"hoje":fmtDue(t.due)));
   if(rec) meta.push(h("span",{class:"m-rep",title:"Repete: "+repText(t)},svg(ICON.repeat,12),repShort(t)));
   if(!t.done&&t.remindAt&&tsOf(t.remindAt)) meta.push(h("span",{class:"m-rem"+(tsOf(t.remindAt)<=Date.now()?" past":""),title:"Lembrete"},svg(ICON.bell,12),fmtRemind(t.remindAt)));
-  if(!t.done&&p===1) meta.push(h("span",{class:"m-p1",title:PRI[1]},"P1"));
+  if(!t.done&&p===1) meta.push(h("span",{class:"m-p1",title:PRI[1]},"Urgente"));   // v41: era "P1"
   if(!t.done&&p===3) meta.push(h("span",{class:"m-p3",title:PRI[3]},"P3"));
   if(!t.done&&t.importance===1) meta.push(h("span",{class:"m-low"},"baixa imp."));
   if(t.steps&&t.steps.length){ const nd=t.steps.filter(x=>x.done).length; meta.push(h("span",{class:"m-steps"+(nd===t.steps.length?" all":""),title:"Etapas concluídas"},svg(ICON.check,12,'stroke-width="3"'),`${nd}/${t.steps.length}`)); }
@@ -1700,7 +1708,10 @@ function taskRow(t,opt={}){
       h("button",{class:"check","aria-label":t.done?"Marcar como pendente":"Concluir",onclick:e=>{e.stopPropagation();toggleDone(t.id,occ||undefined);}},
         h("span",{},t.done?svg(ICON.check,13,'stroke-width="3.2"'):null)),
       h("div",{class:"t-main"},h("div",{class:"t-title",title:t.title},t.title),meta.length?h("div",{class:"t-meta"},meta):null),
-      t.importance===3&&!t.done?h("span",{class:"star-ic",title:"Importância alta"},svg(ICON.star,15,'fill="currentColor"')):null,
+      // v41: estrela clicável — põe/tira a importância alta (Alta ⇄ Média); sem importância alta, estrela vazada
+      !t.done?h("button",{class:"star-ic star-btn"+(t.importance===3?" on":""),type:"button","aria-pressed":t.importance===3?"true":"false",
+        title:t.importance===3?"Importante (tocar: tirar)":"Marcar como importante","aria-label":t.importance===3?"Tirar a importância alta":"Marcar como importante",
+        onclick:e=>{ e.stopPropagation(); patchTask(t.id,{importance:t.importance===3?2:3}); }},svg(ICON.star,15,t.importance===3?'fill="currentColor"':"")):null,
       opt.cronoBtn&&!t.done?h("button",{class:"cr-btn"+(opt.cronoBtn==="tirar"?" tirar":""),title:opt.cronoBtn==="tirar"?"Tirar do cronograma":"Incluir no cronograma","aria-label":opt.cronoBtn==="tirar"?"Tirar do cronograma":"Incluir no cronograma",
         onclick:e=>{e.stopPropagation();cronoToggle(t.id,opt.cronoBtn!=="tirar");}},svg(opt.cronoBtn==="tirar"?ICON.minus:ICON.plus,16)):null,
       opt.toDay&&!t.done&&!mine?h("button",{class:"to-day",title:"Trazer para o Meu Dia","aria-label":"Trazer para o Meu Dia",onclick:e=>{e.stopPropagation();bringToday(t.id);}},svg(ICON.sun,14),"Hoje"):null,
@@ -2540,12 +2551,14 @@ function fallbackCopy(txt){ openModal("Copie o relatório",h("textarea",{id:"cop
 function copyReport(){ const txt=reportPlain(); try{ navigator.clipboard.writeText(txt).then(()=>toast("Tabela copiada. Cole no Excel ou Word."),()=>fallbackCopy(txt)); }catch(e){ fallbackCopy(txt);} }
 
 /* ---------- Modais ---------- */
-function openModal(title,body,actions){
+function openModal(title,body,actions,o){
   const root=$("#modalRoot");
   const close=()=>root.replaceChildren();
+  const topo=!!(o&&o.fecharNoTopo);   // v41: botão fechar (×) em cima, à direita, no lugar do "Fechar" de baixo
   const bg=h("div",{class:"modal-bg",onclick:e=>{if(e.target===bg)close();}},
-    h("div",{class:"modal",role:"dialog","aria-label":title},h("h3",{},title),body,
-      h("div",{class:"row-end"},...actions.map(a=>h("button",{class:"btn"+(a.cls?" "+a.cls:""),onclick:()=>{ if(a.run()!==false) close(); }},a.label)),h("button",{class:"btn",onclick:close},"Fechar"))));
+    h("div",{class:"modal",role:"dialog","aria-label":title},
+      topo?h("div",{class:"modal-top"},h("h3",{},title),h("button",{class:"icon-btn","aria-label":"Fechar",title:"Fechar",onclick:close},svg(ICON.x,20))):h("h3",{},title),body,
+      actions.length||!topo?h("div",{class:"row-end"},...actions.map(a=>h("button",{class:"btn"+(a.cls?" "+a.cls:""),onclick:()=>{ if(a.run()!==false) close(); }},a.label)),topo?null:h("button",{class:"btn",onclick:close},"Fechar")):null));
   root.replaceChildren(bg);
 }
 /* v38: escolher os grupos da tarefa num toque — janela com todos os grupos (cor; projetos marcados), cada toque
@@ -2562,11 +2575,12 @@ function openGroupPicker(id){
     const nomes=ordem.filter(n=>!q||fold(n).includes(q));
     lista.replaceChildren(...nomes.map(n=>{ const on=tem.has(n), pj=!!(VIEW.projects||{})[n];
       return h("button",{class:"gp-item"+(on?" on":""),type:"button","aria-pressed":on?"true":"false",onclick:()=>{ const c=VIEW.tasks[id]; if(!c) return;
-          UI.forceDetail=true; patchTask(id,{tags:on?(c.tags||[]).filter(x=>x!==n):[...(c.tags||[]),n]}); paint(); }},
+          $("#modalRoot").replaceChildren();   // v41: escolheu, fecha
+          UI.forceDetail=true; patchTask(id,{tags:on?(c.tags||[]).filter(x=>x!==n):[...(c.tags||[]),n]}); }},
         h("i",{style:`background:${tagColor(n)}`}),h("span",{},"#"+n),pj?h("small",{},(VIEW.projects[n].titulo||"projeto")):null,
         h("span",{class:"gp-ck","aria-hidden":"true"},on?svg(ICON.check,14,'stroke-width="3"'):null)); }));
     if(nq&&!allTags().names.includes(nq)) lista.append(h("button",{class:"gp-item gp-novo",type:"button",onclick:()=>{ const c=VIEW.tasks[id]; if(!c) return;
-        ensureTags([nq]); UI.forceDetail=true; patchTask(id,{tags:[...new Set([...(c.tags||[]),nq])]}); busca.value=""; paint(); }},svg(ICON.plus,15),h("span",{},"Criar #"+nq)));
+        $("#modalRoot").replaceChildren(); ensureTags([nq]); UI.forceDetail=true; patchTask(id,{tags:[...new Set([...(c.tags||[]),nq])]}); }},svg(ICON.plus,15),h("span",{},"Criar #"+nq)));
     if(!lista.childElementCount) lista.append(h("div",{class:"gest-hint",style:"text-align:left"},"Nenhum grupo ainda: escreva um nome acima para criar."));
   };
   busca.addEventListener("input",paint);
@@ -3987,9 +4001,9 @@ function keysSection(){
   return sec;
 }
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
-function openConfig(){ openModal("Configurações",configBody(),[]); }
+function openConfig(){ openModal("Configurações",configBody(),[],{fecharNoTopo:true}); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v40";
+const APP_VER="v41";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
