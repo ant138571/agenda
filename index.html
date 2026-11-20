@@ -876,6 +876,7 @@ const uid=()=> "t"+Date.now().toString(36)+Math.random().toString(36).slice(2,7)
 const normTag=s=>String(s).trim().replace(/^#+/,"").toLowerCase().replace(/\s+/g,"-").replace(/[^\p{L}\p{N}_.\-]/gu,"").slice(0,40);
 const TAG_COLORS=["#2F6FB0","#B5563A","#3C8A5E","#8A5AB5","#B08A2F","#2F8C95","#B54A7A","#5C6BC0","#7A8B2F","#C0662F"];
 const IMP={3:"Alta",2:"Média",1:"Baixa"};
+const IMP_EST={3:"Com estrela",2:"Sem estrela",1:"Pouco importante"};   // v43: nomes da importância nos Detalhes
 const PRI={1:"P1 · Urgente",2:"P2 · Normal",3:"P3 · Pode esperar"};
 const lsGet=(k,f)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):f;}catch(e){return f;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}};
@@ -1643,7 +1644,7 @@ function filterBar(v){
   const seg=(label,val,opts,set)=>h("span",{},h("span",{class:"flabel"},label),h("span",{class:"seg"},opts.map(([k,t])=>h("button",{class:val===k?"on":"",onclick:()=>{set(k);saveUI();render();}},t))));
   const f=h("div",{class:"filters"},
     // v42: critérios novos — importante ou não; urgente, normal ou pode esperar
-    seg("Importância",UI.imp,[[0,"Todas"],[3,"Importantes"],[-3,"Não importantes"]],k=>UI.imp=k),
+    seg("Importância",UI.imp,[[0,"Todas"],[3,"Com estrela"],[-3,"Sem estrela"]],k=>UI.imp=k),   // v43: com/sem estrela
     seg("Urgência",UI.pri,[[0,"Todas"],[1,"Urgente"],[2,"Normal"],[3,"Pode esperar"]],k=>UI.pri=k));
   if(v!=="priority"&&v!=="planned"&&v!=="done"&&v!=="today"&&v!=="search"){
     const sel=h("select",{id:"sortSel","aria-label":"Ordenar por",onchange:e=>{UI.sort=e.target.value;saveUI();render();}},
@@ -2300,9 +2301,10 @@ function renderDetail(){
         corpo:()=>[h("div",{class:"field d-inl"},remVal,remOpts,remPick,noPerm?h("button",{class:"pn-more",onclick:()=>openSettings("rem")},"Ativar notificações neste aparelho ›"):null)]},
       {k:"rep",ic:svg(ICON.repeat,15),txt:rep?cap(t.due?repText(t):REP_LABEL[rep.freq].toLowerCase()):"Repetir",tem:!!rep,titulo:"Repetir",corpo:()=>[repField]},
       // v39: a urgência foi para a área do Prazo e a estrela para o retângulo da tarefa; a etiqueta fica só com a importância
-      {k:"class",ic:svg(ICON.star,15,'fill="currentColor" stroke="none"'),txt:"Importância "+IMP[imp].toLowerCase(),tem:imp!==2,titulo:"Importância",
+      // v43: importância dita pela estrela: Com estrela (alta) · Sem estrela (média, padrão) · Pouco importante (baixa)
+      {k:"class",ic:svg(ICON.star,15,imp===3?'fill="currentColor" stroke="none"':""),txt:IMP_EST[imp],tem:imp!==2,titulo:"Importância",
         corpo:()=>[h("div",{class:"field"},h("span",{class:"lbl"},"Quanto a tarefa pesa nos seus objetivos"),
-            h("div",{class:"opts"},[3,2,1].map(v=>opt(imp,v,IMP[v],val=>patchTask(id,{importance:val})))))]},
+            h("div",{class:"opts"},[3,2,1].map(v=>opt(imp,v,IMP_EST[v],val=>patchTask(id,{importance:val})))))]},
       {k:"etapas",ic:svg(IC_ETAPAS,15),txt:steps.length?`Etapas ${nDone}/${steps.length}`:"Etapas",tem:!!steps.length,titulo:"Etapas"+(steps.length?` · ${nDone} de ${steps.length}`:""),corpo:()=>[stepBox]},
       projTags.length?{k:"proj",ic:svg(ICON.user,15),txt:respNomes.length?respNomes.join(", "):"Responsáveis",tem:!!respNomes.length||inCrono(t),titulo:"Projeto e responsáveis",
         corpo:()=>[h("div",{class:"field"},h("div",{class:"toggle-row"},h("span",{style:"display:inline-flex;gap:8px;align-items:center"},svg(ICON.folder,17),(inCrono(t)?"No cronograma de ":"Fora do cronograma de ")+projTags.map(g=>"#"+g).join(", ")),
@@ -4008,7 +4010,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[],{fecharNoTopo:true}); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v42";
+const APP_VER="v43";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
