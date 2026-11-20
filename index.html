@@ -1256,6 +1256,10 @@ function applyOrder(ids){
 
 /* ================= Estado de UI ================= */
 const UI=Object.assign({view:"home",imp:0,pri:0,sort:"due",showDone:false,sel:null,q:"",rep:{from:null,to:null,tags:[]},panels:{}},lsGet(UI_KEY,{}),{sel:null,detailHidden:false,q:"",homeDay:null,tlLeft:null,multi:new Set(),multiOn:false,projTab:"tarefas",crDone:{}});
+/* v42: filtro de importância passa a ser Importantes (3) / Não importantes (-3); escolhas antigas (Média/Baixa) viram
+   "Não importantes" */
+if(UI.imp===2||UI.imp===1) UI.imp=-3;
+const impFiltro=t=>!UI.imp||(UI.imp===-3?(t.importance||2)!==3:(t.importance||2)===UI.imp);
 function saveUI(){ lsSet(UI_KEY,{view:UI.view,imp:UI.imp,pri:UI.pri,sort:UI.sort,showDone:UI.showDone,panels:UI.panels}); }
 /* grupo que virou projeto: a tela do grupo dá lugar à do projeto (aba Tarefas). tab: aba do projeto (tarefas | cronograma | equipe) */
 function go(view,tab){ if(view.startsWith("tag:")&&(VIEW.projects||{})[view.slice(4)]){ view="proj:"+view.slice(4); tab=tab||"tarefas"; }
@@ -1606,7 +1610,7 @@ function renderList(wrap,v,po){
   }
   // filtros
   if(v!=="done") list=list.filter(t=>showDoneDefault||!t.done||(v==="today"));
-  if(UI.imp) list=list.filter(t=>(t.importance||2)===UI.imp);
+  if(UI.imp) list=list.filter(impFiltro);
   if(UI.pri) list=list.filter(t=>(t.priority||2)===UI.pri);
   if(v!=="done"&&v!=="search") out.append(addBar(defaults));
   out.append(filterBar(v));
@@ -1638,11 +1642,12 @@ function tagActions(g){
 function filterBar(v){
   const seg=(label,val,opts,set)=>h("span",{},h("span",{class:"flabel"},label),h("span",{class:"seg"},opts.map(([k,t])=>h("button",{class:val===k?"on":"",onclick:()=>{set(k);saveUI();render();}},t))));
   const f=h("div",{class:"filters"},
-    seg("Importância",UI.imp,[[0,"Todas"],[3,"Alta"],[2,"Média"],[1,"Baixa"]],k=>UI.imp=k),
-    seg("Prioridade",UI.pri,[[0,"Todas"],[1,"P1"],[2,"P2"],[3,"P3"]],k=>UI.pri=k));
+    // v42: critérios novos — importante ou não; urgente, normal ou pode esperar
+    seg("Importância",UI.imp,[[0,"Todas"],[3,"Importantes"],[-3,"Não importantes"]],k=>UI.imp=k),
+    seg("Urgência",UI.pri,[[0,"Todas"],[1,"Urgente"],[2,"Normal"],[3,"Pode esperar"]],k=>UI.pri=k));
   if(v!=="priority"&&v!=="planned"&&v!=="done"&&v!=="today"&&v!=="search"){
     const sel=h("select",{id:"sortSel","aria-label":"Ordenar por",onchange:e=>{UI.sort=e.target.value;saveUI();render();}},
-      [["manual","Manual (arrastar)"],["due","Prazo"],["priority","Prioridade"],["importance","Importância"],["created","Mais recentes"],["title","Nome"]].map(([k,t])=>h("option",{value:k,selected:UI.sort===k},t)));
+      [["manual","Manual (arrastar)"],["due","Prazo"],["priority","Urgência"],["importance","Importância"],["created","Mais recentes"],["title","Nome"]].map(([k,t])=>h("option",{value:k,selected:UI.sort===k},t)));
     f.append(h("span",{},h("span",{class:"flabel"},"Ordenar"),sel));
   }
   if(v!=="done"&&v!=="search"&&v!=="today"){
@@ -1669,7 +1674,7 @@ function addBar(defaults,ids){
     const nid=createTask(p.title,extra), nt=VIEW.tasks[nid];
     // filtros de importância/prioridade (só nas listas) esconderiam a nova tarefa: são limpos para ela aparecer selecionada
     const inList=!UI.q&&UI.view!=="home"&&(!UI.view.startsWith("proj:")||UI.projTab==="tarefas")&&UI.view!=="report"&&UI.view!=="projects";
-    if(inList&&nt&&((UI.imp&&(nt.importance||2)!==UI.imp)||(UI.pri&&(nt.priority||2)!==UI.pri))){ UI.imp=0; UI.pri=0; saveUI(); toast("Tarefa adicionada · filtros limpos para mostrá-la"); }
+    if(inList&&nt&&((UI.imp&&!impFiltro(nt))||(UI.pri&&(nt.priority||2)!==UI.pri))){ UI.imp=0; UI.pri=0; saveUI(); toast("Tarefa adicionada · filtros limpos para mostrá-la"); }
     else toast("Tarefa adicionada");
     if(!UI.multiOn){ UI.sel=nid; UI.detailHidden=!detOpen; render(); }
     setTimeout(()=>{const i=document.getElementById(inId); if(i) i.focus();},0);
@@ -4003,7 +4008,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[],{fecharNoTopo:true}); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v41";
+const APP_VER="v42";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
