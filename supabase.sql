@@ -87,3 +87,15 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function public.lembretes_pendentes() from public, anon, authenticated;
 grant execute on function public.lembretes_pendentes() to service_role;
+
+-- ================= Aviso imediato entre aparelhos (v34) =================
+-- Liga o Supabase Realtime na tabela docs: quando uma tarefa muda num aparelho, os outros sincronizam na hora
+-- (o RLS continua valendo: cada pessoa só recebe avisos dos próprios documentos). Pode rodar de novo sem problema.
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (select 1 from pg_publication_tables
+                     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'docs') then
+    alter publication supabase_realtime add table public.docs;
+  end if;
+end $$;

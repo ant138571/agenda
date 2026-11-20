@@ -486,6 +486,27 @@ details.mail-note p{margin-top:6px}
 .ctx button{border:0;background:none;text-align:left;padding:8px 10px;border-radius:8px;display:flex;gap:8px;align-items:center;font-weight:600;font-size:14px}
 .ctx button:hover,.ctx button:focus-visible{background:var(--hover);outline:none}
 .ctx button span{color:var(--muted)}
+/* v34: calendário do Prazo (mês em semanas, segunda a domingo) */
+input.cal-in{cursor:pointer}
+.calpop{position:fixed;z-index:80;background:var(--panel);border:1px solid var(--line-strong);border-radius:14px;box-shadow:var(--shadow);padding:10px;width:288px;user-select:none;-webkit-user-select:none}
+.calpop .cal-hd{display:flex;align-items:center;gap:4px;margin-bottom:6px}
+.calpop .cal-tt{flex:1;text-align:center;font-weight:800;font-size:14.5px}
+.calpop .cal-nav{border:0;background:none;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:var(--ink)}
+.calpop .cal-nav:hover:not(:disabled){background:var(--hover)}
+.calpop .cal-nav:disabled{opacity:.3}
+.calpop .cal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.calpop .cal-wd{font-size:11px;font-weight:700;color:var(--faint);text-align:center;padding:4px 0}
+.calpop .cal-wd.we{color:var(--muted)}
+.calpop .cd{border:0;background:none;height:36px;border-radius:999px;font-size:13.5px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.calpop .cd.o{color:var(--faint);font-weight:500}
+.calpop .cd:hover:not(:disabled){background:var(--hover)}
+.calpop .cd:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.calpop .cd.t{box-shadow:inset 0 0 0 1.5px var(--accent);color:var(--accent-text)}
+.calpop .cd.s{background:var(--accent);color:var(--accent-ink)}
+.calpop .cd:disabled{opacity:.28;cursor:default}
+.calpop .cal-ft{display:flex;gap:6px;justify-content:space-between;margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
+.calpop .cal-ft button{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:700;color:var(--ink)}
+.calpop .cal-ft button:hover{background:var(--hover)}
 .pn .gest-hint{text-align:left;padding:0}
 /* atalhos de teclado (Configurações) */
 .keys{display:flex;flex-direction:column}
@@ -837,7 +858,14 @@ function applyToServer(op){
 /* meus dados (Configurações): nome e e-mail do dono do app; viram o membro "eu" de todos os projetos */
 function cleanPerfil(d){
   d=d&&typeof d==="object"?d:{};
-  return {nome:typeof d.nome==="string"?d.nome.trim().slice(0,120):"",email:typeof d.email==="string"?d.email.trim().slice(0,200):""};
+  const o={nome:typeof d.nome==="string"?d.nome.trim().slice(0,120):"",email:typeof d.email==="string"?d.email.trim().slice(0,200):""};
+  if(typeof d.rollover==="boolean") o.rollover=d.rollover;   // v34: opção "Tarefas inacabadas", a mesma em todos os aparelhos
+  // v34: lembretes e avisos por e-mail (lidos pela função "lembretes" do servidor)
+  if(typeof d.emailLembrete==="boolean") o.emailLembrete=d.emailLembrete;
+  if(typeof d.emailAviso==="boolean") o.emailAviso=d.emailAviso;
+  if(Number.isInteger(d.emailHora)&&d.emailHora>=5&&d.emailHora<=10) o.emailHora=d.emailHora;
+  if(typeof d.appUrl==="string"&&/^https:\/\/[^\s"'<>]+$/.test(d.appUrl)&&d.appUrl.length<=300) o.appUrl=d.appUrl;
+  return o;
 }
 function applyQueue(base){
   const saved=S.server; S.server={tasks:{...base.tasks},tags:{...base.tags},projects:{...(base.projects||{})},perfil:{...(base.perfil||{})},trash:{...(base.trash||{})}};
@@ -851,19 +879,44 @@ function enqueueMany(ops){
   if(!ops.length) return;
   // guarda só a última alteração de cada documento
   const paths=new Set(ops.map(o=>o.path));
+  // v34: alteração parcial (patch) sobre outra parcial ainda não enviada junta os campos das duas; sobre uma gravação
+  // inteira (tarefa nova, restaurada…), vai inteira
+  const prevOp=new Map(S.queue.filter(q=>paths.has(q.path)).map(q=>[q.path,q]));
+  ops=ops.map(o=>{ const q=prevOp.get(o.path); if(!o.patch||!q) return o; if(q.op==="set"&&q.patch) return {...o,patch:{...q.patch,...o.patch}}; const {patch,...full}=o; return full; });
   S.queue=S.queue.filter(q=>!paths.has(q.path)); S.queue.push(...ops);
   saveCache(); recompute(); render(); scheduleSync(800);
 }
 function enqueue(op){ enqueueMany([op]); }
 const tsOf=s=>{ if(!s) return 0; const t=Date.parse(String(s).replace(/(\.\d{3})\d+/,"$1")); return isNaN(t)?0:t; };
+/* v34: alteração parcial de tarefa (op.patch: só os campos mudados) é aplicada sobre a versão ATUAL do servidor, e não
+   sobre a cópia local, que pode estar atrasada: assim um aparelho desatualizado não reabre a tarefa concluída no outro,
+   não traz de volta uma tarefa apagada nem desfaz o que mudou lá. Tarefa apagada no servidor: a alteração é descartada. */
 async function pushQueue(){
   while(S.queue.length){
     const chunk=S.queue.slice(0,200);
-    const rows=chunk.map(o=>({user_id:S.user.id,id:o.path,data:o.op==="delete"?null:o.data,deleted:o.op==="delete"}));
-    const {error}=await S.sb.from("docs").upsert(rows,{onConflict:"user_id,id"});
-    if(error) throw error;
-    for(const o of chunk){ applyToServer(o); const i=S.queue.indexOf(o); if(i>=0) S.queue.splice(i,1); }
-    saveCache();
+    const pids=chunk.filter(o=>o.op==="set"&&o.patch).map(o=>o.path), cur={};
+    if(pids.length){
+      const {data,error}=await S.sb.from("docs").select("id,data,deleted").in("id",pids);
+      if(error) throw error;
+      for(const r of data||[]) cur[r.id]=r;
+    }
+    const send=[], gone=[];
+    for(const o of chunk){
+      if(o.op==="set"&&o.patch){ const r=cur[o.path];
+        if(r&&r.deleted){ gone.push(o); continue; }
+        if(r&&r.data&&typeof r.data==="object") o.data={...r.data,...o.patch};
+      }
+      send.push(o);
+    }
+    if(send.length){
+      const rows=send.map(o=>({user_id:S.user.id,id:o.path,data:o.op==="delete"?null:o.data,deleted:o.op==="delete"}));
+      const {error}=await S.sb.from("docs").upsert(rows,{onConflict:"user_id,id"});
+      if(error) throw error;
+    }
+    for(const o of send) applyToServer(o);
+    for(const o of gone) applyToServer({op:"delete",path:o.path});
+    for(const o of chunk){ const i=S.queue.indexOf(o); if(i>=0) S.queue.splice(i,1); }
+    saveCache(); if(gone.length) recompute();
   }
 }
 async function pullChanges(){
@@ -885,6 +938,7 @@ async function sync(){
   try{
     await pushQueue(); await pullChanges();
     S.mode="online"; S.lastError="";
+    if(typeof (VIEW.perfil||{}).rollover!=="boolean"&&PREFS.rollover===true) setRollover(true);   // v34: leva para a conta a opção ligada neste aparelho
     if(rollPending){ rollPending=false; rollOver(); }   // tarefas inacabadas: só depois de receber os dados do servidor
   }catch(e){
     const msg=(e&&(e.message||e.error_description))||String(e);
@@ -912,7 +966,23 @@ function updateSync(){
   else if(n){ cls="dot warn"; txt=`${n} alteração(ões) a enviar`; }
   el.innerHTML=`<span class="${cls}"></span><span>${esc(txt)}</span>`;
 }
+/* v34: aviso imediato do servidor (Supabase Realtime) quando um documento muda em outro aparelho: dispara a
+   sincronização na hora, em vez de esperar a próxima rodada. Precisa da tabela docs na publicação supabase_realtime
+   (supabase.sql); sem ela, nada muda (a sincronização periódica continua). */
+let RT=null, RT_UID=null;
+function rtStop(){ if(RT&&S.sb){ try{ S.sb.removeChannel(RT); }catch(e){} } RT=null; RT_UID=null; }
+function rtStart(){
+  if(!S.sb||!S.user||!S.sb.channel) return;
+  if(RT&&RT_UID===S.user.id) return;
+  rtStop(); RT_UID=S.user.id;
+  try{
+    RT=S.sb.channel("docs-"+S.user.id)
+      .on("postgres_changes",{event:"*",schema:"public",table:"docs",filter:"user_id=eq."+S.user.id},()=>scheduleSync(300))
+      .subscribe(st=>{ if(st==="SUBSCRIBED") scheduleSync(300); });
+  }catch(e){ RT=null; RT_UID=null; }
+}
 function initClient(){
+  rtStop();
   S.sb=null; S.user=null;
   if(!CFG.url||!CFG.key){ updateSync(); return; }
   if(!window.supabase||!window.supabase.createClient){ S.lastError="Biblioteca de sincronização não carregou."; updateSync(); return; }
@@ -922,7 +992,7 @@ function initClient(){
   S.sb.auth.onAuthStateChange((ev,session)=>{
     S.user=session?session.user:null;
     if(S.user){ ownerCheck(S.user.id); pedirPersistencia(); }
-    setTimeout(()=>{ updateSync(); renderSettingsIfOpen(); if(S.user){ sync(); ensurePush(); } else if(rollPending){ rollPending=false; rollOver(); } },0);
+    setTimeout(()=>{ updateSync(); renderSettingsIfOpen(); if(S.user){ sync(); ensurePush(); rtStart(); } else { rtStop(); if(rollPending){ rollPending=false; rollOver(); } } },0);
   });
 }
 /* dono da cópia local: ao entrar com OUTRA conta, a cópia e as alterações pendentes da conta anterior não vão para a
@@ -947,8 +1017,11 @@ function pedirPersistencia(){
 }
 window.addEventListener("online",()=>scheduleSync(200));
 window.addEventListener("offline",()=>{ S.mode="offline"; updateSync(); });
-document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") scheduleSync(200); });
-setInterval(()=>{ if(document.visibilityState==="visible"&&S.user&&navigator.onLine) sync(); },30000);
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") scheduleSync(200);
+  else if(S.queue.length&&S.user&&navigator.onLine){ clearTimeout(syncTimer); sync(); } });   // v34: celular bloqueado logo depois de concluir: envia na hora
+window.addEventListener("focus",()=>scheduleSync(200));   // v34: computador — voltar à janela (sem ela ter ficado escondida) também sincroniza
+window.addEventListener("pagehide",()=>{ if(S.queue.length&&S.user&&navigator.onLine){ clearTimeout(syncTimer); sync(); } });
+setInterval(()=>{ if(document.visibilityState==="visible"&&S.user&&navigator.onLine) sync(); },15000);   // v34: 15 s (era 30 s); com o aviso do servidor, é só a reserva
 
 /* ================= Modelo ================= */
 const tasksArr=()=>Object.entries(VIEW.tasks).map(([id,t])=>({id,...t}));
@@ -978,8 +1051,10 @@ function ensureTags(list){
   for(const n of list) if(!m[n]){ m[n]={color:TAG_COLORS[hash(n)%TAG_COLORS.length]}; changed=true; }
   if(changed) saveTags(m);
 }
-function putTask(id,data){ const clean={...data}; delete clean.id; clean.updatedAt=new Date().toISOString(); enqueue({op:"set",path:"tasks/"+id,data:clean}); }
-function patchTask(id,patch){ const cur=VIEW.tasks[id]; if(!cur) return; putTask(id,{...cur,...patch}); }
+/* patch (v34): só os campos mudados; no envio, aplicados sobre a versão atual do servidor (ver pushQueue) */
+const taskOp=(id,data,patch)=>{ const op={op:"set",path:"tasks/"+id,data}; if(patch){ const p={...patch}; delete p.id; p.updatedAt=data.updatedAt; op.patch=p; } return op; };
+function putTask(id,data,patch){ const clean={...data}; delete clean.id; clean.updatedAt=new Date().toISOString(); enqueue(taskOp(id,clean,patch)); }
+function patchTask(id,patch){ const cur=VIEW.tasks[id]; if(!cur) return; putTask(id,{...cur,...patch},patch); }
 function deleteTask(id){ if(UI.sel===id){UI.sel=null;} enqueueMany(trashOps(id)); }
 /* lixeira: a tarefa apagada vai para trash/<id> (com deletedAt) e é apagada de vez depois de TRASH_DIAS dias */
 const TRASH_DIAS=10;
@@ -1088,7 +1163,12 @@ const dueNoDia=(t,td)=>!!t.due&&(PREFS.semAtrasadas!==false?t.due===td:t.due<=td
 const tiradaDoDia=(t,td)=>{ const m=t.myDay; if(m==="no:"+td) return true;
   if(PREFS.tirarAtrasada===false||typeof m!=="string"||!/^no:\d{4}-\d{2}-\d{2}$/.test(m)) return false;
   const x=m.slice(3); return x<td&&!!t.due&&t.due<x; };
-const inMyDay=t=>{const td=today(); return !t.done&&!tiradaDoDia(t,td)&&(t.myDay===td||dueNoDia(t,td));};
+/* recorrentes (v34): entram no Meu Dia em todo dia que tem ocorrência em aberto — também quando uma ocorrência
+   anterior ficou sem concluir (prazo atrasado) —; "Tirar do Meu Dia" vale só para aquele dia */
+const recNoMeuDia=(t,td)=>!t.done&&t.myDay!=="no:"+td&&(recOn(t,td)||(t.myDay===td&&!recClosed(t,td)));
+/* recorrente no Meu Dia de hoje: vista como a ocorrência de hoje (concluir marca hoje, não a data atrasada) */
+const meuDiaView=t=>{ const td=today(); return isRec(t)&&recOn(t,td)?occView(t,td):t; };
+const inMyDay=t=>{const td=today(); if(isRec(t)) return recNoMeuDia(t,td); return !t.done&&!tiradaDoDia(t,td)&&(t.myDay===td||dueNoDia(t,td));};
 function toggleMyDay(t){ const td=today(); if(inMyDay(t)){ patchTask(t.id,{myDay:"no:"+td}); toast("Tirada do Meu Dia"); } else { patchTask(t.id,{myDay:td}); toast("Adicionada ao Meu Dia"); } }
 /* restaura uma tarefa exatamente como estava (usado no “Desfazer”) */
 function restoreTask(id,data){ const ops=[{op:"set",path:"tasks/"+id,data:{...data,updatedAt:new Date().toISOString()}}]; if((VIEW.trash||{})[id]) ops.push({op:"delete",path:"trash/"+id}); enqueueMany(ops); }   // desfazer “apagar”: sai também da lixeira
@@ -1112,7 +1192,7 @@ function runRight(id,ra){ const prev=VIEW.tasks[id]; if(!prev||!ra) return; ra.r
 /* grava a nova ordem manual (campo “ord”) das tarefas de uma lista */
 function applyOrder(ids){
   const now=new Date().toISOString(), ops=[];
-  ids.forEach((id,i)=>{ const t=VIEW.tasks[id]; const ord=(i+1)*1000; if(t&&t.ord!==ord) ops.push({op:"set",path:"tasks/"+id,data:{...t,ord,updatedAt:now}}); });
+  ids.forEach((id,i)=>{ const t=VIEW.tasks[id]; const ord=(i+1)*1000; if(t&&t.ord!==ord) ops.push(taskOp(id,{...t,ord,updatedAt:now},{ord})); });
   enqueueMany(ops);
 }
 
@@ -1266,7 +1346,7 @@ function renderHome(wrap){
   let dayOpen, dayDone;
   // recorrentes: a data concluída continua aparecendo no dia, como concluída
   const recDoneOn=all.filter(t=>isRec(t)&&(t.doneDates||[]).includes(sel)).map(t=>occView(t,sel));
-  if(isToday){ dayOpen=sortTasks(open.filter(inMyDay),"manual"); dayDone=[...all.filter(t=>t.done&&t.doneAt&&ymd(new Date(t.doneAt))===td),...recDoneOn]; }
+  if(isToday){ dayOpen=sortTasks(open.filter(inMyDay),"manual").map(meuDiaView); dayDone=[...all.filter(t=>t.done&&t.doneAt&&ymd(new Date(t.doneAt))===td),...recDoneOn]; }
   else { dayOpen=sortTasks(open.filter(t=>dueOn(t,sel)),"manual").map(t=>isRec(t)?occView(t,sel):t); dayDone=[...all.filter(t=>t.done&&((t.doneAt&&ymd(new Date(t.doneAt))===sel)||t.due===sel)),...recDoneOn]; }
   const late=dayOpen.filter(t=>isLate(t)&&!(t._occ&&t._occ!==t.due)).length;
   left.append(h("div",{class:"col-head"},
@@ -1447,7 +1527,7 @@ function renderList(wrap,v,po){
   else if(v==="search"){ title="Pesquisa"; sub=`Resultados para “${UI.q}”`; list=searchTasks(list,UI.q); showDoneDefault=true; }
   else if(v==="today"){ title="Meu Dia"; sub=fmtLong(new Date());
     const recDone=list.filter(t=>isRec(t)&&(t.doneDates||[]).includes(td)&&!inMyDay(t)).map(t=>occView(t,td));
-    list=[...list.filter(t=>inMyDay(t)||(t.done&&(t.myDay===td||(!tiradaDoDia(t,td)&&dueNoDia(t,td)&&t.doneAt&&ymd(new Date(t.doneAt))===td)))),...recDone]; defaults={myDay:td}; }
+    list=[...list.filter(t=>inMyDay(t)||(t.done&&(t.myDay===td||(!tiradaDoDia(t,td)&&dueNoDia(t,td)&&t.doneAt&&ymd(new Date(t.doneAt))===td)))).map(meuDiaView),...recDone]; defaults={myDay:td}; }
   else if(v==="important"){ title="Importantes"; sub="Importância alta"; list=list.filter(t=>t.importance===3); defaults={importance:3}; }
   else if(v==="priority"){ title="Por prioridade"; sub="Agrupadas de P1 (urgente) a P3"; groupBy="priority"; }
   else if(v==="planned"){ title="Planejado"; sub="Tarefas com prazo"; list=list.filter(t=>t.due); groupBy="due"; }
@@ -1537,7 +1617,7 @@ function addBar(defaults,ids){
     setTimeout(()=>{const i=document.getElementById(inId); if(i) i.focus();},0);
   }});
   const inp=h("input",{type:"text",id:inId,placeholder:(ids&&ids.ph)||"Adicionar tarefa…",autocomplete:"off","aria-label":"Nova tarefa"});
-  const date=h("input",{type:"date",id:dtId,"aria-label":"Prazo",title:"Prazo",min:today(),max:DATA_MAX});
+  const date=calPick(h("input",{type:"date",id:dtId,"aria-label":"Prazo",title:"Prazo",min:today(),max:DATA_MAX}));
   form.append(inp,date,h("button",{class:"add-btn",type:"submit","aria-label":"Adicionar"},svg(ICON.plus,20,'stroke-width="2.4"')));
   const frag=document.createDocumentFragment();
   frag.append(form,h("div",{class:"hint",html:"Atalhos no nome: <code>#grupo</code> <code>!alta</code> <code>!media</code> <code>!baixa</code> <code>p1</code> <code>p2</code> <code>p3</code> — ex.: <code>Corrigir provas #preparar-aula !alta p1</code>"}));
@@ -1591,6 +1671,76 @@ function dayMenu(t){
   items.push({label:"Abrir detalhes",icon:ICON.edit,run:()=>select(t.id)});
   return items;
 }
+/* v34: calendário do Prazo — o mês em semanas (segunda a domingo), como no Google Agenda. O campo de data continua
+   (mesmo valor, mesmos eventos change/input); ele fica só para leitura e o toque/clique abre este calendário no lugar
+   do seletor do sistema. Dias fora de min/max (prazos: de hoje até 2099) não podem ser escolhidos. */
+let CAL=null;
+function closeCal(refocus){ if(!CAL) return; const {el,inp}=CAL; CAL=null; el.remove(); if(refocus){ const i=document.contains(inp)?inp:(inp.id&&document.getElementById(inp.id)); if(i) try{ i.focus({preventScroll:true}); }catch(e){} } }
+function calSet(inp,v){
+  const i=document.contains(inp)?inp:((inp.id&&document.getElementById(inp.id))||inp);   // a tela pode ter sido redesenhada com o calendário aberto
+  i.value=v; i.dispatchEvent(new Event("input",{bubbles:true})); i.dispatchEvent(new Event("change",{bubbles:true}));
+}
+function calPick(inp){
+  inp.readOnly=true; inp.classList.add("cal-in"); inp.setAttribute("aria-haspopup","dialog");
+  inp.addEventListener("click",e=>{ e.preventDefault(); if(CAL&&CAL.inp===inp) closeCal(); else openCal(inp); });
+  inp.addEventListener("keydown",e=>{ if(e.key===" "||e.key==="ArrowDown"){ e.preventDefault(); openCal(inp); } });
+  return inp;
+}
+function openCal(inp){
+  closeCal();
+  const td=today(), min=inp.min||"", max=inp.max||DATA_MAX, ok=k=>(!min||k>=min)&&(!max||k<=max);
+  const cur=/^\d{4}-\d{2}-\d{2}$/.test(inp.value||"")?inp.value:"";
+  let fk=cur&&ok(cur)?cur:(ok(td)?td:(min||td));   // dia com o foco
+  const el=h("div",{class:"calpop",id:"calPop",role:"dialog","aria-label":"Escolher data"});
+  CAL={el,inp};
+  const mesDe=k=>{ const d=parseYmd(k); return new Date(d.getFullYear(),d.getMonth(),1); };
+  let mes=mesDe(fk);
+  const escolher=k=>{ if(!ok(k)) return; closeCal(true); calSet(inp,k); };
+  const draw=foco=>{
+    const y=mes.getFullYear(), m=mes.getMonth(), ini=addDays(mes,-((mes.getDay()+6)%7)), fimMes=ymd(new Date(y,m+1,0)), iniMes=ymd(mes);
+    const nav=(d,lbl,ic,dis)=>h("button",{class:"cal-nav",type:"button","aria-label":lbl,title:lbl,disabled:dis?true:null,onclick:()=>{ mes=new Date(y,m+d,1); draw(); }},svg(ic,16));
+    const g=h("div",{class:"cal-g",role:"grid"},["S","T","Q","Q","S","S","D"].map((x,i)=>h("div",{class:"cal-wd"+(i>4?" we":""),"aria-hidden":"true"},x)));
+    for(let i=0;i<42;i++){
+      const d=addDays(ini,i), k=ymd(d), dentro=d.getMonth()===m;
+      g.append(h("button",{type:"button",class:"cd"+(dentro?"":" o")+(k===td?" t":"")+(k===cur?" s":""),"data-k":k,tabindex:k===fk?"0":"-1",disabled:ok(k)?null:true,
+        "aria-label":cap(d.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))+(k===td?" (hoje)":""),"aria-pressed":k===cur?"true":"false",
+        onclick:()=>escolher(k)},String(d.getDate())));
+    }
+    el.replaceChildren(
+      h("div",{class:"cal-hd"},nav(-1,"Mês anterior",'<path d="M15 6l-6 6 6 6"/>',min&&iniMes<=min),
+        h("div",{class:"cal-tt","aria-live":"polite"},cap(MESES_LONGOS[m])+" de "+y),
+        nav(1,"Próximo mês",'<path d="M9 6l6 6-6 6"/>',max&&fimMes>=max)),
+      g,
+      h("div",{class:"cal-ft"},
+        ok(td)?h("button",{type:"button",onclick:()=>escolher(td)},"Hoje"):h("span"),
+        cur?h("button",{type:"button",onclick:()=>{ closeCal(true); calSet(inp,""); }},"Sem prazo"):null));
+    if(foco){ const b=el.querySelector(`.cd[data-k="${fk}"]`); if(b&&!b.disabled) b.focus({preventScroll:true}); }
+  };
+  el.addEventListener("keydown",e=>{
+    if(e.key==="Escape"){ e.preventDefault(); e.stopPropagation(); closeCal(true); return; }
+    if(e.key==="Tab"){ return; }
+    const step={ArrowLeft:-1,ArrowRight:1,ArrowUp:-7,ArrowDown:7}[e.key];
+    let nk=null;
+    if(step) nk=ymd(addDays(parseYmd(fk),step));
+    else if(e.key==="PageUp"||e.key==="PageDown"){ const d=parseYmd(fk); nk=ymd(new Date(d.getFullYear(),d.getMonth()+(e.key==="PageUp"?-1:1),Math.min(d.getDate(),28))); }
+    else if(e.key==="Home"||e.key==="End"){ const d=parseYmd(fk), w=(d.getDay()+6)%7; nk=ymd(addDays(d,e.key==="Home"?-w:6-w)); }
+    if(!nk) return;
+    e.preventDefault(); e.stopPropagation();
+    if(!ok(nk)) return;
+    fk=nk; const nm=mesDe(fk); if(nm.getTime()!==mes.getTime()) mes=nm; draw(true);
+  });
+  draw();
+  document.body.append(el);
+  // posição: abaixo do campo (ou acima, sem espaço), dentro da tela
+  const z=parseFloat(getComputedStyle(document.documentElement).zoom)||1, r=inp.getBoundingClientRect(), pr=el.getBoundingClientRect();
+  const W=window.innerWidth/z, H=window.innerHeight/z, w=pr.width/z, hh=pr.height/z;
+  let x=r.left/z, y=r.bottom/z+6; if(y+hh>H-8&&r.top/z-hh-6>=8) y=r.top/z-hh-6;
+  el.style.left=Math.max(8,Math.min(x,W-w-8))+"px"; el.style.top=Math.max(8,Math.min(y,H-hh-8))+"px";
+  setTimeout(()=>{ if(CAL&&CAL.el===el) draw(true); },0);
+}
+document.addEventListener("pointerdown",e=>{ if(CAL&&!e.target.closest("#calPop")&&e.target!==CAL.inp) closeCal(); },true);
+window.addEventListener("resize",()=>closeCal());
+document.addEventListener("scroll",e=>{ if(CAL&&!(e.target&&e.target.closest&&e.target.closest("#calPop"))) closeCal(); },true);
 function closeCtx(){ const m=$("#ctx"); if(m) m.remove(); }
 function openCtx(x,y,items){
   closeCtx();
@@ -1829,7 +1979,7 @@ function bulkRun(fn,msg,exit){
     const p=fn({...t,id}); if(p==null) continue;
     prev[id]=t;
     if(p==="delete") ops.push(...trashOps(id));   // apagar: vai para a lixeira
-    else ops.push({op:"set",path:"tasks/"+id,data:{...t,...p,updatedAt:now}});
+    else ops.push(taskOp(id,{...t,...p,updatedAt:now},p));
   }
   if(!ops.length){ toast("Nada a alterar nas tarefas selecionadas."); return; }
   const n=Object.keys(prev).length;
@@ -1842,7 +1992,7 @@ function bulkRun(fn,msg,exit){
 const nTxt=(n,s,p)=>`${n} ${n===1?s:p}`;
 function bulkDue(due,label){ bulkRun(t=>t.due===due?null:(due?{due}:(t.repeat?{due:null,repeat:null}:{due:null})),n=>nTxt(n,"tarefa","tarefas")+" · "+label); }
 function bulkPickDate(){
-  const inp=h("input",{type:"date",id:"bulkDate",min:today(),max:DATA_MAX,style:"border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)"});
+  const inp=calPick(h("input",{type:"date",id:"bulkDate",min:today(),max:DATA_MAX,style:"border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)"}));
   openModal("Prazo para "+nTxt(UI.multi.size,"tarefa","tarefas"),h("div",{class:"field"},h("label",{for:"bulkDate"},"Data"),inp),[
     {label:"Aplicar",cls:"primary",run:()=>{ if(!inp.value){ toast("Escolha uma data."); return false; } if(!dataValida(inp.value)){ toast("Escolha uma data de hoje em diante."); return false; } bulkDue(inp.value,"prazo "+fmtShort(inp.value)); }}]);
   setTimeout(()=>inp.focus(),30);
@@ -2008,7 +2158,7 @@ function renderDetail(){
     const a=document.activeElement;
     if(tagsDirty&&!(pane.contains(a)&&a.matches("textarea,input[type=text]"))){ tagsDirty=false; UI.forceDetail=true; render(); } },0));
   tagBox.append(tagIn,dl);
-  const dueIn=h("input",{type:"date",id:"dDue",min:today(),max:DATA_MAX,value:t.due||"",onchange:e=>{ const v=e.target.value||null, cur=VIEW.tasks[id]; if(v&&!dataValida(v)) return; patchTask(id,!v&&cur&&cur.repeat?{due:null,repeat:null}:{due:v}); }});
+  const dueIn=calPick(h("input",{type:"date",id:"dDue",min:today(),max:DATA_MAX,value:t.due||"",onchange:e=>{ const v=e.target.value||null, cur=VIEW.tasks[id]; if(v&&!dataValida(v)) return; patchTask(id,!v&&cur&&cur.repeat?{due:null,repeat:null}:{due:v}); }}));
   dueIn.addEventListener("blur",()=>{ const v=dueIn.value, cur=(VIEW.tasks[id]||{}).due||""; if(v&&v!==cur&&!dataValida(v)){ dueIn.value=cur; toast("Escolha um prazo de hoje em diante."); } });
   const notes=h("textarea",{id:"dNotes",placeholder:"Anotações, links, passos…"}); notes.value=t.notes||"";
   notes.addEventListener("blur",()=>{ if(notes.value!==(VIEW.tasks[id]?.notes||"")) patchTask(id,{notes:notes.value}); });
@@ -2323,7 +2473,7 @@ function openTagModal(g){
 }
 function openImport(){
   const ta=h("textarea",{id:"importBox",placeholder:"Uma tarefa por linha. Ex.:\n#imagem4 Aula: distribuir manual de pós-produção\nLer artigo sobre fotografia #pesquisa !alta p2"});
-  const date=h("input",{type:"date",id:"importDate",min:today(),max:DATA_MAX,style:"border:1px solid var(--line);border-radius:10px;padding:6px 8px;background:var(--panel)"});
+  const date=calPick(h("input",{type:"date",id:"importDate",min:today(),max:DATA_MAX,style:"border:1px solid var(--line);border-radius:10px;padding:6px 8px;background:var(--panel)"}));
   openModal("Importar lista de tarefas",h("div",{style:"display:flex;flex-direction:column;gap:10px"},
     h("p",{style:"margin:0;color:var(--muted);font-size:14px"},"Cole aqui tarefas de outro aplicativo (por exemplo, copiadas do Microsoft To Do). Cada linha vira uma tarefa; #tags, !alta e p1 são reconhecidos. Linhas começando com “-” viram etapas da tarefa de cima."),
     ta,h("label",{class:"check-lbl",for:"importDate"},"Prazo para todas (opcional):",date)),[
@@ -2846,7 +2996,7 @@ function saveMembros(tag,membros,atrib,msg,funcoes){
 /* garante o membro "eu" (primeiro da equipe) no projeto; nome e e-mail vêm do "eu" de outro projeto */
 const EU_FEITO=new Set();
 function saveMeusDados(nome,email,exceto){
-  enqueueMany([{op:"set",path:"meta/perfil",data:{nome,email,updatedAt:new Date().toISOString()}},
+  enqueueMany([{op:"set",path:"meta/perfil",data:{...(VIEW.perfil||{}),nome,email,updatedAt:new Date().toISOString()}},
     ...projectsArr().filter(o=>o.tag!==exceto).map(o=>{ const m=o.membros.find(x=>x.id===EU); if(!m||(m.nome===nome&&m.email===email)) return null;
       const c=cleanProject({...o,membros:o.membros.map(x=>x.id===EU?{...x,nome,email}:x)});
       return {op:"set",path:"projects/"+o.tag,data:{...c,createdAt:c.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()}}; }).filter(Boolean)]);
@@ -3446,7 +3596,11 @@ function voltarInicio(){
   if(Date.now()-OPEN_TASK_AT>5000) UI.sel=null;
   goStart();
 }
-document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") voltarInicio(); });
+/* v34: a volta automática só acontece no celular (tela de toque e estreita), quando a tela volta a aparecer depois de
+   bloquear/desbloquear. No computador o app fica na tela em que estava. (O navegador do celular não distingue o
+   bloqueio da troca de app: os dois escondem a página.) */
+const ehCelular=()=>{ try{ return matchMedia("(pointer: coarse)").matches&&matchMedia("(max-width: 860px)").matches; }catch(e){ return false; } };
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&ehCelular()) voltarInicio(); });
 /* push: inscrição do aparelho no servidor de lembretes (função "lembretes" do Supabase) */
 const pushSupported=()=>location.protocol.startsWith("http")&&"serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;
 const fnURL=()=>CFG.url.trim().replace(/\/+$/,"")+"/functions/v1/lembretes";
@@ -3503,6 +3657,31 @@ function notifCfgSec(){
     h("div",{style:"margin-top:8px"},h("button",{class:"pn-more",onclick:()=>openSettings("rem")},"Mais opções (enviar teste) ›")));
   return sec;
 }
+/* v34: lembretes e avisos por e-mail (Configurações). As opções ficam em meta/perfil (valem em todos os aparelhos) e
+   quem envia é a função "lembretes" do servidor, pelo mesmo Gmail/Brevo do "Enviar agora" (guia LEMBRETES.html). */
+function setPerfilOpts(p){ enqueue({op:"set",path:"meta/perfil",data:{...cleanPerfil(VIEW.perfil),...p,updatedAt:new Date().toISOString()}}); }
+const appUrlAtual=()=>{ const u=location.origin+location.pathname.replace(/index\.html$/,""); return /^https:\/\//.test(u)&&u.length<=300?u:null; };
+function emailCfgSec(){
+  const sec=h("div",{class:"settings-sec",id:"setMail"},h("h4",{},"Lembretes e avisos por e-mail"));
+  if(!S.sb||!S.user){ sec.append(h("p",{},"Entre na sua conta (Sincronização e backup) para receber os lembretes e um aviso diário das tarefas também por e-mail.")); return sec; }
+  const pf=cleanPerfil(VIEW.perfil), para=String(pf.email||S.user.email||"").trim();
+  const opt=(k,txt)=>h("div",{style:"margin-top:10px"},h("p",{},txt),
+    h("div",{},h("span",{class:"seg"},[[false,"Desligado"],[true,"Ligado"]].map(([v,l])=>h("button",{class:(pf[k]===true)===v?"on":"",onclick:()=>{
+      if((pf[k]===true)===v) return; const p={[k]:v}; const u=appUrlAtual(); if(v&&u) p.appUrl=u;
+      setPerfilOpts(p); refreshConfig(); renderSettingsIfOpen();
+      toast(v?(k==="emailLembrete"?"Lembretes por e-mail ligados.":"Aviso diário por e-mail ligado."):(k==="emailLembrete"?"Lembretes por e-mail desligados.":"Aviso diário por e-mail desligado.")); }},l)))));
+  const hora=pf.emailHora||7;
+  sec.append(h("p",{},"Os e-mails vão para ",h("b",{},para||"o e-mail da conta")," (Meus dados; sem ele, o e-mail da conta)."),
+    opt("emailLembrete","Lembretes por e-mail: na hora do lembrete de cada tarefa chega também um e-mail, com o nome, o prazo e as anotações da tarefa."),
+    opt("emailAviso","Aviso diário por e-mail: todo dia, um e-mail com as tarefas de hoje (Meu Dia e prazo hoje) e as atrasadas."),
+    pf.emailAviso?h("div",{style:"margin-top:8px"},h("p",{},"Horário do aviso diário (Brasília):"),
+      h("span",{class:"seg"},[5,6,7,8,9,10].map(x=>h("button",{class:hora===x?"on":"",onclick:()=>{ if(hora===x) return; setPerfilOpts({emailHora:x}); refreshConfig(); renderSettingsIfOpen(); }},x+"h")))):null,
+    h("div",{style:"margin-top:10px"},h("button",{class:"btn small",onclick:async e=>{ const b=e.currentTarget; b.disabled=true;
+      try{ const r=await fnCall({method:"POST",body:JSON.stringify({action:"test-email"})}); toast("E-mail de teste enviado para "+(r.para||para)+"."); }
+      catch(err){ toast("Falha no teste: "+err.message); } b.disabled=false; }},"Enviar e-mail de teste")),
+    h("p",{style:"margin-top:8px"},"Precisa do servidor de lembretes e do envio de e-mail configurados (guias LEMBRETES.html e ENVIO-EMAIL.html); a conta precisa estar em ENVIO_USUARIOS."));
+  return sec;
+}
 function remindersSection(){
   const sec=h("div",{class:"settings-sec",id:"setRem"},h("h4",{},"Lembretes e alarmes"));
   if(!pushSupported()){
@@ -3531,8 +3710,12 @@ if(![0.8,0.9,1,1.1].includes(PREFS.zoom)) PREFS.zoom=0.9;
 /* opção (Configurações): tarefas inacabadas de dias anteriores passam para o próximo dia útil (sábado e domingo
    ficam de fora: no fim de semana elas vão para segunda). Vale para o prazo vencido e para o Meu Dia de dias
    anteriores; recorrentes não mudam (a repetição já cuida delas). Roda ao abrir o app, na virada do dia e ao ligar. */
+/* v34: a opção fica gravada na conta (meta/perfil, campo rollover) e vale em todos os aparelhos; não se perde quando o
+   navegador apaga os dados do site. Sem valor na conta, vale a escolha antiga deste aparelho (PREFS.rollover). */
+const rollOn=()=>{ const v=(VIEW.perfil||{}).rollover; return typeof v==="boolean"?v:!!PREFS.rollover; };
+function setRollover(v){ PREFS.rollover=v; lsSet(PREF_KEY,PREFS); enqueue({op:"set",path:"meta/perfil",data:{...cleanPerfil(VIEW.perfil),rollover:v,updatedAt:new Date().toISOString()}}); }
 function rollOver(){
-  if(!PREFS.rollover) return;
+  if(!rollOn()) return;
   const td=today(); let d=parseYmd(td); while(d.getDay()===0||d.getDay()===6) d=addDays(d,1);
   const target=ymd(d), now=new Date().toISOString(), prev={}, ops=[];
   for(const [id,t] of Object.entries(VIEW.tasks)){
@@ -3541,7 +3724,7 @@ function rollOver(){
     if(t.due&&t.due<td) p.due=target;
     if(typeof t.myDay==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(t.myDay)&&t.myDay<td) p.myDay=target;
     if(!Object.keys(p).length) continue;
-    prev[id]=t; ops.push({op:"set",path:"tasks/"+id,data:{...t,...p,updatedAt:now}});
+    prev[id]=t; ops.push(taskOp(id,{...t,...p,updatedAt:now},p));
   }
   if(!ops.length) return;
   enqueueMany(ops);
@@ -3671,7 +3854,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v33";
+const APP_VER="v34";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
@@ -3718,12 +3901,13 @@ function configBody(){
       h("button",{class:"btn",onclick:()=>openSettings()},"Sincronização e backup"),
       h("button",{class:"btn",onclick:()=>openImport()},"Importar lista de tarefas"))));
   box.append(notifCfgSec());
+  box.append(emailCfgSec());
   box.append(h("div",{class:"settings-sec"},h("h4",{},"Tela inicial"),
-    h("p",{},"Tela mostrada ao abrir o app e ao voltar a ele (depois de fechar, minimizar ou desbloquear a tela), e pelo botão “Início” das telas de grupo e de projeto."),
+    h("p",{},"Tela mostrada ao abrir o app, no celular ao desbloquear a tela, e pelo botão “Início” das telas de grupo e de projeto. No computador, o app continua na tela em que estava."),
     h("div",{},h("span",{class:"seg"},[["home","Início"],["today","Meu Dia"]].map(([v,l])=>h("button",{class:startView()===v?"on":"",onclick:()=>{ PREFS.inicio=v; lsSet(PREF_KEY,PREFS); render(); refreshConfig(); }},l))))));
   box.append(h("div",{class:"settings-sec"},h("h4",{},"Tarefas inacabadas"),
-    h("p",{},"Passar as tarefas não concluídas do dia para o próximo dia útil (sábado e domingo ficam de fora: vão para segunda). Vale para prazos vencidos e para o Meu Dia; tarefas recorrentes não mudam."),
-    h("div",{},h("span",{class:"seg"},[[false,"Desligado"],[true,"Ligado"]].map(([v,l])=>h("button",{class:!!PREFS.rollover===v?"on":"",onclick:()=>{ PREFS.rollover=v; lsSet(PREF_KEY,PREFS); refreshConfig(); if(v) requestRollOver(); }},l))))));
+    h("p",{},"Passar as tarefas não concluídas do dia para o próximo dia útil (sábado e domingo ficam de fora: vão para segunda). Vale para prazos vencidos e para o Meu Dia; tarefas recorrentes não mudam. Com login, a opção fica gravada na sua conta e vale em todos os aparelhos."),
+    h("div",{},h("span",{class:"seg"},[[false,"Desligado"],[true,"Ligado"]].map(([v,l])=>h("button",{class:rollOn()===v?"on":"",onclick:()=>{ setRollover(v); refreshConfig(); if(v) requestRollOver(); }},l))))));
   const mdOpt=(k,txt)=>h("div",{style:"margin-top:10px"},h("p",{},txt),
     h("div",{},h("span",{class:"seg"},[[false,"Desligado"],[true,"Ligado"]].map(([v,l])=>h("button",{class:(PREFS[k]!==false)===v?"on":"",onclick:()=>{ PREFS[k]=v; lsSet(PREF_KEY,PREFS); render(); refreshConfig(); }},l)))));
   box.append(h("div",{class:"settings-sec"},h("h4",{},"Meu Dia"),
