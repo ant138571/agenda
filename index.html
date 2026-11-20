@@ -318,6 +318,20 @@ button{cursor:pointer}
 .detail .field.d-inl>.pn-more{flex-basis:100%}
 .detail .gest-hint{padding:0 2px}
 .detail .d-foot{padding:6px 14px}
+/* v37: "Mais propriedades" — etiquetas (com valor: laranja clara com o valor; sem valor: tracejada) que abrem as
+   opções logo abaixo, uma de cada vez */
+.d-pchips{display:flex;flex-wrap:wrap;gap:6px}
+.pc{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:5px 11px;border-radius:999px;font:inherit;font-size:12.5px;font-weight:700;box-sizing:border-box;cursor:pointer;
+  border:1px dashed var(--line-strong);background:var(--panel);color:var(--muted);max-width:100%}
+.pc>span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.pc svg{flex:none}
+.pc.tem{border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));background:color-mix(in srgb,var(--accent-soft) 60%,var(--panel));color:var(--accent-text)}
+.pc.open{border:1.5px solid var(--accent);background:var(--accent-soft);color:var(--accent-text);box-shadow:0 0 0 3px var(--accent-soft)}
+.d-pedit{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:12px;padding:8px 10px 10px;background:var(--soft);margin-top:4px}
+.d-pedit-h{display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:800}
+.d-pedit-h .icon-btn{width:32px;height:32px}
+.d-pedit>textarea#dNotes{min-height:80px}
+.d-pedit .d-coment>.lbl{display:none}
 /* v36: lembrete — valor com sino (não é um campo de data) e escolha de data e hora só pelo botão */
 .detail .field.d-inl>.lbl{flex-basis:100%}
 .rem-val{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;padding:4px 2px;margin-right:4px}
@@ -2078,8 +2092,9 @@ let STEP_GEN=0;
 /* linha "Meu Dia" dos Detalhes: sempre lê a tarefa atual (não a do momento em que o painel foi montado) */
 function myDayRow(id){
   const cur=()=>{ const x=VIEW.tasks[id]; return x?{...x,id}:null; }, t0=cur(), on=!!(t0&&inMyDay(t0));
-  return h("div",{class:"toggle-row d-myday"},h("span",{style:"display:inline-flex;gap:8px;align-items:center"},svg(ICON.sun,17),on?"Está no Meu Dia":"Fora do Meu Dia"),
-    h("button",{class:"btn small"+(on?"":" primary"),onclick:()=>{ const t=cur(); if(t) toggleMyDay(t); }},on?"Tirar":"Adicionar"));
+  // v37: etiqueta em "Mais propriedades" — tocar põe/tira do Meu Dia, sem abrir nada
+  return h("button",{class:"pc d-myday"+(on?" tem":""),"aria-pressed":on?"true":"false",title:on?"Está no Meu Dia: tocar tira":"Fora do Meu Dia: tocar adiciona",
+    onclick:()=>{ const t=cur(); if(t) toggleMyDay(t); }},svg(ICON.sun,15),on?"No Meu Dia":"Meu Dia");
 }
 function renderDetail(){
   const pane=$("#detail"), app=$("#app");
@@ -2177,7 +2192,7 @@ function renderDetail(){
     if(f==="monthly") r.day=rep&&rep.freq==="monthly"&&rep.day?rep.day:bd.getDate();
     setRep(r); };
   const nOcc=(t.doneDates||[]).length;
-  const repField=h("div",{class:"field"},h("span",{class:"lbl"},"Repetir"),
+  const repField=h("div",{class:"field"},
     h("div",{class:"opts"},[[null,"Não repete"],["daily","Diária"],["weekdays","Dias úteis"],["weekly","Semanal"],["monthly","Mensal"]].map(([f,l])=>h("button",{class:"opt"+((rep?rep.freq:null)===f?" on":""),onclick:()=>repPick(f)},l))),
     rep&&rep.freq==="weekly"?h("div",{class:"opts","aria-label":"Dias da semana"},[1,2,3,4,5,6,0].map(w=>{ const on=(rep.days||[]).includes(w);
       return h("button",{class:"opt wd"+(on?" on":""),"aria-pressed":on?"true":"false",title:DIAS[w],"aria-label":DIAS[w],onclick:()=>{ const ds=new Set(rep.days||[]); if(on) ds.delete(w); else ds.add(w); if(!ds.size) return; setRep({...rep,days:[...ds].sort()}); }},DIAS[w][0].toUpperCase()); })):null,
@@ -2222,32 +2237,52 @@ function renderDetail(){
     h("button",{class:"btn small",onclick:()=>{delZone.replaceChildren(delBtn);}},"Cancelar"))); };
   const delBtn=h("button",{class:"btn small danger",onclick:askDel},svg(ICON.trash,15),"Excluir");
   delZone.append(delBtn);
+  function maisProps(){
+    if(UI.dPropFor!==id){ UI.dPropFor=id; UI.dProp=""; }   // outra tarefa: tudo fechado
+    if(UI.remPick===id) UI.dProp="lemb";
+    const sel=UI.dProp;
+    const respNomes=[...new Set(projTags.flatMap(g=>{ const pj=getProject(g); if(!pj) return []; const ids=(pj.atrib||{})[id]||[]; return pj.membros.filter(m=>ids.includes(m.id)).map(m=>membroNome(m)); }))];
+    const nComent=COMENT[id]&&Array.isArray(COMENT[id].list)?COMENT[id].list.length:0;
+    const imp=t.importance||2, pri=t.priority||2;
+    const IC_ETAPAS='<path d="M10 6h11M10 12h11M10 18h11"/><path d="M3 6l1.5 1.5L7 5M3 12l1.5 1.5L7 11"/><circle cx="5" cy="18" r="1.6"/>',
+      IC_NOTAS='<path d="M5 3h10l4 4v14H5z"/><path d="M9 12h6M9 16h6"/>', IC_COMENT='<path d="M4 5h16v11H8l-4 4z"/>';
+    const itens=[
+      {k:"lemb",ic:svg(ICON.bell,15),txt:t.remindAt?fmtRemind(t.remindAt):"Lembrete",tem:!!t.remindAt,titulo:"Lembrete (alarme)",
+        corpo:()=>[h("div",{class:"field d-inl"},remVal,remOpts,remPick,noPerm?h("button",{class:"pn-more",onclick:()=>openSettings("rem")},"Ativar notificações neste aparelho ›"):null)]},
+      {k:"rep",ic:svg(ICON.repeat,15),txt:rep?cap(t.due?repText(t):REP_LABEL[rep.freq].toLowerCase()):"Repetir",tem:!!rep,titulo:"Repetir",corpo:()=>[repField]},
+      {k:"class",ic:svg(ICON.star,15,'fill="currentColor" stroke="none"'),txt:IMP[imp]+" · P"+pri,tem:imp!==2||pri!==2,titulo:"Importância e prioridade",
+        corpo:()=>[h("div",{class:"field"},h("span",{class:"lbl"},"Importância  (quanto a tarefa pesa nos seus objetivos)"),
+            h("div",{class:"opts"},[3,2,1].map(v=>opt(imp,v,IMP[v],val=>patchTask(id,{importance:val}))))),
+          h("div",{class:"field"},h("span",{class:"lbl"},"Prioridade  (em que ordem fazer)"),
+            h("div",{class:"opts"},[1,2,3].map(v=>h("button",{class:"opt"+(pri===v?" on":""),onclick:()=>patchTask(id,{priority:v})},h("span",{class:"pill p"+v},"P"+v),PRI[v].split(" · ")[1]))))]},
+      {k:"etapas",ic:svg(IC_ETAPAS,15),txt:steps.length?`Etapas ${nDone}/${steps.length}`:"Etapas",tem:!!steps.length,titulo:"Etapas"+(steps.length?` · ${nDone} de ${steps.length}`:""),corpo:()=>[stepBox]},
+      projTags.length?{k:"proj",ic:svg(ICON.user,15),txt:respNomes.length?respNomes.join(", "):"Responsáveis",tem:!!respNomes.length||inCrono(t),titulo:"Projeto e responsáveis",
+        corpo:()=>[h("div",{class:"field"},h("div",{class:"toggle-row"},h("span",{style:"display:inline-flex;gap:8px;align-items:center"},svg(ICON.folder,17),(inCrono(t)?"No cronograma de ":"Fora do cronograma de ")+projTags.map(g=>"#"+g).join(", ")),
+              h("button",{class:"btn small"+(inCrono(t)?"":" primary"),onclick:()=>setCrono([id],!inCrono(t))},inCrono(t)?"Tirar":"Incluir")),
+            inCrono(t)&&!t.due?h("div",{class:"gest-hint",style:"text-align:left"},"Sem prazo, a tarefa aparece em “Sem prazo”, no fim do cronograma; com prazo, vai para a data."):null),
+          ...projTags.map(g=>{ const pj=getProject(g); if(!pj) return null; const ids=(pj.atrib||{})[id]||[];
+            return h("div",{class:"field d-resp"},h("span",{class:"lbl"},"Responsáveis"+(projTags.length>1?" · #"+g:"")),
+              pj.membros.length?h("div",{class:"opts"},pj.membros.map(m=>h("button",{class:"opt"+(ids.includes(m.id)?" on":""),"aria-pressed":ids.includes(m.id)?"true":"false",title:funcNomes(pj,m).join(", "),onclick:()=>toggleResp(g,id,m.id)},svg(ICON.user,13),membroNome(m))))
+                :h("div",{class:"gest-hint",style:"text-align:left"},"Cadastre a equipe na aba “Equipe” do projeto para escolher os responsáveis.",h("button",{class:"pn-more",onclick:()=>go("proj:"+g,"equipe")},"Abrir equipe do projeto #"+g+" ›"))); })]}:null,
+      {k:"notas",ic:svg(IC_NOTAS,15),txt:"Anotações",tem:!!(t.notes||"").trim(),titulo:"Anotações",
+        corpo:()=>{ setTimeout(()=>{ if(UI.dProp==="notas"&&document.contains(notes)&&!notes.value) notes.focus(); },0); return [notes]; }},
+      projTags.length?{k:"coment",ic:svg(IC_COMENT,15),txt:"Comentários"+(nComent?" "+nComent:""),tem:nComent>0,titulo:"Comentários",corpo:()=>[comentSection(id)]}:null
+    ].filter(Boolean);
+    const abre=k=>{ UI.dProp=UI.dProp===k?"":k; if(UI.dProp!=="lemb"&&UI.remPick===id){ UI.remPick=null; UI.remPickVal=null; } UI.forceDetail=true; renderDetail(); };
+    const chips=h("div",{class:"d-pchips"},myDayRow(id),...itens.map(x=>h("button",{class:"pc"+(x.tem?" tem":"")+(sel===x.k?" open":""),"aria-expanded":sel===x.k?"true":"false",title:x.titulo,onclick:()=>abre(x.k)},x.ic,h("span",{},x.txt))));
+    const aberto=itens.find(x=>x.k===sel);
+    return h("div",{class:"field d-mais"},h("span",{class:"lbl"},"Mais propriedades · toque para ver ou mudar"),chips,
+      aberto?h("div",{class:"d-pedit"},h("div",{class:"d-pedit-h"},h("span",{},aberto.titulo),h("button",{class:"icon-btn","aria-label":"Fechar "+aberto.titulo,onclick:()=>abre(aberto.k)},svg(ICON.x,15))),...aberto.corpo()):null);
+  }
   pane.append(
     h("div",{class:"d-head"},h("span",{},"Detalhes da tarefa"),h("button",{class:"icon-btn","aria-label":"Fechar",onclick:()=>{UI.sel=null;render();}},svg(ICON.x,18))),
     h("div",{class:"d-body"},
       h("div",{class:"d-title"},h("button",{class:"circle p"+(t.priority||2),style:t.done?"background:var(--ink);border-color:var(--ink);color:var(--bg)":"","aria-label":"Concluir",onclick:()=>toggleDone(id)},t.done?svg(ICON.check,13,'stroke-width="3"'):null),title),
-      // etapas logo abaixo do nome da tarefa
-      h("div",{class:"field"},h("span",{class:"lbl"},"Etapas ",steps.length?h("span",{class:"steps-count"},`· ${nDone} de ${steps.length}`):null),stepBox),
-      // grupos logo depois das etapas (um dos campos mais usados)
-      h("div",{class:"field"},h("span",{class:"lbl"},"Grupos"),tagBox),
-      myDayRow(id),
-      projTags.length?h("div",{class:"field"},h("div",{class:"toggle-row"},h("span",{style:"display:inline-flex;gap:8px;align-items:center"},svg(ICON.folder,17),(inCrono(t)?"No cronograma de ":"Fora do cronograma de ")+projTags.map(g=>"#"+g).join(", ")),
-          h("button",{class:"btn small"+(inCrono(t)?"":" primary"),onclick:()=>setCrono([id],!inCrono(t))},inCrono(t)?"Tirar":"Incluir")),
-        inCrono(t)&&!t.due?h("div",{class:"gest-hint",style:"text-align:left"},"Sem prazo, a tarefa aparece em “Sem prazo”, no fim do cronograma; com prazo, vai para a data."):null):null,
-      ...projTags.map(g=>{ const pj=getProject(g); if(!pj) return null; const sel=(pj.atrib||{})[id]||[];
-        return h("div",{class:"field d-resp"},h("span",{class:"lbl"},"Responsáveis"+(projTags.length>1?" · #"+g:"")),
-          pj.membros.length?h("div",{class:"opts"},pj.membros.map(m=>h("button",{class:"opt"+(sel.includes(m.id)?" on":""),"aria-pressed":sel.includes(m.id)?"true":"false",title:funcNomes(pj,m).join(", "),onclick:()=>toggleResp(g,id,m.id)},svg(ICON.user,13),membroNome(m))))
-            :h("div",{class:"gest-hint",style:"text-align:left"},"Cadastre a equipe na aba “Equipe” do projeto para escolher os responsáveis.",h("button",{class:"pn-more",onclick:()=>go("proj:"+g,"equipe")},"Abrir equipe do projeto #"+g+" ›"))); }),
+      // v37: à vista só o nome, o Prazo e os Grupos; o resto fica em etiquetas ("Mais propriedades") que abrem as
+      // opções logo abaixo, uma de cada vez
       h("div",{class:"field d-inl"},h("label",{for:"dDue"},"Prazo de execução"),dueIn,h("div",{class:"opts"},quickDue(0,"Hoje"),quickDue(1,"Amanhã"),quickDue(7,"Em 1 semana"),t.due?h("button",{class:"opt",onclick:()=>patchTask(id,t.repeat?{due:null,repeat:null}:{due:null})},"Sem prazo"):null)),
-      repField,
-      h("div",{class:"field d-inl"},h("span",{class:"lbl"},"Lembrete (alarme)"),remVal,remOpts,remPick,
-        noPerm?h("button",{class:"pn-more",onclick:()=>openSettings("rem")},"Ativar notificações neste aparelho ›"):null),
-      h("div",{class:"field"},h("span",{class:"lbl"},"Importância  (quanto a tarefa pesa nos seus objetivos)"),
-        h("div",{class:"opts"},[3,2,1].map(v=>opt(t.importance||2,v,IMP[v],val=>patchTask(id,{importance:val}))))),
-      h("div",{class:"field"},h("span",{class:"lbl"},"Prioridade  (em que ordem fazer)"),
-        h("div",{class:"opts"},[1,2,3].map(v=>h("button",{class:"opt"+((t.priority||2)===v?" on":""),onclick:()=>patchTask(id,{priority:v})},h("span",{class:"pill p"+v},"P"+v),PRI[v].split(" · ")[1])))),
-      h("div",{class:"field"},h("label",{for:"dNotes"},"Anotações"),notes),
-      projTags.length?comentSection(id):null   // comentários com a equipe (tarefas de projeto)
+      h("div",{class:"field"},h("span",{class:"lbl"},"Grupos"),tagBox),
+      maisProps()
     ),
     h("div",{class:"d-foot"},h("span",{},t.done&&t.doneAt?`Concluída em ${fmtBR(t.doneAt)}`:`Criada em ${fmtBR(t.createdAt)}`),delZone)
   );
@@ -3882,7 +3917,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v36";
+const APP_VER="v37";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
