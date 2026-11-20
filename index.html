@@ -296,6 +296,8 @@ button{cursor:pointer}
 .detail .d-body{gap:9px;padding:2px 12px 10px}
 .detail .d-title{padding:8px 10px;border-radius:12px;gap:8px}
 .detail .d-title textarea{font-size:16.5px;min-height:24px}
+.d-title textarea{overflow:hidden;scrollbar-width:none}   /* v44: sem a barra vertical (barra de rolagem) entre o nome e a estrela */
+.d-title textarea::-webkit-scrollbar{display:none}
 .detail .field{gap:4px}
 .detail .field>label,.detail .field>.lbl{font-size:11.5px}
 .detail .opts{gap:4px}
@@ -1338,7 +1340,6 @@ function renderNav(){
     ["planned","Planejado",ICON.cal,open.filter(t=>t.due).length],
     ["all","Tarefas",ICON.list,open.length],
     ["done","Concluídas",ICON.check,all.filter(t=>t.done).length],
-    ["projects","Projetos",ICON.folder,Object.keys(VIEW.projects||{}).length],
     ["report","Relatório",ICON.report,null],
     ["trash","Lixeira",ICON.trash,trashArr().length]
   ];
@@ -1450,17 +1451,7 @@ function renderHome(wrap){
   right.append(h("div",{class:"later"},h("div",{class:"later-title"},"Depois"),later.map(x=>h("div",{class:"later-row"},
     h("span",{},`${pad(x.a.getDate())}/${pad(x.a.getMonth()+1)} – ${pad(x.b.getDate())}/${pad(x.b.getMonth()+1)}`),h("b",{},x.n+" tarefa"+(x.n===1?"":"s"))))));
   cols.append(left,right); wrap.append(cols);
-  // ----- Cronogramas dos projetos (faixa no design da ferramenta)
-  const projs=projectsArr().filter(p=>cronoEvents(p).length);
-  if(projs.length){
-    const nextOf=p=>{ const t=Date.UTC(now.getFullYear(),now.getMonth(),now.getDate()); const n=cronoEvents(p).map(crUtc).filter(x=>x>=t).sort((a,b)=>a-b)[0]; return n==null?Infinity:n; };
-    projs.sort((a,b)=>nextOf(a)-nextOf(b));
-    wrap.append(h("section",{class:"home-proj","aria-label":"Cronogramas dos projetos"},
-      h("div",{class:"col-head"},h("h3",{},"Projetos"),h("button",{class:"btn small",onclick:()=>go("projects")},"Ver todos")),
-      h("div",{class:"proj-grid"},projs.map(p=>{ const c=cronoView(p,"mini"); c.setAttribute("role","link"); c.tabIndex=0; c.title="Abrir projeto #"+p.tag;
-        c.addEventListener("click",()=>go("proj:"+p.tag,"cronograma")); c.addEventListener("keydown",e=>{ if(e.key==="Enter") go("proj:"+p.tag,"cronograma"); }); return c; }))));
-    crAjustarTudo();
-  }
+  // v44: os cartões "Projetos" (cronogramas) saíram do fim do Início — cada projeto é aberto pelo menu lateral
 }
 /* Painel recolhível da coluna direita da home; o estado aberto/fechado fica salvo */
 const PANEL_MAX=6;
@@ -4010,7 +4001,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[],{fecharNoTopo:true}); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v43";
+const APP_VER="v44";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
