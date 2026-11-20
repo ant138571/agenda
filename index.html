@@ -318,6 +318,22 @@ button{cursor:pointer}
 .detail .field.d-inl>.pn-more{flex-basis:100%}
 .detail .gest-hint{padding:0 2px}
 .detail .d-foot{padding:6px 14px}
+/* v39: estrela no retângulo da tarefa; prazo numa linha com a urgência */
+.d-star{flex:none;align-self:center;width:40px;height:40px;margin:-6px -6px -6px 0;border:0;background:none;border-radius:10px;display:grid;place-items:center;color:var(--faint);cursor:pointer}
+.d-star:hover{background:var(--hover)}
+.d-star.on{color:var(--imp)}
+.detail .d-prazo{gap:4px 5px}
+.detail .d-prazo .d-prazo-h{flex-basis:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.d-prazo-h>label{font-size:12px;color:var(--muted);font-weight:600}
+.d-urg{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;color:var(--muted);font-weight:600}
+.d-urg>span{margin-right:2px}
+.d-urg .opt{padding:2px 4px;min-height:26px;border-radius:8px}
+.d-urg .opt .pill{display:block}
+.d-urg .opt:not(.on){opacity:.55}
+.d-urg .opt.on{opacity:1;border-color:var(--ink)}
+.detail .d-prazo>input[type=date]{width:118px;flex:none;font-size:13px}
+.detail .d-prazo .opt{padding:4px 8px;font-size:12.5px}
+.detail .d-prazo .d-noprazo{padding:0;width:30px;height:30px;justify-content:center;color:var(--muted)}
 /* v38: janela de grupos */
 .lbl-btn{border:0;background:none;padding:0;text-align:left;cursor:pointer;font:inherit}
 .lbl-btn:hover{color:var(--accent-text)}
@@ -2264,11 +2280,10 @@ function renderDetail(){
       {k:"lemb",ic:svg(ICON.bell,15),txt:t.remindAt?fmtRemind(t.remindAt):"Lembrete",tem:!!t.remindAt,titulo:"Lembrete (alarme)",
         corpo:()=>[h("div",{class:"field d-inl"},remVal,remOpts,remPick,noPerm?h("button",{class:"pn-more",onclick:()=>openSettings("rem")},"Ativar notificações neste aparelho ›"):null)]},
       {k:"rep",ic:svg(ICON.repeat,15),txt:rep?cap(t.due?repText(t):REP_LABEL[rep.freq].toLowerCase()):"Repetir",tem:!!rep,titulo:"Repetir",corpo:()=>[repField]},
-      {k:"class",ic:svg(ICON.star,15,'fill="currentColor" stroke="none"'),txt:IMP[imp]+" · P"+pri,tem:imp!==2||pri!==2,titulo:"Importância e prioridade",
-        corpo:()=>[h("div",{class:"field"},h("span",{class:"lbl"},"Importância  (quanto a tarefa pesa nos seus objetivos)"),
-            h("div",{class:"opts"},[3,2,1].map(v=>opt(imp,v,IMP[v],val=>patchTask(id,{importance:val}))))),
-          h("div",{class:"field"},h("span",{class:"lbl"},"Prioridade  (em que ordem fazer)"),
-            h("div",{class:"opts"},[1,2,3].map(v=>h("button",{class:"opt"+(pri===v?" on":""),onclick:()=>patchTask(id,{priority:v})},h("span",{class:"pill p"+v},"P"+v),PRI[v].split(" · ")[1]))))]},
+      // v39: a urgência foi para a área do Prazo e a estrela para o retângulo da tarefa; a etiqueta fica só com a importância
+      {k:"class",ic:svg(ICON.star,15,'fill="currentColor" stroke="none"'),txt:"Importância "+IMP[imp].toLowerCase(),tem:imp!==2,titulo:"Importância",
+        corpo:()=>[h("div",{class:"field"},h("span",{class:"lbl"},"Quanto a tarefa pesa nos seus objetivos"),
+            h("div",{class:"opts"},[3,2,1].map(v=>opt(imp,v,IMP[v],val=>patchTask(id,{importance:val})))))]},
       {k:"etapas",ic:svg(IC_ETAPAS,15),txt:steps.length?`Etapas ${nDone}/${steps.length}`:"Etapas",tem:!!steps.length,titulo:"Etapas"+(steps.length?` · ${nDone} de ${steps.length}`:""),corpo:()=>[stepBox]},
       projTags.length?{k:"proj",ic:svg(ICON.user,15),txt:respNomes.length?respNomes.join(", "):"Responsáveis",tem:!!respNomes.length||inCrono(t),titulo:"Projeto e responsáveis",
         corpo:()=>[h("div",{class:"field"},h("div",{class:"toggle-row"},h("span",{style:"display:inline-flex;gap:8px;align-items:center"},svg(ICON.folder,17),(inCrono(t)?"No cronograma de ":"Fora do cronograma de ")+projTags.map(g=>"#"+g).join(", ")),
@@ -2291,10 +2306,20 @@ function renderDetail(){
   pane.append(
     h("div",{class:"d-head"},h("span",{},"Detalhes da tarefa"),h("button",{class:"icon-btn","aria-label":"Fechar",onclick:()=>{UI.sel=null;render();}},svg(ICON.x,18))),
     h("div",{class:"d-body"},
-      h("div",{class:"d-title"},h("button",{class:"circle p"+(t.priority||2),style:t.done?"background:var(--ink);border-color:var(--ink);color:var(--bg)":"","aria-label":"Concluir",onclick:()=>toggleDone(id)},t.done?svg(ICON.check,13,'stroke-width="3"'):null),title),
+      h("div",{class:"d-title"},h("button",{class:"circle p"+(t.priority||2),style:t.done?"background:var(--ink);border-color:var(--ink);color:var(--bg)":"","aria-label":"Concluir",onclick:()=>toggleDone(id)},t.done?svg(ICON.check,13,'stroke-width="3"'):null),title,
+        // v39: estrela da importância no retângulo da tarefa — toque alterna Alta ⇄ Média (Baixa: etiqueta Importância)
+        h("button",{class:"d-star"+((t.importance||2)===3?" on":""),type:"button","aria-pressed":(t.importance||2)===3?"true":"false",
+          "aria-label":(t.importance||2)===3?"Importante: tocar volta para importância média":"Marcar como importante",title:(t.importance||2)===3?"Importante (tocar: média)":"Marcar como importante",
+          onclick:()=>patchTask(id,{importance:(t.importance||2)===3?2:3})},svg(ICON.star,20,(t.importance||2)===3?'fill="currentColor"':""))),
       // v37: à vista só o nome, o Prazo e os Grupos; o resto fica em etiquetas ("Mais propriedades") que abrem as
       // opções logo abaixo, uma de cada vez
-      h("div",{class:"field d-inl"},h("label",{for:"dDue"},"Prazo de execução"),dueIn,h("div",{class:"opts"},quickDue(0,"Hoje"),quickDue(1,"Amanhã"),quickDue(7,"Em 1 semana"),t.due?h("button",{class:"opt",onclick:()=>patchTask(id,t.repeat?{due:null,repeat:null}:{due:null})},"Sem prazo"):null)),
+      // v39: prazo numa linha só (atalhos curtos; "Sem prazo" = ×) e a urgência (P1/P2/P3) na mesma área
+      h("div",{class:"field d-inl d-prazo"},
+        h("div",{class:"d-prazo-h"},h("label",{for:"dDue"},"Prazo de execução"),
+          h("span",{class:"d-urg",role:"group","aria-label":"Urgência"},h("span",{},"Urgência"),
+            [1,2,3].map(v=>h("button",{class:"opt"+((t.priority||2)===v?" on":""),type:"button","aria-pressed":(t.priority||2)===v?"true":"false",title:PRI[v],onclick:()=>patchTask(id,{priority:v})},h("span",{class:"pill p"+v},"P"+v))))),
+        dueIn,h("div",{class:"opts"},quickDue(0,"Hoje"),quickDue(1,"Amanhã"),h("button",{class:"opt",title:"Em 1 semana",onclick:()=>patchTask(id,{due:ymd(addDays(new Date(),7))})},"+1 sem"),
+          t.due?h("button",{class:"opt d-noprazo",title:"Sem prazo","aria-label":"Sem prazo",onclick:()=>patchTask(id,t.repeat?{due:null,repeat:null}:{due:null})},svg(ICON.x,14)):null)),
       h("div",{class:"field"},h("button",{class:"lbl lbl-btn",type:"button",onclick:()=>openGroupPicker(id)},"Grupos"),tagBox),
       maisProps()
     ),
@@ -3958,7 +3983,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v38";
+const APP_VER="v39";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
