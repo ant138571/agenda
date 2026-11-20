@@ -318,6 +318,20 @@ button{cursor:pointer}
 .detail .field.d-inl>.pn-more{flex-basis:100%}
 .detail .gest-hint{padding:0 2px}
 .detail .d-foot{padding:6px 14px}
+/* v38: janela de grupos */
+.lbl-btn{border:0;background:none;padding:0;text-align:left;cursor:pointer;font:inherit}
+.lbl-btn:hover{color:var(--accent-text)}
+.tagedit .tag-pick{padding:3px 9px;font-size:12px;margin-left:auto}
+.gp-list{display:flex;flex-direction:column;gap:2px;max-height:min(55vh,420px);overflow:auto}
+.gp-item{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 10px;border:1px solid transparent;border-radius:10px;background:none;font:inherit;font-size:14px;font-weight:600;color:var(--ink);text-align:left;cursor:pointer}
+.gp-item:hover{background:var(--hover)}
+.gp-item.on{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 35%,var(--line))}
+.gp-item>i{flex:none;width:10px;height:10px;border-radius:50%}
+.gp-item>span:first-of-type{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gp-item small{color:var(--muted);font-weight:500;font-size:11.5px;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gp-ck{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;border:1.5px solid var(--line-strong);color:var(--accent-ink)}
+.gp-item.on .gp-ck{background:var(--accent);border-color:var(--accent)}
+.gp-novo{color:var(--accent-text)}
 /* v37: "Mais propriedades" — etiquetas (com valor: laranja clara com o valor; sem valor: tracejada) que abrem as
    opções logo abaixo, uma de cada vez */
 .d-pchips{display:flex;flex-wrap:wrap;gap:6px}
@@ -2178,7 +2192,7 @@ function renderDetail(){
     if(v.trim()){ tagIn.value=""; addTags(v.split(/[\s,]+/),false); return; }
     const a=document.activeElement;
     if(tagsDirty&&!(pane.contains(a)&&a.matches("textarea,input[type=text]"))){ tagsDirty=false; UI.forceDetail=true; render(); } },0));
-  tagBox.append(tagIn,dl);
+  tagBox.append(tagIn,dl,h("button",{class:"opt tag-pick",type:"button",title:"Escolher entre os grupos existentes",onmousedown:noBlur,onclick:()=>openGroupPicker(id)},svg('<path d="M4 6h16M4 12h16M4 18h10"/>',13),"Escolher"));
   const dueIn=calPick(h("input",{type:"date",id:"dDue",min:today(),max:DATA_MAX,value:t.due||"",onchange:e=>{ const v=e.target.value||null, cur=VIEW.tasks[id]; if(v&&!dataValida(v)) return; patchTask(id,!v&&cur&&cur.repeat?{due:null,repeat:null}:{due:v}); }}));
   dueIn.addEventListener("blur",()=>{ const v=dueIn.value, cur=(VIEW.tasks[id]||{}).due||""; if(v&&v!==cur&&!dataValida(v)){ dueIn.value=cur; toast("Escolha um prazo de hoje em diante."); } });
   const notes=h("textarea",{id:"dNotes",placeholder:"Anotações, links, passos…"}); notes.value=t.notes||"";
@@ -2281,7 +2295,7 @@ function renderDetail(){
       // v37: à vista só o nome, o Prazo e os Grupos; o resto fica em etiquetas ("Mais propriedades") que abrem as
       // opções logo abaixo, uma de cada vez
       h("div",{class:"field d-inl"},h("label",{for:"dDue"},"Prazo de execução"),dueIn,h("div",{class:"opts"},quickDue(0,"Hoje"),quickDue(1,"Amanhã"),quickDue(7,"Em 1 semana"),t.due?h("button",{class:"opt",onclick:()=>patchTask(id,t.repeat?{due:null,repeat:null}:{due:null})},"Sem prazo"):null)),
-      h("div",{class:"field"},h("span",{class:"lbl"},"Grupos"),tagBox),
+      h("div",{class:"field"},h("button",{class:"lbl lbl-btn",type:"button",onclick:()=>openGroupPicker(id)},"Grupos"),tagBox),
       maisProps()
     ),
     h("div",{class:"d-foot"},h("span",{},t.done&&t.doneAt?`Concluída em ${fmtBR(t.doneAt)}`:`Criada em ${fmtBR(t.createdAt)}`),delZone)
@@ -2502,6 +2516,33 @@ function openModal(title,body,actions){
     h("div",{class:"modal",role:"dialog","aria-label":title},h("h3",{},title),body,
       h("div",{class:"row-end"},...actions.map(a=>h("button",{class:"btn"+(a.cls?" "+a.cls:""),onclick:()=>{ if(a.run()!==false) close(); }},a.label)),h("button",{class:"btn",onclick:close},"Fechar"))));
   root.replaceChildren(bg);
+}
+/* v38: escolher os grupos da tarefa num toque — janela com todos os grupos (cor; projetos marcados), cada toque
+   põe/tira o grupo na hora; busca por nome e "Criar #…" quando o nome não existe */
+function openGroupPicker(id){
+  if(!VIEW.tasks[id]) return;
+  const busca=h("input",{type:"text",id:"gpBusca",placeholder:"Procurar ou criar grupo…","aria-label":"Procurar grupo",autocomplete:"off",
+    style:"border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel);width:100%;box-sizing:border-box"});
+  const lista=h("div",{class:"gp-list"});
+  const t0=new Set(VIEW.tasks[id].tags||[]), ordem=allTags().names.slice().sort((a,b)=>(t0.has(b)-t0.has(a))||a.localeCompare(b,"pt-BR"));   // os da tarefa primeiro
+  const paint=()=>{ const cur=VIEW.tasks[id]; if(!cur){ $("#modalRoot").replaceChildren(); return; }
+    const tem=new Set(cur.tags||[]), q=fold(busca.value.replace(/^#/,"").trim()), nq=normTag(busca.value);
+    for(const n of allTags().names) if(!ordem.includes(n)) ordem.push(n);   // ordem fixa enquanto a janela está aberta (os itens não pulam ao tocar)
+    const nomes=ordem.filter(n=>!q||fold(n).includes(q));
+    lista.replaceChildren(...nomes.map(n=>{ const on=tem.has(n), pj=!!(VIEW.projects||{})[n];
+      return h("button",{class:"gp-item"+(on?" on":""),type:"button","aria-pressed":on?"true":"false",onclick:()=>{ const c=VIEW.tasks[id]; if(!c) return;
+          UI.forceDetail=true; patchTask(id,{tags:on?(c.tags||[]).filter(x=>x!==n):[...(c.tags||[]),n]}); paint(); }},
+        h("i",{style:`background:${tagColor(n)}`}),h("span",{},"#"+n),pj?h("small",{},(VIEW.projects[n].titulo||"projeto")):null,
+        h("span",{class:"gp-ck","aria-hidden":"true"},on?svg(ICON.check,14,'stroke-width="3"'):null)); }));
+    if(nq&&!allTags().names.includes(nq)) lista.append(h("button",{class:"gp-item gp-novo",type:"button",onclick:()=>{ const c=VIEW.tasks[id]; if(!c) return;
+        ensureTags([nq]); UI.forceDetail=true; patchTask(id,{tags:[...new Set([...(c.tags||[]),nq])]}); busca.value=""; paint(); }},svg(ICON.plus,15),h("span",{},"Criar #"+nq)));
+    if(!lista.childElementCount) lista.append(h("div",{class:"gest-hint",style:"text-align:left"},"Nenhum grupo ainda: escreva um nome acima para criar."));
+  };
+  busca.addEventListener("input",paint);
+  busca.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); const b=lista.querySelector(".gp-item"); if(b&&busca.value.trim()) b.click(); } });
+  paint();
+  openModal("Grupos da tarefa",h("div",{style:"display:flex;flex-direction:column;gap:8px"},busca,lista),[]);
+  if(!matchMedia("(pointer: coarse)").matches) setTimeout(()=>busca.focus(),30);
 }
 function openTagModal(g){
   const inp=h("input",{type:"text",id:"tagRename",value:g,style:"border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)"});
@@ -3917,7 +3958,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[]); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v37";
+const APP_VER="v38";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
