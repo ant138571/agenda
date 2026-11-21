@@ -336,6 +336,37 @@ button{cursor:pointer}
 .detail .field.d-inl>.pn-more{flex-basis:100%}
 .detail .gest-hint{padding:0 2px}
 .detail .d-foot{padding:6px 14px}
+/* v47: aba Cronograma = tarefas agrupadas por data; arrastar para outra data */
+.crg-wrap{display:flex;flex-direction:column;gap:14px;margin-top:6px}
+.crg{border:1px solid var(--line);border-left:4px solid var(--c);border-radius:14px;background:var(--panel);padding:6px 10px 8px;transition:box-shadow .12s,background .12s}
+.crg.passou{opacity:.75}
+.crg.sem-data{border-left-style:dashed}
+.crg.drop{box-shadow:0 0 0 2px var(--accent);background:color-mix(in srgb,var(--accent-soft) 55%,var(--panel))}
+.crg.nodrop{box-shadow:0 0 0 2px var(--danger)}
+.crg-h{display:flex;align-items:center;gap:4px;min-height:40px}
+.crg-tit{flex:1;min-width:0;display:flex;align-items:center;flex-wrap:wrap;gap:2px 8px;border:0;background:none;padding:4px 2px;font:inherit;color:var(--ink);text-align:left;cursor:pointer;border-radius:8px}
+.crg-tit:disabled{cursor:default;color:var(--ink)}
+.crg-tit:not(:disabled):hover .crg-nome{text-decoration:underline;text-decoration-color:var(--c);text-underline-offset:3px}
+.crg-dot{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none}
+.crg-nome{font-weight:800;font-size:14.5px}
+.crg-sub{flex-basis:100%;padding-left:18px;font-size:12.5px;color:var(--muted);font-weight:600}
+.crg-tag{font-size:11px;font-weight:800;border-radius:999px;padding:1px 8px;background:var(--soft);color:var(--muted)}
+.crg-tag.hoje{background:var(--accent-soft);color:var(--accent-text)}
+.crg-btn{width:36px;height:36px;color:var(--muted)}
+.crg-txt{padding:0 4px 4px 20px;cursor:pointer}
+.crg-ctx{margin:2px 0;font-style:italic;color:var(--muted);font-size:13px}
+.crg-ativ{margin:2px 0;font-size:13px}
+.crg-ativ::before{content:"";display:inline-block;width:10px;height:2px;background:var(--c);vertical-align:middle;margin-right:7px}
+.crg-vazio{padding:6px 4px 4px 20px;font-size:12.5px;color:var(--faint)}
+.crg .list{margin-top:2px}
+.crg-add{margin-top:6px}
+.crg-novo{margin:0 0 2px}
+.crg-past{align-self:flex-start}
+.crg-ghost{position:fixed;z-index:90;pointer-events:none;box-shadow:var(--shadow);border-radius:12px;opacity:.95;background:var(--panel);transform:rotate(-1.2deg)}
+.task.crg-moving{opacity:.35}
+body.crg-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
+.d-xtra{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.d-xtra .field label{font-size:11.5px;color:var(--muted);font-weight:600}
 /* v45: cronograma editável direto no cartão */
 .cr-tools .cr-n{margin-left:2px;background:var(--accent);color:var(--accent-ink);border-radius:999px;font-size:11px;font-weight:800;padding:0 7px;line-height:18px}
 .crono.cr-card .cr-ed-it{cursor:pointer;border-radius:8px;transition:background .12s}
@@ -1913,6 +1944,7 @@ document.addEventListener("pointerdown",e=>{
 // no celular, o toque longo não abre o menu do sistema nem o do clique direito
 document.addEventListener("contextmenu",e=>{ if(LAST_PTR==="touch"&&Date.now()-LAST_PTR_AT<3000&&e.target.closest&&e.target.closest(".t-card")){ e.preventDefault(); e.stopPropagation(); } },true);
 function startDrag(e,row){
+  if(row.closest(".crg-wrap")) return startDateDrag(e,row);   // v47: aba Cronograma — leva a tarefa para outra data
   const list=row.parentElement;
   const rows=[...list.children].filter(r=>r.classList.contains("task")&&r.querySelector(".grip"));
   const from=rows.indexOf(row); if(from<0) return;
@@ -1923,8 +1955,43 @@ function startDrag(e,row){
   G={type:"drag",row,list,rows,rects,from,to:from,pitch:rects[from].height+gap,y:e.clientY,st:$("#content").scrollTop,pid:e.pointerId};
   GESTURE=true; row.classList.add("dragging"); list.classList.add("reordering");
 }
+/* v47: arrastar uma tarefa para outra data (aba Cronograma do projeto): um "fantasma" segue o dedo/mouse e a data sob
+   ele fica destacada; soltar muda o prazo (com Desfazer). Data passada não aceita. */
+function startDateDrag(e,row){
+  e.preventDefault();
+  const card=row.querySelector(".t-card"), r=card.getBoundingClientRect(), ghost=card.cloneNode(true);
+  ghost.classList.add("crg-ghost"); ghost.style.width=r.width+"px"; ghost.style.left=r.left+"px"; ghost.style.top=r.top+"px";
+  document.body.append(ghost);
+  try{ e.target.closest(".grip").setPointerCapture(e.pointerId); }catch(err){}
+  const de=row.closest(".crg"); 
+  G={type:"ddrag",row,ghost,dx:e.clientX-r.left,dy:e.clientY-r.top,pid:e.pointerId,from:de?de.dataset.iso:null,alvo:null,x:e.clientX,y:e.clientY};
+  GESTURE=true; row.classList.add("crg-moving"); document.body.classList.add("crg-dragging");
+}
+function moveDateDrag(e){
+  const g=G; g.x=e.clientX; g.y=e.clientY;
+  g.ghost.style.left=(e.clientX-g.dx)+"px"; g.ghost.style.top=(e.clientY-g.dy)+"px";
+  const sc=$("#content"), cr=sc.getBoundingClientRect();
+  if(e.clientY>cr.bottom-60) sc.scrollTop+=14; else if(e.clientY<cr.top+60) sc.scrollTop-=14;
+  g.ghost.style.visibility="hidden"; const el=document.elementFromPoint(e.clientX,e.clientY); g.ghost.style.visibility="";
+  const alvo=el&&el.closest?el.closest(".crg"):null;
+  if(alvo!==g.alvo){ if(g.alvo) g.alvo.classList.remove("drop","nodrop"); g.alvo=alvo;
+    if(alvo){ const iso=alvo.dataset.iso; alvo.classList.add(iso&&iso<today()?"nodrop":"drop"); } }
+}
+function endDateDrag(g,cancelled){
+  g.ghost.remove(); g.row.classList.remove("crg-moving"); document.body.classList.remove("crg-dragging");
+  if(g.alvo) g.alvo.classList.remove("drop","nodrop");
+  GESTURE=false;
+  const id=g.row.dataset.id, t=VIEW.tasks[id];
+  if(cancelled||!g.alvo||!t){ if(pendingRender) render(); return; }
+  const iso=g.alvo.dataset.iso||null;
+  if(iso===(t.due||null)){ if(pendingRender) render(); return; }
+  if(iso&&iso<today()){ toast("Essa data já passou: escolha uma data de hoje em diante."); if(pendingRender) render(); return; }
+  const prev=t; patchTask(id,!iso&&t.repeat?{due:null,repeat:null}:{due:iso});
+  toast(iso?"Movida para "+fmtBR(iso):"Movida para “Sem data”",()=>restoreTask(id,prev));
+}
 window.addEventListener("pointermove",e=>{
   if(!G||e.pointerId!==G.pid) return;
+  if(G.type==="ddrag") return moveDateDrag(e);
   if(G.type==="drag") return moveDrag(e);
   const dx=e.clientX-G.x, dy=e.clientY-G.y;
   if(G.type==="pending"){
@@ -1960,6 +2027,7 @@ function endGesture(e,cancelled){
   const g=G; G=null;
   if(g.type==="pending"){ clearTimeout(g.lp); return; }
   swallowNextClick();
+  if(g.type==="ddrag") return endDateDrag(g,cancelled);
   if(g.type==="drag"){
     g.rows.forEach(r=>r.style.transform=""); g.row.classList.remove("dragging"); g.list.classList.remove("reordering");
     GESTURE=false;
@@ -2354,10 +2422,8 @@ function renderDetail(){
         corpo:()=>[h("div",{class:"field"},h("span",{class:"lbl"},"Quanto a tarefa pesa nos seus objetivos"),
             h("div",{class:"opts"},[3,2,1].map(v=>opt(imp,v,IMP_EST[v],val=>patchTask(id,{importance:val})))))]},
       {k:"etapas",ic:svg(IC_ETAPAS,15),txt:steps.length?`Etapas ${nDone}/${steps.length}`:"Etapas",tem:!!steps.length,titulo:"Etapas"+(steps.length?` · ${nDone} de ${steps.length}`:""),corpo:()=>[stepBox]},
-      projTags.length?{k:"proj",ic:svg(ICON.user,15),txt:respNomes.length?respNomes.join(", "):"Responsáveis",tem:!!respNomes.length||inCrono(t),titulo:"Projeto e responsáveis",
-        corpo:()=>[h("div",{class:"field"},h("div",{class:"toggle-row"},h("span",{style:"display:inline-flex;gap:8px;align-items:center"},svg(ICON.folder,17),(inCrono(t)?"No cronograma de ":"Fora do cronograma de ")+projTags.map(g=>"#"+g).join(", ")),
-              h("button",{class:"btn small"+(inCrono(t)?"":" primary"),onclick:()=>setCrono([id],!inCrono(t))},inCrono(t)?"Tirar":"Incluir")),
-            inCrono(t)&&!t.due?h("div",{class:"gest-hint",style:"text-align:left"},"Sem prazo, a tarefa aparece em “Sem prazo”, no fim do cronograma; com prazo, vai para a data."):null),
+      projTags.length?{k:"proj",ic:svg(ICON.user,15),txt:respNomes.length?respNomes.join(", "):"Responsáveis",tem:!!respNomes.length,titulo:"Projeto e responsáveis",
+        corpo:()=>[crExtrasCampos(id,projTags,t),
           ...projTags.map(g=>{ const pj=getProject(g); if(!pj) return null; const ids=(pj.atrib||{})[id]||[];
             return h("div",{class:"field d-resp"},h("span",{class:"lbl"},"Responsáveis"+(projTags.length>1?" · #"+g:"")),
               pj.membros.length?h("div",{class:"opts"},pj.membros.map(m=>h("button",{class:"opt"+(ids.includes(m.id)?" on":""),"aria-pressed":ids.includes(m.id)?"true":"false",title:funcNomes(pj,m).join(", "),onclick:()=>toggleResp(g,id,m.id)},svg(ICON.user,13),membroNome(m))))
@@ -2774,7 +2840,8 @@ function cleanExtras(x){
 }
 /* tarefas que entram no cronograma: marcadas com crono:true (coluna da direita do projeto) */
 const inCrono=t=>t.crono===true;
-const cronoTasks=tag=>sortTasks(tasksArr().filter(t=>inCrono(t)&&t.due&&!t.done&&(t.tags||[]).includes(tag)),"manual");   // concluídas não aparecem no cronograma
+// v47: TODAS as tarefas abertas do projeto com data entram no cronograma (PDF/e-mail); a marca crono não é mais usada
+const cronoTasks=tag=>sortTasks(tasksArr().filter(t=>t.due&&!t.done&&(t.tags||[]).includes(tag)),"manual");   // concluídas não aparecem no cronograma
 const extraInfo=(x,resp)=>{ x=x||{}; const r=resp&&resp.length?resp.join(", "):x.resp; return [x.horario,x.local,r?"Resp.: "+r:""].filter(Boolean).join(" · "); };
 function setCrono(ids,on){
   const now=new Date().toISOString(), ops=[];
@@ -2922,6 +2989,7 @@ function cronoView(p,kind){
 }
 /* v30: tarefas do cronograma (crono) abertas e sem prazo: aparecem no fim da lista, em “Sem prazo” */
 function cronoSemPrazo(p){
+  return [];   // v47: tarefas sem data não vão para o PDF/e-mail (no app ficam no grupo "Sem data" da aba Cronograma)
   const mb=membrosDe(p);
   return sortTasks(tasksArr().filter(t=>inCrono(t)&&!t.due&&!t.done&&(t.tags||[]).includes(p.tag)),"manual")
     .map(t=>({t:t.title,id:t.id,info:extraInfo((p.extras||{})[t.id],mb(t.id).map(membroNome))}));
@@ -3054,46 +3122,88 @@ function renderProject(wrap,tag){
     wrap.append(h("div",{class:"proj-pane"},equipeEnvio(tag,p),acessoEquipe(tag,p),membrosSection(tag,p,all)));
     return;
   }
-  // ----- cronograma (ou modo de edição): em cima (v29)
-  const sec=h("section",{class:"proj-crono acima","aria-label":"Cronograma"},h("div",{class:"col-head"},h("h3",{},"Cronograma")));
-  // v45: sem modo de edição — edita-se direto no cronograma (datas, tarefas, + Adicionar); cabeçalho em "Configurar"
-  const foraN=tasksArr().filter(t=>(t.tags||[]).includes(tag)&&!t.done&&!inCrono(t)).length;
-  if(!editing) sec.append(h("div",{class:"row-end cr-tools",style:"justify-content:flex-start"},
+  // v47: a aba Cronograma é a lista das tarefas do projeto agrupadas por data (o desenho do cronograma fica só no PDF e
+  // no e-mail); arrastar ⋮⋮ leva a tarefa para outra data
+  renderCronoTab(wrap,tag,p);
+}
+function renderCronoTab(wrap,tag,p){
+  const td=today(), mb=membrosDe(p);
+  wrap.append(h("div",{class:"row-end cr-tools",style:"justify-content:flex-start"},
     h("button",{class:"btn",onclick:()=>openCrConfig(tag)},svg(ICON.edit,15),"Configurar"),
     h("button",{class:"btn",onclick:()=>openCrData(tag,null)},svg(ICON.plus,15),"Nova data"),
-    h("button",{class:"btn",onclick:()=>openCrTrazer(tag),title:"Tarefas do projeto que ainda não estão no cronograma"},svg(ICON.list,15),"Trazer tarefas",foraN?h("span",{class:"cr-n"},String(foraN)):null),
     h("button",{class:"btn primary",onclick:()=>exportCronoPDF(tag)},svg(ICON.report,15),"Exportar PDF"),
     h("button",{class:"btn",onclick:()=>openMailCrono(tag)},svg(ICON.mail,15),"Enviar por e-mail"),
     h("button",{class:"btn",title:"Remover projeto","aria-label":"Remover projeto",style:"margin-left:auto",onclick:()=>confirmRemoveProject(tag)},svg(ICON.trash,15))));
-  sec.append(editing?cronoEditor(tag):crEditavel(cronoView(p,"card"),tag));
-  wrap.append(sec);
-  // ----- tarefas, abaixo do cronograma: gerais (esquerda) e as que entram no cronograma (direita)
-  const all=tasksArr().filter(t=>(t.tags||[]).includes(tag));
-  const mb=membrosDe(p), vis=p.visao;
-  const col=(title,list,defaults,ids,emptyTxt,extra,cronoBtn,crono)=>{   // crono: ordem cronológica (prazo), sem arrastar
-    const open=sortTasks(list.filter(t=>!t.done),crono?"due":"manual"), done=list.filter(t=>t.done).sort((a,b)=>(b.doneAt||"").localeCompare(a.doneAt||""));
-    const sec=h("section",{class:"proj-tasks","aria-label":title},h("div",{class:"col-head"},h("h3",{},title),h("span",{class:"col-count"},`${open.length} aberta${open.length===1?"":"s"}`)));
-    if(defaults) sec.append(addBar(defaults,ids));   // v30: a coluna do cronograma não tem Adicionar (a tarefa nasce em Tarefas gerais e vai pelo +)
-    if(extra) sec.append(extra);
-    if(!open.length) sec.append(h("div",{class:"empty"},emptyTxt));
-    else if(vis==="tarefa") sec.append(h("div",{class:"list"},open.map(t=>taskRow(t,{drag:!crono,membros:mb(t.id),cronoBtn}))),crono?"":gestureHint());
-    else for(const g of gruposVis(p,open,vis,false))   // por membro / por função: agrupadas, sem arrastar
-      sec.append(h("div",{class:"group-title"},g.titulo,h("span",{class:"n"},g.list.length)),h("div",{class:"list"},g.list.map(t=>taskRow(t,{membros:mb(t.id),cronoBtn}))));
-    // concluídas: recolhidas por padrão (v29); abrir vale só até sair do app
-    if(done.length){ const k=tag+"|"+(crono?"crono":"gerais"), aberto=!!UI.crDone[k];
-      sec.append(h("button",{class:"group-title gt-toggle","aria-expanded":aberto?"true":"false",onclick:()=>{ UI.crDone={...UI.crDone,[k]:!aberto}; render(); }},
-        h("span",{class:"pn-chev"},svg(ICON.chev,14)),"Concluídas",h("span",{class:"n"},done.length)));
-      if(aberto) sec.append(h("div",{class:"list"},done.slice(0,20).map(t=>taskRow(t,{membros:mb(t.id)})))); }
+  const all=tasksArr().filter(t=>(t.tags||[]).includes(tag)), open=all.filter(t=>!t.done);
+  const evIso={}; for(const e of p.eventos) evIso[crIso(e)]=e;
+  const cores={}; { const ce=cronoEvents({...p,tag}); if(ce.length){ crCores(ce); ce.forEach(e=>cores[crIso(e)]=e.cor); } }
+  const isos=[...new Set([...open.filter(t=>t.due).map(t=>t.due),...Object.keys(evIso)])].sort();
+  const porData=iso=>sortTasks(open.filter(t=>t.due===iso),"manual");
+  const proximo=isos.find(x=>x>=td&&!(evIso[x]&&evIso[x].sem));
+  const grupo=iso=>{
+    const e=evIso[iso], ts=iso?porData(iso):sortTasks(open.filter(t=>!t.due),"manual"), passado=iso&&iso<td;
+    const sub=e?[e.horario,e.rotulo].filter(Boolean):[];
+    const textos=e?[e.contexto?h("p",{class:"crg-ctx"},e.contexto):null,...e.atividades.map(a=>h("p",{class:"crg-ativ"},a)),e.sem?h("p",{class:"crg-ctx"},"Sem encontro nesta data."):null].filter(Boolean):[];
+    const addOn=UI.crAdd===(iso||"-");
+    const abreAdd=()=>{ UI.crAdd=iso||"-"; render(); setTimeout(()=>{ const i=$("#crAddIn"); if(i) i.focus(); },0); };
+    const sec=h("section",{class:"crg"+(passado?" passou":"")+(iso?"":" sem-data"),"data-iso":iso,style:"--c:"+(iso?(cores[iso]||"var(--line-strong)"):"var(--line-strong)")},
+      h("div",{class:"crg-h"},
+        h("button",{class:"crg-tit",type:"button",title:iso?"Editar esta data":null,disabled:iso?null:true,onclick:()=>iso&&openCrData(tag,iso)},
+          h("span",{class:"crg-dot","aria-hidden":"true"}),
+          h("span",{class:"crg-nome"},iso?cap(crDiaTxt(iso)):"Sem data"),
+          iso===td?h("span",{class:"crg-tag hoje"},"Hoje"):iso===proximo?h("span",{class:"crg-tag"},"Próxima"):null,
+          sub.length?h("span",{class:"crg-sub"},sub.join(" · ")):null),
+        h("span",{class:"col-count"},ts.length?String(ts.length):""),
+        !passado?h("button",{class:"icon-btn crg-btn",type:"button",title:"Adicionar tarefa nesta data","aria-label":"Adicionar tarefa "+(iso?"em "+fmtBR(iso):"sem data"),onclick:abreAdd},svg(ICON.plus,17)):null,
+        iso?h("button",{class:"icon-btn crg-btn",type:"button",title:"Editar a data (horário, rótulo, contexto…)","aria-label":"Editar a data "+fmtBR(iso),onclick:()=>openCrData(tag,iso)},svg(ICON.edit,16)):null),
+      textos.length?h("div",{class:"crg-txt",onclick:()=>iso&&openCrData(tag,iso)},textos):null,
+      ts.length?h("div",{class:"list"},ts.map(t=>taskRow(t,{drag:true,membros:mb(t.id)}))):(!addOn?h("div",{class:"crg-vazio"},iso?"Nenhuma tarefa nesta data — arraste uma tarefa para cá.":"Nenhuma tarefa sem data."):null),
+      addOn?crAddRow(tag,iso):null);
     return sec;
   };
-  const gen=all.filter(t=>!inCrono(t)), cr=all.filter(inCrono), noDue=cr.filter(t=>!t.done&&!t.due).length;
-  wrap.append(h("div",{class:"proj-tarefas-abaixo"},visaoSel(tag,p),h("div",{class:"proj-cols2"},
-    col("Tarefas gerais",gen,{tags:[tag]},null,"Nenhuma tarefa geral aberta neste projeto.",
-      gen.some(t=>!t.done)?h("div",{class:"gest-hint",style:"text-align:left"},"Toque em + para levar a tarefa ao cronograma."):null,"incluir"),
-    col("Tarefas do cronograma",cr,null,null,
-      "Nenhuma tarefa no cronograma. Toque em + numa tarefa geral (ou abra uma tarefa e escolha “Incluir” em Cronograma do projeto).",
-      h("div",{class:"gest-hint",style:"text-align:left"},"Título e prazo destas tarefas atualizam o cronograma automaticamente; concluídas saem dele. Toque em − para tirar uma tarefa do cronograma."+(noDue?` ${noDue} sem prazo: aparece${noDue===1?"":"m"} em “Sem prazo”, no fim do cronograma, até ter prazo.`:"")),"tirar",true))));
-  if(!editing) crAjustarTudo();
+  const passadas=isos.filter(x=>x<td&&!porData(x).length), visiveis=isos.filter(x=>!passadas.includes(x));
+  const box=h("div",{class:"crg-wrap"});
+  if(passadas.length){ const ab=!!(UI.crPast||{})[tag];
+    box.append(h("button",{class:"group-title gt-toggle crg-past","aria-expanded":ab?"true":"false",onclick:()=>{ UI.crPast={...(UI.crPast||{}),[tag]:!ab}; render(); }},
+      h("span",{class:"pn-chev"},svg(ICON.chev,14)),"Datas passadas",h("span",{class:"n"},passadas.length)));
+    if(ab) passadas.forEach(x=>box.append(grupo(x))); }
+  if(!isos.length) box.append(h("div",{class:"empty"},"Ainda não há datas: use “+ Nova data” ou dê uma data a uma tarefa (abaixo, em “Sem data”)."));
+  visiveis.forEach(x=>box.append(grupo(x)));
+  box.append(h("div",{class:"cr-ed-novo crg-novo"},h("button",{type:"button",onclick:()=>openCrData(tag,null)},svg(ICON.plus,15),"Nova data")));
+  box.append(grupo(""));
+  // concluídas do projeto: recolhidas
+  const done=all.filter(t=>t.done).sort((a,b)=>(b.doneAt||"").localeCompare(a.doneAt||""));
+  if(done.length){ const k=tag+"|crg", ab=!!UI.crDone[k];
+    box.append(h("button",{class:"group-title gt-toggle","aria-expanded":ab?"true":"false",onclick:()=>{ UI.crDone={...UI.crDone,[k]:!ab}; render(); }},
+      h("span",{class:"pn-chev"},svg(ICON.chev,14)),"Concluídas",h("span",{class:"n"},done.length)));
+    if(ab) box.append(h("div",{class:"list"},done.slice(0,30).map(t=>taskRow(t,{membros:mb(t.id)})))); }
+  box.append(h("div",{class:"gest-hint",style:"text-align:left;margin-top:10px"},"Arraste ⋮⋮ para levar a tarefa a outra data (ou para “Sem data”). Toque na tarefa para os detalhes (nome, responsáveis, horário e local no cronograma). Todas as tarefas com data entram no PDF e no e-mail do cronograma."));
+  wrap.append(box);
+}
+/* campo de adicionar dentro de uma data (Enter cria e continua no campo; Esc fecha) */
+function crAddRow(tag,iso){
+  const inp=h("input",{type:"text",id:"crAddIn",placeholder:"Nova tarefa"+(iso?" em "+fmtBR(iso):" sem data"),autocomplete:"off",enterkeyhint:"done"});
+  const fecha=()=>{ UI.crAdd=null; render(); };
+  inp.addEventListener("keydown",e=>{
+    if(e.key==="Escape"){ e.preventDefault(); fecha(); return; }
+    if(e.key!=="Enter") return; e.preventDefault();
+    const q=parseQuick(inp.value); if(!q.title) return;
+    const id=createTask(q.title,{tags:[...new Set([tag,...q.tags])],due:iso||null,...(q.importance?{importance:q.importance}:{}),...(q.priority?{priority:q.priority}:{})});
+    inp.value=""; toast("Tarefa adicionada"+(iso?" em "+fmtBR(iso):""),()=>{ if(VIEW.tasks[id]) enqueueMany([{op:"delete",path:"tasks/"+id}]); });
+    setTimeout(()=>{ const i=$("#crAddIn"); if(i) i.focus(); },0); });
+  inp.addEventListener("blur",()=>setTimeout(()=>{ const a=document.activeElement; if(UI.crAdd!=null&&!inp.value.trim()&&!(a&&a.id==="crAddIn")){ UI.crAdd=null; render(); } },150));
+  return h("form",{class:"add crg-add",onsubmit:e=>e.preventDefault()},svg(ICON.plus,16),inp);
+}
+
+/* v47: horário e local da tarefa no cronograma (extras do projeto), nos Detalhes › Projeto e responsáveis */
+function crExtrasCampos(id,projTags,t){
+  const pj=getProject(projTags[0]); const x=(pj&&(pj.extras||{})[id])||{};
+  const salva=(k,v)=>{ for(const g of projTags){ const q=getProject(g); if(!q) continue; const c=cleanProject(q), cur={horario:"",local:"",resp:"",...(c.extras[id]||{})};
+    if((cur[k]||"")===v.trim()) continue; putProject(g,{...c,extras:{...c.extras,[id]:{...cur,[k]:v.trim()}}}); } };
+  const campo=(k,lbl,ph,max)=>{ const i=h("input",{type:"text",id:"dX"+k,placeholder:ph,maxlength:String(max)}); i.value=x[k]||""; i.addEventListener("change",()=>salva(k,i.value));
+    return h("div",{class:"field"},h("label",{for:"dX"+k},lbl),i); };
+  return h("div",{class:"field"},h("span",{class:"lbl"},"No cronograma"+(t.due?" ("+fmtBR(t.due)+")":" (sem data: não aparece)")),
+    h("div",{class:"d-xtra"},campo("horario","Horário","ex.: 14h",80),campo("local","Local / sala","ex.: sala 203",120)));
 }
 /* ===================== v45: cronograma editável direto no cartão =====================
    Tocar numa data (ou no lápis) abre a ficha da data; tocar numa tarefa abre a ficha da tarefa (prazo, horário, local,
@@ -3164,8 +3274,9 @@ function openCrData(tag,iso){
     const q=getProject(tag); if(!q) return; const prev=cleanProject(q);
     if(!prev.eventos.some(e=>crIso(e)===orig)&&!lk.length) return;
     const ops=[crProjOp(tag,{...prev,eventos:prev.eventos.filter(e=>crIso(e)!==orig)})], undo=[crProjOp(tag,prev)];
-    const tirar=lk.length&&confirm(`Tirar também ${lk.length===1?"a tarefa":"as "+lk.length+" tarefas"} desta data do cronograma? (Cancelar = as tarefas continuam no cronograma, e a data também.)`);
-    if(tirar) for(const t of lk){ ops.push(taskOp(t.id,{...VIEW.tasks[t.id],crono:false,updatedAt:new Date().toISOString()},{crono:false})); undo.push(taskOp(t.id,{...VIEW.tasks[t.id],crono:true},{crono:true})); }
+    const tirar=lk.length&&confirm(`${lk.length===1?"A tarefa desta data fica":"As "+lk.length+" tarefas desta data ficam"} sem data (vão para “Sem data”)? Cancelar = continuam nesta data, e a data também.`);
+    if(tirar) for(const t of lk){ const pt=t.repeat?{due:null,repeat:null}:{due:null}, now=new Date().toISOString();
+      ops.push(taskOp(t.id,{...VIEW.tasks[t.id],...pt,updatedAt:now},pt)); undo.push(taskOp(t.id,{...VIEW.tasks[t.id],updatedAt:now},{due:t.due,repeat:t.repeat||null})); }
     enqueueMany(ops); toast("Data "+fmtBR(orig)+" excluída",()=>enqueueMany(undo));
   };
   openModal(orig?"Data · "+crDiaTxt(orig):"Nova data",body,[...(orig?[{label:"Excluir data",cls:"danger",run:excluir}]:[]),{label:orig?"Salvar":"Criar data",cls:"primary",run:salvar}],{fecharNoTopo:true});
@@ -4213,7 +4324,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[],{fecharNoTopo:true}); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v46";
+const APP_VER="v47";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";

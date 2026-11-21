@@ -424,7 +424,7 @@ function telaProjeto(p){
     if(t.due) meta.push(prazoTag(t,td));
     else meta.push(h("span",{},"sem prazo"));
     meta.push(...classTags(t));
-    if(t.crono) meta.push(h("span",{},"no cronograma"));
+    // v47 do app: "no cronograma" saiu (toda tarefa com data está no cronograma)
     meta.push(h("span",{},t.responsaveis.length?"resp.: "+t.responsaveis.join(", "):"sem responsável"));
     const pegar=h("button",{class:"btn small",onclick:async()=>{ pegar.disabled=true;
       try{ await chamar({acao:"pegar",dono:t.dono,projeto:t.projeto,tarefa:t.id}); toast("A tarefa agora é sua também"); await carregar(); }
@@ -524,6 +524,7 @@ function cronoView(p){
 }
 /* “Sem prazo” (v30 do app): tarefas do projeto marcadas para o cronograma, abertas e ainda sem prazo — mesmo desenho do app */
 function crSemPrazo(p){
+  return null;   // v47 do app: tarefas sem data não entram mais no cronograma (todas as tarefas com data entram)
   const l=(ST.tarefas||[]).filter(t=>t.dono===p.dono&&t.projeto===p.tag&&t.crono&&!t.due&&!t.done); if(!l.length) return null;
   return h("div",{class:"cr-sp"},h("h4",{class:"cr-sp-titulo"},"Sem prazo"),h("ul",{},l.map(t=>h("li",{},t.title,
     (t.responsaveis||[]).length?h("small",{class:"info"},"Resp.: "+t.responsaveis.join(", ")):null))));
