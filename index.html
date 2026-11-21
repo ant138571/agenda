@@ -320,6 +320,37 @@ button{cursor:pointer}
 .detail .field.d-inl>.pn-more{flex-basis:100%}
 .detail .gest-hint{padding:0 2px}
 .detail .d-foot{padding:6px 14px}
+/* v45: cronograma editável direto no cartão */
+.cr-tools .cr-n{margin-left:2px;background:var(--accent);color:var(--accent-ink);border-radius:999px;font-size:11px;font-weight:800;padding:0 7px;line-height:18px}
+.crono.cr-card .cr-ed-it{cursor:pointer;border-radius:8px;transition:background .12s}
+.crono.cr-card .cr-ed-it:hover,.crono.cr-card .cr-ed-it:focus-visible{background:color-mix(in srgb,var(--c,var(--azul)) 10%,transparent);outline:none}
+.crono.cr-card .data.cr-ed-it{margin-right:.6rem;padding:.2rem .4rem .2rem;margin-left:-.4rem;align-self:start}
+.crono.cr-card .corpo li.cr-ed-it{margin-left:-.35rem;padding-right:.35rem;box-shadow:-.35rem 0 0 0 transparent}
+.cr-ed-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:.1rem;opacity:0;transition:opacity .15s}
+.crono .evento:hover .cr-ed-acts,.crono .evento:focus-within .cr-ed-acts{opacity:1}
+@media (pointer:coarse){ .cr-ed-acts{opacity:1} }
+.cr-ed-acts button,.cr-ed-novo button{display:inline-flex;align-items:center;gap:5px;border:1px dashed var(--linha);background:none;border-radius:999px;padding:4px 11px;min-height:30px;
+  font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:12px;font-weight:700;color:var(--suave);cursor:pointer}
+.cr-ed-acts button:hover,.cr-ed-novo button:hover{border-style:solid;color:var(--texto);border-color:var(--c,var(--suave))}
+.cr-ed-novo{margin:.2rem 0 1.6rem 11.75rem}
+.cr-ed-novo button{font-size:13px;padding:6px 14px;min-height:36px}
+@media (max-width:860px){ .cr-ed-novo{margin-left:1.75rem} .crono.cr-card .data.cr-ed-it{margin-right:0} }
+.cr-ficha{display:flex;flex-direction:column;gap:10px}
+.cr-ficha .field{display:flex;flex-direction:column;gap:4px}
+.cr-ficha input[type=text],.cr-ficha input[type=date],.cr-ficha textarea{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel);color:var(--ink);font:inherit;font-size:14px}
+.cr-ficha textarea{min-height:70px;resize:vertical}
+.cr-ficha-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.cr-ficha-tit{display:flex;align-items:center;gap:10px}
+.cr-ficha-tit input{flex:1;font-size:16px!important;font-weight:700}
+.cr-due{display:flex;gap:6px;align-items:center}
+.cr-due input{flex:1;min-width:0}
+.cr-due .opt{padding:0;width:34px;height:34px;justify-content:center;flex:none}
+.cr-ficha-tks{display:flex;flex-wrap:wrap;gap:6px}
+.cr-feitos{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--muted)}
+.cr-trazer{display:flex;flex-direction:column;gap:2px;max-height:min(60vh,480px);overflow:auto}
+.cr-tr-it{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--line)}
+.cr-tr-t{flex:1;min-width:0;display:flex;flex-direction:column;font-weight:600;font-size:14px}
+.cr-tr-t small{color:var(--muted);font-weight:500;font-size:12px}
 /* v41: estrela clicável nas linhas; fechar no topo da janela */
 .star-btn{border:0;background:none;cursor:pointer;min-width:34px;min-height:34px;place-items:center;border-radius:8px;color:var(--faint)}
 .star-btn.on{color:var(--imp)}
@@ -2821,7 +2852,7 @@ function crGrupos(p,itens){
   if(!p||(p.visao!=="membro"&&p.visao!=="funcao")) return null;
   return gruposVis(p,itens,p.visao,false).map(g=>({titulo:(typeof g.titulo==="string"?g.titulo:g.titulo.textContent).replace(" (você)",""),itens:g.list}));
 }
-const crItem=(a,chk)=>typeof a==="string"?h("li",{},a):h("li",{class:chk&&a.id?"cr-tk":null},
+const crItem=(a,chk)=>typeof a==="string"?h("li",{},a):h("li",{class:chk&&a.id?"cr-tk":null,"data-tid":chk&&a.id?a.id:null},
   chk&&a.id?h("button",{class:"cr-chk",title:"Concluir tarefa","aria-label":"Concluir “"+a.t+"”",onclick:ev=>{ ev.stopPropagation(); toggleDone(a.id); }},svg(ICON.check,12,'stroke-width="3"')):null,
   a.t,a.info?h("small",{class:"info"},a.info):null);
 /* lista de itens; com grupos: as soltas (texto digitado) e depois cada grupo com o seu título */
@@ -2857,7 +2888,7 @@ function cronoView(p,kind){
     full&&p.logo?h("img",{class:"cr-logo",src:p.logo,alt:"Logotipo"}):null);
   const box=h("div",{class:"crono cr-"+kind},head);
   const sp=full&&p.tag?cronoSemPrazo(p):[];   // v30: tarefas do cronograma ainda sem prazo
-  if(!ev.length){ if(full) box.append(h("p",{class:"cr-vazio"},"Ainda não há datas. Toque em + numa tarefa geral com prazo para levá-la ao cronograma, ou use “Editar cronograma”."),sp.length?crSemPrazo(sp,kind==="card",p):"",crEquipe(p)||"",crAcesso(p)||""); return box; }
+  if(!ev.length){ if(full) box.append(h("p",{class:"cr-vazio"},"Ainda não há datas. Use “+ Nova data” ou “Trazer tarefas” para montar o cronograma."),sp.length?crSemPrazo(sp,kind==="card",p):"",crEquipe(p)||"",crAcesso(p)||""); return box; }
   crCores(ev);
   box.append(crFaixa(ev));
   if(full){ box.append(crLista(ev,kind==="card",p)); if(sp.length) box.append(crSemPrazo(sp,kind==="card",p)); const eq=crEquipe(p); if(eq) box.append(eq); const ac=crAcesso(p); if(ac) box.append(ac); }
@@ -2999,12 +3030,16 @@ function renderProject(wrap,tag){
   }
   // ----- cronograma (ou modo de edição): em cima (v29)
   const sec=h("section",{class:"proj-crono acima","aria-label":"Cronograma"},h("div",{class:"col-head"},h("h3",{},"Cronograma")));
-  if(!editing) sec.append(h("div",{class:"row-end",style:"justify-content:flex-start"},
-    h("button",{class:"btn",onclick:()=>startCronoEdit(tag)},svg(ICON.edit,15),"Editar cronograma"),
+  // v45: sem modo de edição — edita-se direto no cronograma (datas, tarefas, + Adicionar); cabeçalho em "Configurar"
+  const foraN=tasksArr().filter(t=>(t.tags||[]).includes(tag)&&!t.done&&!inCrono(t)).length;
+  if(!editing) sec.append(h("div",{class:"row-end cr-tools",style:"justify-content:flex-start"},
+    h("button",{class:"btn",onclick:()=>openCrConfig(tag)},svg(ICON.edit,15),"Configurar"),
+    h("button",{class:"btn",onclick:()=>openCrData(tag,null)},svg(ICON.plus,15),"Nova data"),
+    h("button",{class:"btn",onclick:()=>openCrTrazer(tag),title:"Tarefas do projeto que ainda não estão no cronograma"},svg(ICON.list,15),"Trazer tarefas",foraN?h("span",{class:"cr-n"},String(foraN)):null),
     h("button",{class:"btn primary",onclick:()=>exportCronoPDF(tag)},svg(ICON.report,15),"Exportar PDF"),
     h("button",{class:"btn",onclick:()=>openMailCrono(tag)},svg(ICON.mail,15),"Enviar por e-mail"),
     h("button",{class:"btn",title:"Remover projeto","aria-label":"Remover projeto",style:"margin-left:auto",onclick:()=>confirmRemoveProject(tag)},svg(ICON.trash,15))));
-  sec.append(editing?cronoEditor(tag):cronoView(p,"card"));
+  sec.append(editing?cronoEditor(tag):crEditavel(cronoView(p,"card"),tag));
   wrap.append(sec);
   // ----- tarefas, abaixo do cronograma: gerais (esquerda) e as que entram no cronograma (direita)
   const all=tasksArr().filter(t=>(t.tags||[]).includes(tag));
@@ -3033,6 +3068,157 @@ function renderProject(wrap,tag){
       "Nenhuma tarefa no cronograma. Toque em + numa tarefa geral (ou abra uma tarefa e escolha “Incluir” em Cronograma do projeto).",
       h("div",{class:"gest-hint",style:"text-align:left"},"Título e prazo destas tarefas atualizam o cronograma automaticamente; concluídas saem dele. Toque em − para tirar uma tarefa do cronograma."+(noDue?` ${noDue} sem prazo: aparece${noDue===1?"":"m"} em “Sem prazo”, no fim do cronograma, até ter prazo.`:"")),"tirar",true))));
   if(!editing) crAjustarTudo();
+}
+/* ===================== v45: cronograma editável direto no cartão =====================
+   Tocar numa data (ou no lápis) abre a ficha da data; tocar numa tarefa abre a ficha da tarefa (prazo, horário, local,
+   responsáveis, concluir, tirar do cronograma); "+ Adicionar" em cada data cria uma tarefa (já no cronograma, naquela data)
+   ou uma atividade de texto; "+ Nova data" no fim. Tudo é gravado na hora, com Desfazer. */
+const crIsoOk=s=>/^\d{4}-\d{2}-\d{2}$/.test(s||"")&&!!cleanEvent({y:+s.slice(0,4),m:+s.slice(5,7),d:+s.slice(8,10)});
+const crDiaTxt=iso=>{ const d=parseYmd(iso); return DIAS_LONGOS[d.getDay()].toLowerCase()+", "+d.getDate()+" de "+MESES_LONGOS[d.getMonth()]+(d.getFullYear()!==new Date().getFullYear()?" de "+d.getFullYear():""); };
+function crProjOp(tag,p){ const c=cleanProject(p), now=new Date().toISOString(); return {op:"set",path:"projects/"+tag,data:{...c,createdAt:c.createdAt||now,updatedAt:now}}; }
+function crEditavel(box,tag){
+  const ativa=(el,fn,lbl)=>{ el.classList.add("cr-ed-it"); el.tabIndex=0; el.setAttribute("role","button"); if(lbl) el.setAttribute("aria-label",lbl);
+    el.addEventListener("click",e=>{ if(e.target.closest("button,a")) return; fn(); });
+    el.addEventListener("keydown",e=>{ if((e.key==="Enter"||e.key===" ")&&e.target===el){ e.preventDefault(); fn(); } }); };
+  box.querySelectorAll("li.evento[data-dia]").forEach(li=>{
+    const iso=li.dataset.dia, dt=li.querySelector(".data"), corpo=li.querySelector(".corpo");
+    if(dt){ dt.classList.add("cr-ed-data"); ativa(dt,()=>openCrData(tag,iso),"Editar a data "+fmtBR(iso)); }
+    li.querySelectorAll(".corpo li").forEach(it=>{ const tid=it.dataset.tid;
+      if(tid) ativa(it,()=>openCrTask(tag,tid),"Abrir a tarefa"); else ativa(it,()=>openCrData(tag,iso),"Editar a data "+fmtBR(iso)); });
+    li.querySelectorAll(".corpo .contexto").forEach(c=>ativa(c,()=>openCrData(tag,iso)));
+    if(corpo) corpo.append(h("div",{class:"cr-ed-acts"},
+      h("button",{type:"button",onclick:()=>openCrAdd(tag,iso)},svg(ICON.plus,13),"Adicionar"),
+      h("button",{type:"button",onclick:()=>openCrData(tag,iso)},svg(ICON.edit,13),"Editar data")));
+  });
+  box.querySelectorAll(".cr-sp li[data-tid]").forEach(it=>ativa(it,()=>openCrTask(tag,it.dataset.tid),"Abrir a tarefa"));
+  const lin=box.querySelector("ol.linha"), novo=h("div",{class:"cr-ed-novo"},h("button",{type:"button",onclick:()=>openCrData(tag,null)},svg(ICON.plus,15),"Nova data"));
+  if(lin) lin.after(novo); else { const v=box.querySelector(".cr-vazio"); if(v) v.after(novo); }
+  return box;
+}
+/* ficha da data: data, horário, rótulo, contexto, atividades, sem encontro; tarefas da data; mover (levando as tarefas) e excluir */
+function openCrData(tag,iso){
+  const p=getProject(tag); if(!p) return;
+  const td=new Date(), orig=iso&&crIsoOk(iso)?iso:null;
+  const e0=orig?p.eventos.find(e=>crIso(e)===orig):null;
+  const lk=orig?cronoTasks(tag).filter(t=>t.due===orig):[];
+  let sugestao=ymd(td);
+  if(!orig){ const evs=cronoEvents({...p,tag}); if(evs.length){ const ult=evs[evs.length-1]; const d=new Date(crUtc(ult)+7*DIA_MS); sugestao=d.toISOString().slice(0,10); if(sugestao<ymd(td)) sugestao=ymd(td); } }
+  const txt=(id,val,ph,lbl,max)=>{ const i=h("input",{type:"text",id,placeholder:ph||"",maxlength:String(max||300)}); i.value=val||""; return h("div",{class:"field"},h("label",{for:id},lbl),i); };
+  const dIn=calPick(h("input",{type:"date",id:"crdData",max:DATA_MAX,value:orig||sugestao,"aria-label":"Data"}));
+  const fH=txt("crdHora",e0&&e0.horario,"ex.: 15h às 17h","Horário",80), fR=txt("crdRot",e0&&e0.rotulo,"nome curto","Rótulo na faixa do topo",60),
+    fC=txt("crdCtx",e0&&e0.contexto,"opcional","Contexto (frase em itálico)",500);
+  const at=h("textarea",{id:"crdAtiv",rows:"3",placeholder:"Uma por linha"}); at.value=e0?e0.atividades.join("\n"):"";
+  const sem=h("input",{type:"checkbox",id:"crdSem",checked:!!(e0&&e0.sem)});
+  const levar=h("input",{type:"checkbox",id:"crdLevar",checked:true});
+  const levarBox=lk.length?h("label",{class:"check-lbl cr-levar",for:"crdLevar",hidden:true},levar,`Levar junto ${lk.length===1?"a tarefa":"as "+lk.length+" tarefas"} desta data`):null;
+  dIn.addEventListener("change",()=>{ if(levarBox) levarBox.hidden=dIn.value===orig; });
+  const body=h("div",{class:"cr-ficha"},
+    h("div",{class:"cr-ficha-row"},h("div",{class:"field"},h("label",{for:"crdData"},"Data"),dIn),fH),
+    levarBox,fR,fC,h("div",{class:"field"},h("label",{for:"crdAtiv"},"Atividades (texto)"),at),
+    h("label",{class:"check-lbl",for:"crdSem"},sem,"Sem encontro nesta data"),
+    lk.length?h("div",{class:"field"},h("span",{class:"lbl"},"Tarefas nesta data"),h("div",{class:"cr-ficha-tks"},lk.map(t=>h("button",{type:"button",class:"opt",onclick:()=>{ $("#modalRoot").replaceChildren(); openCrTask(tag,t.id); }},t.title)))):null);
+  const salvar=()=>{
+    const novo=dIn.value; if(!crIsoOk(novo)){ toast("Escolha uma data válida."); return false; }
+    const atv=at.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+    const q=getProject(tag); if(!q) return; const prev=cleanProject(q), ev=prev.eventos.map(e=>({...e,atividades:[...e.atividades]}));
+    if(orig){ const i=ev.findIndex(e=>crIso(e)===orig); if(i>=0) ev.splice(i,1); }
+    const vai=lk.length&&novo!==orig&&levar.checked, [y,m,d]=novo.split("-").map(Number);
+    const ne={y,m,d,horario:fH.querySelector("input").value.trim(),rotulo:fR.querySelector("input").value.trim(),contexto:fC.querySelector("input").value.trim(),atividades:atv,sem:sem.checked};
+    const tksNovo=cronoTasks(tag).filter(t=>t.due===novo).length+(vai?lk.length:0);
+    const temDados=ne.horario||ne.rotulo||ne.contexto||ne.atividades.length||ne.sem;
+    const j=ev.findIndex(e=>crIso(e)===novo);
+    if(j>=0){ const a=ev[j]; ev[j]={...a,horario:ne.horario||a.horario,rotulo:ne.rotulo||a.rotulo,contexto:ne.contexto||a.contexto,atividades:[...new Set([...a.atividades,...ne.atividades])],sem:ne.sem||a.sem}; ev[j].vinc=!ev[j].atividades.length&&tksNovo>0; }
+    else if(temDados||!tksNovo) ev.push({...ne,vinc:!atv.length&&tksNovo>0});
+    const ops=[crProjOp(tag,{...prev,eventos:ev})], undo=[crProjOp(tag,prev)];
+    if(vai) for(const t of lk){ const now=new Date().toISOString(); ops.push(taskOp(t.id,{...VIEW.tasks[t.id],due:novo,updatedAt:now},{due:novo})); undo.push(taskOp(t.id,{...VIEW.tasks[t.id],due:orig,updatedAt:now},{due:orig})); }
+    enqueueMany(ops);
+    toast(orig?(novo!==orig?"Data movida para "+fmtBR(novo):"Data atualizada"):"Data "+fmtBR(novo)+" criada",()=>enqueueMany(undo.map(o=>o.patch?{...o,data:{...o.data,updatedAt:new Date().toISOString()}}:o)));
+  };
+  const excluir=()=>{
+    const q=getProject(tag); if(!q) return; const prev=cleanProject(q);
+    if(!prev.eventos.some(e=>crIso(e)===orig)&&!lk.length) return;
+    const ops=[crProjOp(tag,{...prev,eventos:prev.eventos.filter(e=>crIso(e)!==orig)})], undo=[crProjOp(tag,prev)];
+    const tirar=lk.length&&confirm(`Tirar também ${lk.length===1?"a tarefa":"as "+lk.length+" tarefas"} desta data do cronograma? (Cancelar = as tarefas continuam no cronograma, e a data também.)`);
+    if(tirar) for(const t of lk){ ops.push(taskOp(t.id,{...VIEW.tasks[t.id],crono:false,updatedAt:new Date().toISOString()},{crono:false})); undo.push(taskOp(t.id,{...VIEW.tasks[t.id],crono:true},{crono:true})); }
+    enqueueMany(ops); toast("Data "+fmtBR(orig)+" excluída",()=>enqueueMany(undo));
+  };
+  openModal(orig?"Data · "+crDiaTxt(orig):"Nova data",body,[...(orig?[{label:"Excluir data",cls:"danger",run:excluir}]:[]),{label:orig?"Salvar":"Criar data",cls:"primary",run:salvar}],{fecharNoTopo:true});
+  if(!orig) setTimeout(()=>openCal(dIn),30);
+}
+/* ficha da tarefa do cronograma: tudo o que o cronograma mostra dela, num lugar só */
+function openCrTask(tag,id){
+  if(!VIEW.tasks[id]) return;
+  const box=h("div",{class:"cr-ficha"});
+  const saveExtra=(k,v)=>{ const q=getProject(tag); if(!q) return; const c=cleanProject(q), x={...(c.extras[id]||{horario:"",local:"",resp:""}),[k]:v.trim()};
+    if(((c.extras[id]||{})[k]||"")===x[k]) return; putProject(tag,{...c,extras:{...c.extras,[id]:x}}); };
+  const paint=()=>{
+    const t=VIEW.tasks[id], q=getProject(tag); if(!t||!q){ $("#modalRoot").replaceChildren(); return; }
+    const x=(q.extras||{})[id]||{}, sel=(q.atrib||{})[id]||[];
+    const tit=h("input",{type:"text",id:"crtTit",maxlength:"500","aria-label":"Nome da tarefa"}); tit.value=t.title;
+    const grava=()=>{ const v=tit.value.replace(/\s+/g," ").trim(); if(v&&v!==VIEW.tasks[id].title){ patchTask(id,{title:v}); } };
+    tit.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); tit.blur(); } }); tit.addEventListener("blur",grava);
+    const dIn=calPick(h("input",{type:"date",id:"crtDue",min:today(),max:DATA_MAX,value:t.due||"",onchange:e=>{ const v=e.target.value||null; if(v&&!dataValida(v)) return;
+      const prev=VIEW.tasks[id]; patchTask(id,!v&&prev.repeat?{due:null,repeat:null}:{due:v}); toast(v?"Tarefa movida para "+fmtBR(v):"Tarefa em “Sem prazo”",()=>restoreTask(id,prev)); paint(); }}));
+    const inp=(k,ph,lbl,max)=>{ const i=h("input",{type:"text",id:"crt"+k,placeholder:ph,maxlength:String(max)}); i.value=x[k]||""; i.addEventListener("change",()=>saveExtra(k,i.value)); return h("div",{class:"field"},h("label",{for:"crt"+k},lbl),i); };
+    box.replaceChildren(
+      h("div",{class:"cr-ficha-tit"},h("button",{class:"circle p"+(t.priority||2),"aria-label":"Concluir",title:"Concluir",onclick:()=>{ $("#modalRoot").replaceChildren(); toggleDone(id); }}),tit),
+      h("div",{class:"cr-ficha-row"},
+        h("div",{class:"field"},h("label",{for:"crtDue"},"Data (prazo)"),h("div",{class:"cr-due"},dIn,t.due?h("button",{class:"opt",type:"button",title:"Tirar a data: a tarefa vai para “Sem prazo”",onclick:()=>{ dIn.value=""; dIn.dispatchEvent(new Event("change",{bubbles:true})); }},svg(ICON.x,13)):null)),
+        inp("horario","ex.: 14h","Horário",80)),
+      inp("local","ex.: sala 203","Local / sala",120),
+      q.membros.length?h("div",{class:"field"},h("span",{class:"lbl"},"Responsáveis"),h("div",{class:"opts"},q.membros.map(m=>h("button",{type:"button",class:"opt"+(sel.includes(m.id)?" on":""),"aria-pressed":sel.includes(m.id)?"true":"false",
+        onclick:()=>{ toggleResp(tag,id,m.id); paint(); }},svg(ICON.user,13),membroNome(m))))):null,
+      !sel.length?inp("resp","nome","Responsável (texto, quando ninguém da equipe está marcado)",120):null);
+  };
+  paint();
+  openModal("Tarefa do cronograma",box,[
+    {label:"Tirar do cronograma",run:()=>cronoToggle(id,false)},
+    {label:"Todos os detalhes",run:()=>select(id)},
+    {label:"Concluir",cls:"primary",run:()=>toggleDone(id)}],{fecharNoTopo:true});
+}
+/* + Adicionar numa data: tarefa (já no cronograma, com prazo nesta data) ou atividade de texto */
+function openCrAdd(tag,iso){
+  let modo=iso>=today()?"tarefa":"atividade";
+  const feitos=h("ul",{class:"cr-feitos"});
+  const inp=h("input",{type:"text",id:"craTxt",maxlength:"500",autocomplete:"off"});
+  const seg=h("span",{class:"seg"});
+  const dica=h("div",{class:"gest-hint",style:"text-align:left"});
+  const pinta=()=>{ seg.replaceChildren(...[["tarefa","Tarefa"],["atividade","Atividade (só texto)"]].map(([k,l])=>h("button",{type:"button",class:modo===k?"on":"",disabled:k==="tarefa"&&iso<today()?true:null,onclick:()=>{ modo=k; pinta(); inp.focus(); }},l)));
+    inp.placeholder=modo==="tarefa"?"Nome da tarefa":"Texto da atividade";
+    dica.textContent=modo==="tarefa"?"A tarefa entra no projeto e no cronograma, com prazo nesta data (atribua responsáveis tocando nela depois).":(iso<today()?"Data passada: só atividades de texto. ":"")+"A atividade aparece só no cronograma (não vira tarefa)."; };
+  const add=()=>{ const v=inp.value.replace(/\s+/g," ").trim(); if(!v) return false;
+    if(modo==="tarefa"){ const id=createTask(v,{tags:[tag],due:iso,crono:true}); feitos.append(h("li",{},"✓ Tarefa: "+v)); toast("Tarefa adicionada em "+fmtBR(iso),()=>{ if(VIEW.tasks[id]) enqueueMany([{op:"delete",path:"tasks/"+id}]); }); }
+    else { const q=getProject(tag); if(!q) return false; const prev=cleanProject(q), ev=prev.eventos.map(e=>({...e,atividades:[...e.atividades]})), [y,m,d]=iso.split("-").map(Number);
+      const j=ev.findIndex(e=>crIso(e)===iso); if(j>=0){ ev[j].atividades.push(v.slice(0,1000)); ev[j].vinc=false; } else ev.push({y,m,d,horario:"",rotulo:"",contexto:"",atividades:[v.slice(0,1000)],sem:false});
+      enqueueMany([crProjOp(tag,{...prev,eventos:ev})]); feitos.append(h("li",{},"✓ Atividade: "+v)); toast("Atividade adicionada em "+fmtBR(iso),()=>enqueueMany([crProjOp(tag,prev)])); }
+    inp.value=""; inp.focus(); return false; };
+  inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); add(); } });
+  pinta();
+  openModal("Adicionar · "+crDiaTxt(iso),h("div",{class:"cr-ficha"},seg,inp,dica,feitos),[{label:"Adicionar",cls:"primary",run:add}],{fecharNoTopo:true});
+  setTimeout(()=>inp.focus(),30);
+}
+/* tarefas do projeto que ainda não estão no cronograma: incluir com um toque */
+function openCrTrazer(tag){
+  const lista=h("div",{class:"cr-trazer"});
+  const paint=()=>{ const ts=sortTasks(tasksArr().filter(t=>(t.tags||[]).includes(tag)&&!t.done&&!inCrono(t)),"due");
+    lista.replaceChildren(...(ts.length?ts.map(t=>h("div",{class:"cr-tr-it"},h("span",{class:"cr-tr-t"},t.title,h("small",{},t.due?fmtDue(t.due):"sem prazo (vai para “Sem prazo”)")),
+      h("button",{type:"button",class:"btn small primary",onclick:()=>{ setCrono([t.id],true); toast("Incluída no cronograma",()=>setCrono([t.id],false)); paint(); }},svg(ICON.plus,14),"Incluir")))
+      :[h("div",{class:"gest-hint",style:"text-align:left"},"Todas as tarefas abertas do projeto já estão no cronograma.")])); };
+  paint();
+  const comPrazo=()=>tasksArr().filter(t=>(t.tags||[]).includes(tag)&&!t.done&&!inCrono(t)&&t.due).map(t=>t.id);
+  openModal("Trazer tarefas para o cronograma",lista,[{label:"Incluir todas com prazo",run:()=>{ const ids=comPrazo(); if(!ids.length){ toast("Nenhuma tarefa com prazo fora do cronograma."); return false; } setCrono(ids,true); toast(nTxt(ids.length,"tarefa incluída","tarefas incluídas"),()=>setCrono(ids,false)); }}],{fecharNoTopo:true});
+}
+/* cabeçalho do cronograma: título, subtítulo, departamento e logotipo */
+function openCrConfig(tag){
+  const p=getProject(tag); if(!p) return;
+  const D={titulo:p.titulo||"",subtitulo:p.subtitulo||"",departamento:p.departamento||"",logo:p.logo||""};
+  const box=h("div",{class:"cr-ficha"});
+  const campo=(k,id,lbl,ph,max)=>{ const i=h("input",{type:"text",id,placeholder:ph,maxlength:String(max)}); i.value=D[k]; i.addEventListener("input",()=>D[k]=i.value); return h("div",{class:"field"},h("label",{for:id},lbl),i); };
+  const paint=()=>box.replaceChildren(campo("titulo","crcTit","Título",projTitle(tag),200),campo("subtitulo","crcSub","Subtítulo (vazio = período calculado pelas datas)","Cronograma de … a …",200),
+    campo("departamento","crcDep","Departamento (acima do título)","Ex.: Departamento de Engenharia",150),logoField(D,paint));
+  paint();
+  openModal("Configurar cronograma",box,[{label:"Salvar",cls:"primary",run:()=>{ const q=getProject(tag); if(!q) return; const prev=cleanProject(q);
+    putProject(tag,{...prev,titulo:D.titulo.trim(),subtitulo:D.subtitulo.trim(),departamento:D.departamento.trim(),logo:D.logo||""}); toast("Cronograma atualizado",()=>putProject(tag,prev)); }}],{fecharNoTopo:true});
 }
 /* aba Tarefas › Por membro: tarefas abertas do projeto (de toda a equipe) agrupadas por responsável; sem responsável no fim */
 function renderPorMembro(out,tag,p){
@@ -3595,7 +3781,7 @@ function logoField(D,again){
   inp.addEventListener("change",()=>{ const f=inp.files&&inp.files[0]; inp.value=""; if(!f) return;
     if(!/^image\//.test(f.type)){ toast("Escolha uma imagem (PNG, JPG…)."); return; }
     if(f.size>15*1024*1024){ toast("Imagem grande demais (máximo 15 MB)."); return; }
-    reduzLogo(f).then(url=>{ D.logo=url; again(); toast("Logotipo pronto: salve o cronograma para gravar."); },()=>toast("Não foi possível ler essa imagem.")); });
+    reduzLogo(f).then(url=>{ D.logo=url; again(); toast("Logotipo pronto: toque em “Salvar” para gravar."); },()=>toast("Não foi possível ler essa imagem.")); });
   return h("div",{class:"field"},h("span",{class:"lbl"},"Logotipo (canto superior direito)"),
     h("div",{class:"ce-logo"},D.logo?h("img",{src:D.logo,alt:"Logotipo atual"}):h("span",{class:"gest-hint"},"Sem logotipo."),
       h("button",{class:"btn",onclick:()=>inp.click()},D.logo?"Trocar imagem":"Escolher imagem"),
@@ -4001,7 +4187,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[],{fecharNoTopo:true}); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v44";
+const APP_VER="v45";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
