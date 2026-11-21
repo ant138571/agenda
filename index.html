@@ -116,6 +116,22 @@ button{cursor:pointer}
 .flabel{color:var(--muted);margin-right:6px}
 .filters select{padding:5px 8px;border:1px solid var(--line);border-radius:9px;background:var(--panel)}
 .check-lbl{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+/* v46: botão Filtrar; cada filtro numa linha só */
+.f-wrap{display:flex;flex-direction:column;gap:8px}
+.f-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.f-toggle{gap:6px}
+.f-toggle.on{border-color:var(--accent);color:var(--accent-text);background:var(--accent-soft)}
+.f-toggle .f-n{background:var(--accent);color:var(--accent-ink);border-radius:999px;font-size:11px;font-weight:800;padding:0 6px;line-height:17px}
+.f-toggle .pn-chev{display:inline-grid;transition:transform .15s}
+.f-toggle .pn-chev.open{transform:rotate(90deg)}
+.f-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));background:color-mix(in srgb,var(--accent-soft) 60%,var(--panel));color:var(--accent-text);border-radius:999px;padding:3px 10px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;min-height:30px}
+.f-panel{flex-direction:column;align-items:flex-start;gap:8px;background:var(--soft);border-radius:12px;padding:10px 12px}
+.f-panel .seg{background:var(--panel)}
+.f-line{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;max-width:100%}
+.f-line .flabel{flex:none;min-width:78px;margin:0}
+.f-line .seg{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;max-width:100%}
+.f-line .seg::-webkit-scrollbar{display:none}
+.f-line .seg button{white-space:nowrap;padding:4px 8px;font-size:12.5px}
 
 /* adicionar */
 .add{background:var(--soft);border-radius:14px;display:flex;align-items:center;gap:8px;padding:4px 4px 4px 14px}
@@ -1663,8 +1679,18 @@ function tagActions(g){
   ba.append((VIEW.projects||{})[g]?h("button",{class:"btn small",onclick:()=>go("proj:"+g)},svg(ICON.folder,15),"Abrir projeto"):h("button",{class:"btn small",onclick:()=>createProject(g)},svg(ICON.folder,15),"Transformar em projeto"));
 }
 function filterBar(v){
-  const seg=(label,val,opts,set)=>h("span",{},h("span",{class:"flabel"},label),h("span",{class:"seg"},opts.map(([k,t])=>h("button",{class:val===k?"on":"",onclick:()=>{set(k);saveUI();render();}},t))));
-  const f=h("div",{class:"filters"},
+  // v46: filtros escondidos atrás do botão "Filtrar" (aberto/fechado só enquanto o app está aberto: UI.filtOpen); com
+  // filtro ligado, o botão mostra quantos e cada filtro aparece como etiqueta com × ao lado
+  const seg=(label,val,opts,set)=>h("span",{class:"f-line"},h("span",{class:"flabel"},label),h("span",{class:"seg"},opts.map(([k,t])=>h("button",{class:val===k?"on":"",onclick:()=>{set(k);saveUI();render();}},t))));
+  const IMP_F={3:"Com estrela","-3":"Sem estrela"}, PRI_F={1:"Urgente",2:"Normal",3:"Pode esperar"};
+  const ativos=(UI.imp?1:0)+(UI.pri?1:0), aberto=!!UI.filtOpen;
+  const tg=h("button",{class:"btn small f-toggle"+(ativos?" on":""),type:"button","aria-expanded":aberto?"true":"false",onclick:()=>{ UI.filtOpen=!aberto; render(); }},
+    svg('<path d="M3 5h18l-7 8v6l-4 2v-8z"/>',14),"Filtrar",ativos?h("span",{class:"f-n"},String(ativos)):null,h("span",{class:"pn-chev"+(aberto?" open":"")},svg(ICON.chev,13)));
+  const chip=(txt,clear)=>h("button",{class:"f-chip",type:"button",title:"Tirar este filtro",onclick:()=>{ clear(); saveUI(); render(); }},txt,svg(ICON.x,12));
+  const barra=h("div",{class:"f-bar"},tg,
+    !aberto&&UI.imp?chip(IMP_F[UI.imp],()=>UI.imp=0):null,
+    !aberto&&UI.pri?chip(PRI_F[UI.pri],()=>UI.pri=0):null);
+  const f=h("div",{class:"filters f-panel"},
     // v42: critérios novos — importante ou não; urgente, normal ou pode esperar
     seg("Importância",UI.imp,[[0,"Todas"],[3,"Com estrela"],[-3,"Sem estrela"]],k=>UI.imp=k),   // v43: com/sem estrela
     seg("Urgência",UI.pri,[[0,"Todas"],[1,"Urgente"],[2,"Normal"],[3,"Pode esperar"]],k=>UI.pri=k));
@@ -1677,7 +1703,7 @@ function filterBar(v){
     const cb=h("input",{type:"checkbox",id:"showDone",checked:UI.showDone,onchange:e=>{UI.showDone=e.target.checked;saveUI();render();}});
     f.append(h("label",{class:"check-lbl",for:"showDone"},cb,"Mostrar concluídas"));
   }
-  return f;
+  return h("div",{class:"f-wrap"},barra,aberto?f:null);
 }
 function addBar(defaults,ids){
   const inId=(ids&&ids.input)||"addInput", dtId=(ids&&ids.date)||"addDate";
@@ -4187,7 +4213,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[],{fecharNoTopo:true}); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v45";
+const APP_VER="v46";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
