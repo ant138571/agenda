@@ -336,6 +336,12 @@ button{cursor:pointer}
 .detail .field.d-inl>.pn-more{flex-basis:100%}
 .detail .gest-hint{padding:0 2px}
 .detail .d-foot{padding:6px 14px}
+/* v48: barra de botões do cronograma numa linha só */
+.cr-tools2{display:flex;flex-wrap:nowrap;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none;padding:1px}
+.cr-tools2::-webkit-scrollbar{display:none}
+.cr-tools2 .btn{flex:none;gap:5px;white-space:nowrap}
+.cr-tools2 .cr-t-del{margin-left:auto;padding-left:8px;padding-right:8px}
+@media (max-width:520px){ .cr-tools2 .cr-t-lbl{display:none} .cr-tools2 .btn{padding-left:9px;padding-right:9px} }
 /* v47: aba Cronograma = tarefas agrupadas por data; arrastar para outra data */
 .crg-wrap{display:flex;flex-direction:column;gap:14px;margin-top:6px}
 .crg{border:1px solid var(--line);border-left:4px solid var(--c);border-radius:14px;background:var(--panel);padding:6px 10px 8px;transition:box-shadow .12s,background .12s}
@@ -362,7 +368,7 @@ button{cursor:pointer}
 .crg-add{margin-top:6px}
 .crg-novo{margin:0 0 2px}
 .crg-past{align-self:flex-start}
-.crg-ghost{position:fixed;z-index:90;pointer-events:none;box-shadow:var(--shadow);border-radius:12px;opacity:.95;background:var(--panel);transform:rotate(-1.2deg)}
+.crg-ghost{position:fixed;right:auto;bottom:auto;z-index:90;pointer-events:none;box-shadow:var(--shadow);border-radius:12px;opacity:.95;background:var(--panel);transform:rotate(-1.2deg)}
 .task.crg-moving{opacity:.35}
 body.crg-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .d-xtra{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
@@ -1960,7 +1966,7 @@ function startDrag(e,row){
 function startDateDrag(e,row){
   e.preventDefault();
   const card=row.querySelector(".t-card"), r=card.getBoundingClientRect(), ghost=card.cloneNode(true);
-  ghost.classList.add("crg-ghost"); ghost.style.width=r.width+"px"; ghost.style.left=r.left+"px"; ghost.style.top=r.top+"px";
+  ghost.classList.add("crg-ghost"); ghost.style.width=r.width+"px"; ghost.style.height=r.height+"px"; ghost.style.left=r.left+"px"; ghost.style.top=r.top+"px";
   document.body.append(ghost);
   try{ e.target.closest(".grip").setPointerCapture(e.pointerId); }catch(err){}
   const de=row.closest(".crg"); 
@@ -3128,12 +3134,13 @@ function renderProject(wrap,tag){
 }
 function renderCronoTab(wrap,tag,p){
   const td=today(), mb=membrosDe(p);
-  wrap.append(h("div",{class:"row-end cr-tools",style:"justify-content:flex-start"},
-    h("button",{class:"btn",onclick:()=>openCrConfig(tag)},svg(ICON.edit,15),"Configurar"),
-    h("button",{class:"btn",onclick:()=>openCrData(tag,null)},svg(ICON.plus,15),"Nova data"),
-    h("button",{class:"btn primary",onclick:()=>exportCronoPDF(tag)},svg(ICON.report,15),"Exportar PDF"),
-    h("button",{class:"btn",onclick:()=>openMailCrono(tag)},svg(ICON.mail,15),"Enviar por e-mail"),
-    h("button",{class:"btn",title:"Remover projeto","aria-label":"Remover projeto",style:"margin-left:auto",onclick:()=>confirmRemoveProject(tag)},svg(ICON.trash,15))));
+  // v48: uma linha só, botões pequenos (como os demais do app)
+  wrap.append(h("div",{class:"cr-tools2"},
+    h("button",{class:"btn small",title:"Configurar o cronograma (título, subtítulo, departamento, logotipo)","aria-label":"Configurar o cronograma",onclick:()=>openCrConfig(tag)},svg(ICON.edit,14),h("span",{class:"cr-t-lbl"},"Configurar")),
+    h("button",{class:"btn small",onclick:()=>openCrData(tag,null)},svg(ICON.plus,14),"Nova data"),
+    h("button",{class:"btn small primary",title:"Exportar o cronograma em PDF",onclick:()=>exportCronoPDF(tag)},svg(ICON.report,14),"PDF"),
+    h("button",{class:"btn small",title:"Enviar o cronograma por e-mail",onclick:()=>openMailCrono(tag)},svg(ICON.mail,14),"E-mail"),
+    h("button",{class:"btn small cr-t-del",title:"Remover projeto","aria-label":"Remover projeto",onclick:()=>confirmRemoveProject(tag)},svg(ICON.trash,14))));
   const all=tasksArr().filter(t=>(t.tags||[]).includes(tag)), open=all.filter(t=>!t.done);
   const evIso={}; for(const e of p.eventos) evIso[crIso(e)]=e;
   const cores={}; { const ce=cronoEvents({...p,tag}); if(ce.length){ crCores(ce); ce.forEach(e=>cores[crIso(e)]=e.cor); } }
@@ -4324,7 +4331,7 @@ function keysSection(){
 function refreshConfig(){ const b=$("#cfgBody"); if(b) b.replaceWith(configBody()); }
 function openConfig(){ openModal("Configurações",configBody(),[],{fecharNoTopo:true}); }
 /* versão do app (igual à do sw.js: APP_VER "v20" ↔ VERSION "agenda-v20") */
-const APP_VER="v47";
+const APP_VER="v48";
 async function checkUpdate(btn){
   if(!navigator.onLine){ toast("Sem internet: conecte-se para procurar atualização."); return; }
   const old=btn.textContent; btn.disabled=true; btn.textContent="Procurando…";
